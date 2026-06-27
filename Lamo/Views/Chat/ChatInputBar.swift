@@ -9,72 +9,68 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
-
             HStack(alignment: .bottom, spacing: LamoTheme.Spacing.sm) {
-                // Attachment button
                 Button(action: {}) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .background(Color(uiColor: .tertiarySystemFill))
+                        .clipShape(Circle())
                 }
-                .padding(.bottom, 6)
+                .padding(.bottom, 4)
 
-                // Input field
-                HStack(alignment: .bottom, spacing: LamoTheme.Spacing.xs) {
-                    TextField("Message...", text: $text, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...8)
-                        .font(LamoTheme.Fonts.body)
-                        .padding(.horizontal, LamoTheme.Spacing.md)
-                        .padding(.vertical, 10)
-                        .scrollContentBackground(.hidden)
-                }
-                .background(Color(uiColor: .systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous)
-                        .stroke(
-                            isFocused ? LamoTheme.Colors.accent.opacity(0.5) : Color(uiColor: .separator),
-                            lineWidth: isFocused ? 1.5 : 0.5
-                        )
-                )
+                TextField("Ask anything...", text: $text, axis: .vertical)
+                    .lineLimit(1...6)
+                    .font(LamoTheme.Fonts.body)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .scrollContentBackground(.hidden)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color(uiColor: .separator).opacity(0.5), lineWidth: 0.3)
+                    )
 
-                // Send / Stop button
                 if isStreaming {
                     Button(action: onStop) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 32, height: 32)
-                            Image(systemName: "stop.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.primary)
+                            .clipShape(Circle())
                     }
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 2)
                     .transition(.scale.combined(with: .opacity))
                 } else {
-                    Button(action: onSend) {
-                        ZStack {
-                            Circle()
-                                .fill(canSend ? LamoTheme.Colors.accent : Color(uiColor: .systemGray5))
-                                .frame(width: 32, height: 32)
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(canSend ? .white : Color(uiColor: .placeholderText))
-                        }
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onSend()
+                    }) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(canSend ? .white : Color(uiColor: .tertiaryLabel))
+                            .frame(width: 36, height: 36)
+                            .background(canSend ? LamoTheme.Colors.accent : Color(uiColor: .quaternarySystemFill))
+                            .clipShape(Circle())
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: canSend)
                     }
                     .disabled(!canSend)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 2)
                     .transition(.scale.combined(with: .opacity))
-                    .sensoryFeedback(.selection, trigger: canSend)
                 }
             }
             .padding(.horizontal, LamoTheme.Spacing.md)
-            .padding(.vertical, LamoTheme.Spacing.sm + 2)
-            .background(.ultraThinMaterial)
+            .padding(.vertical, LamoTheme.Spacing.sm)
         }
+        .background(
+            Rectangle()
+                .fill(.regularMaterial)
+                .ignoresSafeArea()
+                .shadow(color: .black.opacity(0.03), radius: 10, y: -5)
+        )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }
 

@@ -24,15 +24,38 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
+        // Backgrounds
         static let background = Color(uiColor: .systemBackground)
         static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+        static let tertiaryBackground = Color(uiColor: .tertiarySystemBackground)
+
+        // Accent — 使用 iOS 系统蓝色作为主色调
+        static let accent = Color.accentColor
+        static let accentGradient = LinearGradient(
+            colors: [Color.blue, Color.blue.opacity(0.8)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        // Bubbles
         static let userBubble = Color.accentColor
         static let assistantBubble = Color(uiColor: .secondarySystemBackground)
-        static let accent = Color.accentColor
-        static let textPrimary = Color.primary
-        static let textSecondary = Color.secondary
         static let bubbleTextUser = Color.white
         static let bubbleTextAssistant = Color.primary
+
+        // Text
+        static let textPrimary = Color.primary
+        static let textSecondary = Color.secondary
+        static let textTertiary = Color(uiColor: .tertiaryLabel)
+
+        // Semantic
+        static let success = Color.green
+        static let warning = Color.orange
+        static let error = Color.red
+
+        // Glass effects (iOS 27 Liquid Glass)
+        static let glassBackground = Color.white.opacity(0.06)
+        static let glassStroke = Color.white.opacity(0.12)
     }
 
     enum Spacing {
@@ -41,19 +64,120 @@ enum LamoTheme {
         static let md: CGFloat = 12
         static let lg: CGFloat = 16
         static let xl: CGFloat = 24
+        static let xxl: CGFloat = 32
+        static let xxxl: CGFloat = 48
     }
 
     enum CornerRadius {
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 20
         static let bubble: CGFloat = 18
         static let input: CGFloat = 22
+        static let card: CGFloat = 16
     }
 
     enum Fonts {
-        static let body = Font.body
+        static let largeTitle = Font.largeTitle.bold()
+        static let title = Font.title2.bold()
+        static let title3 = Font.title3.bold()
         static let headline = Font.headline.weight(.semibold)
+        static let body = Font.body
         static let subheadline = Font.subheadline
+        static let footnote = Font.footnote
         static let caption = Font.caption
+        static let caption2 = Font.caption2
         static let code = Font.system(.subheadline, design: .monospaced)
+        static let codeBlock = Font.system(.callout, design: .monospaced)
+    }
+}
+
+// MARK: - Glass Effect Modifier (iOS 27 Liquid Glass)
+
+struct GlassModifier: ViewModifier {
+    var cornerRadius: CGFloat = LamoTheme.CornerRadius.card
+    var opacity: Double = 0.06
+
+    func body(content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(opacity), lineWidth: 0.5)
+            )
+    }
+}
+
+extension View {
+    func glassEffect(cornerRadius: CGFloat = LamoTheme.CornerRadius.card, opacity: Double = 0.06) -> some View {
+        modifier(GlassModifier(cornerRadius: cornerRadius, opacity: opacity))
+    }
+}
+
+// MARK: - Shimmer Effect
+
+struct ShimmerModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geometry in
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: phase - 0.3),
+                            .init(color: .white.opacity(0.15), location: phase),
+                            .init(color: .clear, location: phase + 0.3)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .blendMode(.overlay)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.card, style: .continuous))
+            .onAppear {
+                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                    phase = 1.3
+                }
+            }
+    }
+}
+
+extension View {
+    func shimmer() -> some View {
+        modifier(ShimmerModifier())
+    }
+}
+
+// MARK: - Bubble Shape
+
+struct BubbleShape: Shape {
+    let isUser: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let radius: CGFloat = 18
+        let tailSize: CGFloat = 8
+
+        var path = Path()
+
+        if isUser {
+            // User bubble — tail on bottom-right
+            path.addRoundedRect(
+                in: CGRect(x: rect.minX, y: rect.minY, width: rect.width - tailSize, height: rect.height - tailSize),
+                cornerSize: CGSize(width: radius, height: radius)
+            )
+        } else {
+            // Assistant bubble — tail on bottom-left
+            path.addRoundedRect(
+                in: CGRect(x: rect.minX + tailSize, y: rect.minY, width: rect.width - tailSize, height: rect.height - tailSize),
+                cornerSize: CGSize(width: radius, height: radius)
+            )
+        }
+
+        return path
     }
 }
 
@@ -243,6 +367,128 @@ final class ChatService {
 
 
 ================================================================================
+Файл: Lamo/Services/DownloadManager.swift
+================================================================================
+
+import Foundation
+import Combine
+import SwiftUI
+
+/// Manages downloading LiteRT-LM models from HuggingFace.
+@MainActor
+final class DownloadManager: ObservableObject {
+    static let shared = DownloadManager()
+
+    @Published var activeDownloads: [String: DownloadState] = [:]
+
+    private var tasks: [String: URLSessionDownloadTask] = [:]
+    private var observations: [String: NSKeyValueObservation] = [:]
+    private let session: URLSession
+
+    struct DownloadState {
+        var progress: Double = 0
+        var bytesWritten: Int64 = 0
+        var totalBytes: Int64 = 0
+        var isDownloading: Bool = false
+        var error: String? = nil
+        var isComplete: Bool = false
+
+        var progressPercentage: Int {
+            guard totalBytes > 0 else { return 0 }
+            return Int(bytesWritten * 100 / totalBytes)
+        }
+
+        var downloadedSizeString: String {
+            ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
+        }
+
+        var totalSizeString: String {
+            ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+        }
+    }
+
+    init() {
+        let config = URLSessionConfiguration.default
+        config.allowsCellularAccess = true
+        session = URLSession(configuration: config)
+    }
+
+    func download(model: PresetModel) {
+        guard let url = model.downloadURL else { return }
+        guard activeDownloads[model.filename]?.isDownloading != true else { return }
+
+        // Create models directory
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+        let destination = modelsDir.appendingPathComponent(model.filename)
+
+        activeDownloads[model.filename] = DownloadState(isDownloading: true)
+
+        let task = session.downloadTask(with: url) { [weak self] tempURL, response, error in
+            Task { @MainActor in
+                guard let self else { return }
+
+                if let error = error {
+                    self.activeDownloads[model.filename]?.error = error.localizedDescription
+                    self.activeDownloads[model.filename]?.isDownloading = false
+                    return
+                }
+
+                guard let tempURL = tempURL else {
+                    self.activeDownloads[model.filename]?.error = "Download failed: no data"
+                    self.activeDownloads[model.filename]?.isDownloading = false
+                    return
+                }
+
+                do {
+                    if FileManager.default.fileExists(atPath: destination.path) {
+                        try FileManager.default.removeItem(at: destination)
+                    }
+                    try FileManager.default.moveItem(at: tempURL, to: destination)
+                    self.activeDownloads[model.filename]?.isComplete = true
+                    self.activeDownloads[model.filename]?.isDownloading = false
+                    self.activeDownloads[model.filename]?.progress = 1.0
+                } catch {
+                    self.activeDownloads[model.filename]?.error = error.localizedDescription
+                    self.activeDownloads[model.filename]?.isDownloading = false
+                }
+            }
+        }
+
+        // Track progress
+        let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            Task { @MainActor in
+                self?.activeDownloads[model.filename]?.progress = progress.fractionCompleted
+                self?.activeDownloads[model.filename]?.bytesWritten = progress.completedUnitCount
+                self?.activeDownloads[model.filename]?.totalBytes = progress.totalUnitCount
+            }
+        }
+
+        observations[model.filename] = observation
+        tasks[model.filename] = task
+        task.resume()
+    }
+
+    func cancelDownload(model: PresetModel) {
+        tasks[model.filename]?.cancel()
+        activeDownloads[model.filename]?.isDownloading = false
+        activeDownloads[model.filename]?.error = nil
+        observations.removeValue(forKey: model.filename)
+        tasks.removeValue(forKey: model.filename)
+    }
+
+    func deleteModel(_ model: PresetModel) {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let fileURL = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
+        try? FileManager.default.removeItem(at: fileURL)
+        activeDownloads.removeValue(forKey: model.filename)
+    }
+}
+
+
+================================================================================
 Файл: Lamo/Services/LLMProvider.swift
 ================================================================================
 
@@ -262,6 +508,367 @@ struct ChatMessage: Sendable {
 protocol LLMProvider: Sendable {
     var name: String { get }
     func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken>
+}
+
+
+================================================================================
+Файл: Lamo/Services/LiteRTLMProvider.swift
+================================================================================
+
+import Foundation
+import LiteRTLM
+
+/// Provider that runs a local LLM via Google's LiteRT-LM framework.
+/// Supports GPU (Metal) acceleration, streaming, and configurable model path.
+struct LiteRTLMProvider: LLMProvider {
+    let name = "LiteRT-LM"
+
+    /// Path to the .litertlm model file. If nil, uses default Documents location.
+    private let modelPath: String?
+
+    /// Backend selection
+    private let useGPU: Bool
+
+    /// Max tokens for KV-cache. nil = model default.
+    private let maxNumTokens: Int?
+
+    init(modelPath: String? = nil, useGPU: Bool = true, maxNumTokens: Int? = nil) {
+        self.modelPath = modelPath
+        self.useGPU = useGPU
+        self.maxNumTokens = maxNumTokens
+    }
+
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
+        AsyncStream { continuation in
+            Task {
+                do {
+                    try await runInference(messages: messages, continuation: continuation)
+                } catch {
+                    continuation.yield(.error(error))
+                    continuation.finish()
+                }
+            }
+        }
+    }
+
+    // MARK: - Private
+
+    private func runInference(
+        messages: [ChatMessage],
+        continuation: AsyncStream<StreamingToken>.Continuation
+    ) async throws {
+        // Resolve model path
+        let resolvedPath = try resolveModelPath()
+
+        // Build engine config
+        let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: nil)
+
+        let engineConfig = try LiteRTLM.EngineConfig(
+            modelPath: resolvedPath,
+            backend: backend,
+            visionBackend: nil,
+            audioBackend: nil,
+            maxNumTokens: maxNumTokens,
+            cacheDir: NSTemporaryDirectory()
+        )
+
+        // Initialize engine (synchronous, may take several seconds)
+        let engine = LiteRTLM.Engine(engineConfig: engineConfig)
+        try engine.initialize()
+
+        // Build conversation config from message history
+        var initialMessages: [LiteRTLM.Message] = []
+        for msg in messages {
+            // Map app MessageRole → LiteRTLM Role
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            initialMessages.append(LiteRTLM.Message(msg.content, role: role))
+        }
+
+        let samplerConfig = try LiteRTLM.SamplerConfig(
+            topK: 40,
+            topP: 0.95,
+            temperature: 0.7,
+            seed: 0
+        )
+
+        let conversationConfig = LiteRTLM.ConversationConfig(
+            systemMessage: LiteRTLM.Message(
+                "You are a helpful, concise assistant. Answer in the same language the user writes in.",
+                role: .system
+            ),
+            initialMessages: initialMessages,
+            tools: [],
+            samplerConfig: samplerConfig
+        )
+
+        let conversation = try engine.createConversation(with: conversationConfig)
+
+        // Send the last user message and stream the response
+        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
+            let message = LiteRTLM.Message(lastUserMessage.content)
+
+            for try await chunk in conversation.sendMessageStream(message) {
+                if Task.isCancelled { break }
+                continuation.yield(.text(chunk.toString))
+            }
+        }
+
+        continuation.yield(.done)
+        continuation.finish()
+    }
+
+    private func resolveModelPath() throws -> String {
+        // 1. Explicit path
+        if let custom = modelPath {
+            guard FileManager.default.fileExists(atPath: custom) else {
+                throw LiteRTLMError.modelNotFound(custom)
+            }
+            return custom
+        }
+
+        // 2. Default location: Documents/models/*.litertlm
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+
+        guard FileManager.default.fileExists(atPath: modelsDir.path) else {
+            throw LiteRTLMError.modelsDirectoryMissing
+        }
+
+        let models = try FileManager.default.contentsOfDirectory(
+            at: modelsDir,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "litertlm" }
+
+        guard let first = models.first else {
+            throw LiteRTLMError.noModelFound
+        }
+
+        return first.path
+    }
+}
+
+// MARK: - Errors
+
+enum LiteRTLMError: LocalizedError {
+    case modelNotFound(String)
+    case modelsDirectoryMissing
+    case noModelFound
+
+    var errorDescription: String? {
+        switch self {
+        case .modelNotFound(let path):
+            return "Model file not found at: \(path)"
+        case .modelsDirectoryMissing:
+            return "Models directory not found. Create ~/Documents/models/ and place a .litertlm file there."
+        case .noModelFound:
+            return "No .litertlm files found in ~/Documents/models/. Download a model first."
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/PresetModels.swift
+================================================================================
+
+import Foundation
+
+/// Known Gemma 4 models available for download via LiteRT-LM.
+enum PresetModel: String, CaseIterable, Identifiable {
+    case gemma4E4B = "gemma-4-E4B-it"
+    case gemma4E2B = "gemma-4-E2B-it"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gemma4E4B: return "Gemma 4 E4B"
+        case .gemma4E2B: return "Gemma 4 E2B"
+        }
+    }
+
+    var huggingFaceRepo: String {
+        switch self {
+        case .gemma4E4B: return "litert-community/gemma-4-E4B-it-litert-lm"
+        case .gemma4E2B: return "litert-community/gemma-4-E2B-it-litert-lm"
+        }
+    }
+
+    var filename: String {
+        switch self {
+        case .gemma4E4B: return "gemma-4-E4B-it.litertlm"
+        case .gemma4E2B: return "gemma-4-E2B-it.litertlm"
+        }
+    }
+
+    var downloadURL: URL? {
+        URL(string: "https://huggingface.co/\(huggingFaceRepo)/resolve/main/\(filename)")
+    }
+
+    var fileSizeGB: Double {
+        switch self {
+        case .gemma4E4B: return 3.66
+        case .gemma4E2B: return 2.0
+        }
+    }
+
+    var fileSizeString: String {
+        let gb = fileSizeGB
+        return String(format: "%.2f GB", gb)
+    }
+
+    var parameterCount: String {
+        switch self {
+        case .gemma4E4B: return "4B"
+        case .gemma4E2B: return "2B"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gemma4E4B:
+            return "Larger model with better reasoning. Best for complex tasks, coding, and multi-step problems."
+        case .gemma4E2B:
+            return "Compact model optimized for speed. Great for simple Q&A, summaries, and fast responses."
+        }
+    }
+
+    var highlights: [String] {
+        switch self {
+        case .gemma4E4B:
+            return [
+                "Text decoder: 2.24 GB weights",
+                "Embeddings: 0.67 GB (memory-mapped)",
+                "Best quality on-device",
+                "Supports tool calling & vision"
+            ]
+        case .gemma4E2B:
+            return [
+                "Optimized mobile quantization",
+                "Fastest inference speed",
+                "Lowest memory footprint",
+                "Ideal for older devices"
+            ]
+        }
+    }
+
+    var minRAM: String {
+        switch self {
+        case .gemma4E4B: return "~6 GB"
+        case .gemma4E2B: return "~3 GB"
+        }
+    }
+
+    var speedTier: String {
+        switch self {
+        case .gemma4E4B: return "⚡⚡⚡ Moderate"
+        case .gemma4E2B: return "⚡⚡⚡⚡⚡ Fast"
+        }
+    }
+
+    var qualityTier: String {
+        switch self {
+        case .gemma4E4B: return "🏆🏆🏆🏆 High"
+        case .gemma4E2B: return "🏆🏆🏆 Good"
+        }
+    }
+
+    var accentColor: String {
+        switch self {
+        case .gemma4E4B: return "blue"
+        case .gemma4E2B: return "green"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .gemma4E4B: return "brain.head.profile"
+        case .gemma4E2B: return "bolt.fill"
+        }
+    }
+
+    /// Check if this model is already downloaded in ~/Documents/models/
+    var isDownloaded: Bool {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        let fileURL = modelsDir.appendingPathComponent(filename)
+        return FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
+    /// Local path after download
+    var localPath: String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documents.appendingPathComponent("models").appendingPathComponent(filename).path
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/ProviderManager.swift
+================================================================================
+
+import Foundation
+
+/// Available LLM providers in the app.
+enum ProviderType: String, CaseIterable, Identifiable {
+    case appleIntelligence = "apple"
+    case litertLM = "litertlm"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .appleIntelligence: return "Apple Intelligence"
+        case .litertLM: return "LiteRT-LM (Local)"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .appleIntelligence: return "apple.logo"
+        case .litertLM: return "cpu"
+        }
+    }
+}
+
+/// Manages the active LLM provider. Persists selection via UserDefaults.
+@MainActor
+final class ProviderManager {
+    static let shared = ProviderManager()
+
+    /// Currently selected LLM provider (persisted via UserDefaults).
+    var selectedProvider: ProviderType {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: "selectedProvider"),
+                  let type = ProviderType(rawValue: raw) else { return .appleIntelligence }
+            return type
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "selectedProvider") }
+    }
+
+    /// Model path for LiteRT-LM (stored in UserDefaults).
+    var litertLMModelPath: String? {
+        get { UserDefaults.standard.string(forKey: "litertLMModelPath") }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMModelPath") }
+    }
+
+    /// Whether to use GPU acceleration for LiteRT-LM.
+    var litertLMUseGPU: Bool {
+        get { UserDefaults.standard.object(forKey: "litertLMUseGPU") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMUseGPU") }
+    }
+
+    func makeProvider() -> any LLMProvider {
+        switch selectedProvider {
+        case .appleIntelligence:
+            return AppleIntelligenceProvider()
+        case .litertLM:
+            return LiteRTLMProvider(
+                modelPath: litertLMModelPath,
+                useGPU: litertLMUseGPU
+            )
+        }
+    }
 }
 
 
@@ -286,10 +893,12 @@ final class ChatViewModel {
     private let conversation: Conversation
     private var streamingMessageID: UUID?
 
-    init(conversation: Conversation, modelContext: ModelContext, provider: (any LLMProvider)? = nil) {
+    init(conversation: Conversation, modelContext: ModelContext) {
         self.conversation = conversation
         self.modelContext = modelContext
-        self.chatService = ChatService(provider: provider)
+        // Provider is resolved from ProviderManager each time we send,
+        // so settings changes take effect immediately.
+        self.chatService = ChatService(provider: ProviderManager.shared.makeProvider())
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
     }
 
@@ -309,7 +918,11 @@ final class ChatViewModel {
 
         let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
 
-        chatService.sendMessage(
+        // Resolve fresh provider from settings on every send
+        let provider = ProviderManager.shared.makeProvider()
+        let service = ChatService(provider: provider)
+
+        service.sendMessage(
             messages: chatMessages,
             onToken: { [weak self] accumulated in
                 guard let self, let id = self.streamingMessageID,
@@ -415,61 +1028,77 @@ struct ChatInputBar: View {
     let isStreaming: Bool
     let onSend: () -> Void
     let onStop: () -> Void
+    @State private var isFocused = false
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
+
             HStack(alignment: .bottom, spacing: LamoTheme.Spacing.sm) {
+                // Attachment button
                 Button(action: {}) {
-                    Image(systemName: "plus")
-                        .font(.title3)
-                        .bold()
-                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(LamoTheme.Colors.accent)
                 }
                 .padding(.bottom, 6)
 
+                // Input field
                 HStack(alignment: .bottom, spacing: LamoTheme.Spacing.xs) {
                     TextField("Message...", text: $text, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .lineLimit(1...6)
+                        .lineLimit(1...8)
                         .font(LamoTheme.Fonts.body)
                         .padding(.horizontal, LamoTheme.Spacing.md)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 10)
+                        .scrollContentBackground(.hidden)
                 }
                 .background(Color(uiColor: .systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input))
+                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input)
-                        .stroke(Color(uiColor: .separator), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous)
+                        .stroke(
+                            isFocused ? LamoTheme.Colors.accent.opacity(0.5) : Color(uiColor: .separator),
+                            lineWidth: isFocused ? 1.5 : 0.5
+                        )
                 )
 
+                // Send / Stop button
                 if isStreaming {
                     Button(action: onStop) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Color.red)
-                            .clipShape(Circle())
+                        ZStack {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
                     .padding(.bottom, 4)
+                    .transition(.scale.combined(with: .opacity))
                 } else {
                     Button(action: onSend) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(canSend ? .white : Color(uiColor: .placeholderText))
-                            .padding(8)
-                            .background(canSend ? LamoTheme.Colors.accent : Color(uiColor: .systemGray5))
-                            .clipShape(Circle())
+                        ZStack {
+                            Circle()
+                                .fill(canSend ? LamoTheme.Colors.accent : Color(uiColor: .systemGray5))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(canSend ? .white : Color(uiColor: .placeholderText))
+                        }
                     }
                     .disabled(!canSend)
                     .padding(.bottom, 4)
+                    .transition(.scale.combined(with: .opacity))
+                    .sensoryFeedback(.selection, trigger: canSend)
                 }
             }
             .padding(.horizontal, LamoTheme.Spacing.md)
             .padding(.vertical, LamoTheme.Spacing.sm + 2)
             .background(.ultraThinMaterial)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }
 
     private var canSend: Bool {
@@ -559,26 +1188,65 @@ struct ChatView: View {
                     onNewChat?()
                 } label: {
                     Image(systemName: "square.and.pencil")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(LamoTheme.Colors.accent)
                 }
+                .sensoryFeedback(.selection, trigger: viewModel.messages.count)
             }
         }
     }
 
+    // MARK: - Empty State
+
     private var emptyChatView: some View {
-        VStack(spacing: LamoTheme.Spacing.md) {
-            Spacer(minLength: 120)
-            Image(systemName: "sparkles")
-                .font(.system(size: 48))
-                .foregroundStyle(LamoTheme.Colors.accent)
-                .symbolEffect(.bounce, value: viewModel.messages.isEmpty)
-            Text("How can I help you today?")
-                .font(.title3.bold())
-                .foregroundStyle(LamoTheme.Colors.textPrimary)
-            Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
-                .font(LamoTheme.Fonts.subheadline)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, LamoTheme.Spacing.xl)
+        VStack(spacing: LamoTheme.Spacing.xl) {
+            Spacer(minLength: 100)
+
+            // Animated welcome icon
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.blue.opacity(0.15), .purple.opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 88, height: 88)
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 40))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .symbolEffect(.variableColor.iterative, isActive: true)
+            }
+
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                Text("How can I help you today?")
+                    .font(LamoTheme.Fonts.title3)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
+                    .font(LamoTheme.Fonts.subheadline)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, LamoTheme.Spacing.xl)
+            }
+
+            // Quick suggestion chips
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                SuggestionChip(text: "Explain quantum computing")
+                SuggestionChip(text: "Write a Swift function")
+                SuggestionChip(text: "Help me debug my code")
+            }
+            .padding(.top, LamoTheme.Spacing.sm)
+
             Spacer()
         }
     }
@@ -592,9 +1260,25 @@ struct ChatView: View {
     }
 }
 
+// MARK: - Suggestion Chip
+
+struct SuggestionChip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(LamoTheme.Fonts.subheadline)
+            .foregroundStyle(LamoTheme.Colors.textSecondary)
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.vertical, LamoTheme.Spacing.sm)
+            .glassEffect(cornerRadius: LamoTheme.CornerRadius.xl)
+    }
+}
+
+// MARK: - Scroll Offset
+
 struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
-
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
@@ -677,30 +1361,61 @@ struct MarkdownRenderer: View {
     }
 }
 
+// MARK: - Code Block
+
 struct CodeBlock: View {
     let code: String
     let language: String
+    @State private var isCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
-            if !language.isEmpty {
-                Text(language.uppercased())
-                    .font(.system(.caption2, design: .monospaced))
-                    .bold()
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            // Language label + copy button
+            HStack {
+                if !language.isEmpty {
+                    Text(language.uppercased())
+                        .font(.system(.caption2, design: .monospaced))
+                        .bold()
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                }
+
+                Spacer()
+
+                Button {
+                    UIPasteboard.general.string = code
+                    withAnimation {
+                        isCopied = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            isCopied = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                        Text(isCopied ? "Copied" : "Copy")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                }
+                .buttonStyle(.plain)
             }
+
+            // Code content
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(LamoTheme.Fonts.code)
+                    .font(LamoTheme.Fonts.codeBlock)
                     .textSelection(.enabled)
                     .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
         }
         .padding(LamoTheme.Spacing.md)
         .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous)
                 .stroke(Color(uiColor: .separator), lineWidth: 0.5)
         )
     }
@@ -718,7 +1433,7 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack {
-            if message.role == .user { Spacer(minLength: 50) }
+            if message.role == .user { Spacer(minLength: 48) }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: LamoTheme.Spacing.xs) {
                 MarkdownRenderer(
@@ -728,22 +1443,28 @@ struct MessageBubble: View {
                 .padding(.horizontal, LamoTheme.Spacing.md)
                 .padding(.vertical, LamoTheme.Spacing.sm + 2)
                 .background(bubbleBackground)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: LamoTheme.CornerRadius.bubble,
-                        bottomLeadingRadius: message.role == .user ? LamoTheme.CornerRadius.bubble : 4,
-                        bottomTrailingRadius: message.role == .user ? 4 : LamoTheme.CornerRadius.bubble,
-                        topTrailingRadius: LamoTheme.CornerRadius.bubble
-                    )
-                )
+                .clipShape(BubbleShape(isUser: message.role == .user))
+                .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
 
                 if message.isStreaming {
                     TypingIndicator()
                         .padding(.horizontal, LamoTheme.Spacing.xs)
                 }
-            }
 
-            if message.role == .assistant { Spacer(minLength: 50) }
+                // Timestamp for completed messages
+                if !message.isStreaming {
+                    Text(message.timestamp, style: .time)
+                        .font(LamoTheme.Fonts.caption2)
+                        .foregroundStyle(LamoTheme.Colors.textTertiary)
+                        .padding(.horizontal, LamoTheme.Spacing.sm)
+                }
+            }
+            .transition(.asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .opacity
+            ))
+
+            if message.role == .assistant { Spacer(minLength: 48) }
         }
     }
 
@@ -768,14 +1489,15 @@ struct TypingIndicator: View {
     @State private var isAnimating = false
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
                     .fill(LamoTheme.Colors.textSecondary)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 7, height: 7)
                     .scaleEffect(isAnimating ? 1.0 : 0.3)
+                    .opacity(isAnimating ? 1.0 : 0.4)
                     .animation(
-                        .easeInOut(duration: 0.6)
+                        .easeInOut(duration: 0.5)
                         .repeatForever(autoreverses: true)
                         .delay(Double(index) * 0.15),
                         value: isAnimating
@@ -783,7 +1505,7 @@ struct TypingIndicator: View {
             }
         }
         .padding(.horizontal, LamoTheme.Spacing.md)
-        .padding(.vertical, LamoTheme.Spacing.sm)
+        .padding(.vertical, LamoTheme.Spacing.sm + 2)
         .background(LamoTheme.Colors.assistantBubble)
         .clipShape(Capsule())
         .onAppear {
@@ -809,11 +1531,18 @@ struct ConversationListView: View {
         NavigationStack {
             Group {
                 if conversations.isEmpty {
-                    ContentUnavailableView(
-                        "No Conversations",
-                        systemImage: "bubble.left.and.bubble.right",
-                        description: Text("Start a new chat")
-                    )
+                    ContentUnavailableView {
+                        Label("No Conversations", systemImage: "bubble.left.and.bubble.right")
+                    } description: {
+                        Text("Start a new chat to begin")
+                    } actions: {
+                        Button {
+                            _ = viewModel?.createConversation()
+                        } label: {
+                            Label("New Chat", systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 } else {
                     List {
                         ForEach(conversations) { conversation in
@@ -822,9 +1551,10 @@ struct ConversationListView: View {
                             }
                         }
                         .onDelete { indexSet in
-                                viewModel?.deleteConversations(indexSet, from: conversations)
+                            viewModel?.deleteConversations(indexSet, from: conversations)
                         }
                     }
+                    .listStyle(.insetGrouped)
                 }
             }
             .navigationTitle("Lamo")
@@ -834,7 +1564,9 @@ struct ConversationListView: View {
                         _ = viewModel?.createConversation()
                     } label: {
                         Image(systemName: "square.and.pencil")
+                            .font(.body.weight(.medium))
                     }
+                    .sensoryFeedback(.impact(weight: .light), trigger: conversations.count)
                 }
             }
             .navigationDestination(for: Conversation.self) { conversation in
@@ -849,11 +1581,13 @@ struct ConversationListView: View {
     }
 }
 
+// MARK: - Conversation Row
+
 struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(conversation.title)
                     .font(LamoTheme.Fonts.headline)
@@ -862,16 +1596,34 @@ struct ConversationRow: View {
 
                 Spacer()
 
-                Text(conversation.updatedAt, style: .time)
+                Text(conversation.updatedAt, style: .relative)
                     .font(LamoTheme.Fonts.caption)
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .foregroundStyle(LamoTheme.Colors.textTertiary)
             }
 
-            Text(lastMessageSnippet)
-                .font(LamoTheme.Fonts.subheadline)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            HStack(spacing: LamoTheme.Spacing.sm) {
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.2), .purple.opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                }
+
+                Text(lastMessageSnippet)
+                    .font(LamoTheme.Fonts.subheadline)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -912,6 +1664,7 @@ struct MainView: View {
                     modelContext: modelContext,
                     onNewChat: { createNewChat() }
                 )
+                .id(conversation.id) // Force view refresh on conversation change
             } else {
                 emptyState
             }
@@ -922,67 +1675,106 @@ struct MainView: View {
         }
     }
 
+    // MARK: - Sidebar
+
     private var sidebarView: some View {
         List(selection: $selectedConversationID) {
             ForEach(conversations) { conversation in
                 ConversationRow(conversation: conversation)
                     .tag(conversation.id)
-                    .swipeActions(edge: .trailing) {
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             deleteConversation(conversation)
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Chats")
+        .navigationTitle("Lamo")
         .safeAreaInset(edge: .bottom) {
-            HStack {
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                // New Chat Button
                 Button {
                     createNewChat()
                 } label: {
-                    Label("New Chat", systemImage: "square.and.pencil")
-                        .font(.headline)
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                        Text("New Chat")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, LamoTheme.Spacing.sm + 2)
+                    .glassEffect(cornerRadius: LamoTheme.CornerRadius.lg)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(LamoTheme.Colors.accent)
-                .clipShape(Capsule())
+                .buttonStyle(.plain)
 
-                Spacer()
-
+                // Settings Button
                 NavigationLink {
                     SettingsView()
                 } label: {
-                    Image(systemName: "gearshape")
-                        .font(.title3)
-                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    HStack {
+                        Image(systemName: "gearshape")
+                        Text("Settings")
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .padding(.vertical, LamoTheme.Spacing.xs)
+                    .padding(.horizontal, LamoTheme.Spacing.md)
+                    .glassEffect(cornerRadius: LamoTheme.CornerRadius.md)
                 }
-                .buttonStyle(.plain)
             }
             .padding(LamoTheme.Spacing.md)
             .background(.ultraThinMaterial)
         }
     }
 
+    // MARK: - Empty State
+
     private var emptyState: some View {
-        VStack(spacing: LamoTheme.Spacing.lg) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 56))
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-            Text("Lamo")
-                .font(.largeTitle.bold())
-            Text("Select a chat or start a new conversation")
-                .font(LamoTheme.Fonts.subheadline)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-            Button("New Chat") {
-                createNewChat()
+        VStack(spacing: LamoTheme.Spacing.xl) {
+            Spacer(minLength: 80)
+
+            // Animated icon
+            Image(systemName: "sparkles")
+                .font(.system(size: 64))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.blue, .purple, .blue],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .symbolEffect(.variableColor.iterative, isActive: true)
+
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                Text("Lamo")
+                    .font(LamoTheme.Fonts.largeTitle)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+
+                Text("Local AI Assistant")
+                    .font(LamoTheme.Fonts.subheadline)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
             }
-            .buttonStyle(.borderedProminent)
+
+            // Quick action cards
+            VStack(spacing: LamoTheme.Spacing.md) {
+                QuickPromptCard(
+                    icon: "brain.head.profile",
+                    title: "Start a conversation",
+                    subtitle: "Ask anything — all processing stays on your device"
+                )
+            }
+            .padding(.horizontal, LamoTheme.Spacing.xl)
+
+            Spacer()
         }
-        .padding()
     }
+
+    // MARK: - Actions
 
     private func ensureConversationExists() {
         if selectedConversationID == nil {
@@ -1011,37 +1803,454 @@ struct MainView: View {
     }
 }
 
+// MARK: - Quick Prompt Card
+
+struct QuickPromptCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: LamoTheme.Spacing.md) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(LamoTheme.Colors.accent)
+                .frame(width: 44, height: 44)
+                .background(LamoTheme.Colors.accent.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(LamoTheme.Fonts.headline)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                Text(subtitle)
+                    .font(LamoTheme.Fonts.caption)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textTertiary)
+        }
+        .padding(LamoTheme.Spacing.md)
+        .glassEffect(cornerRadius: LamoTheme.CornerRadius.card)
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Settings/ModelCardView.swift
+================================================================================
+
+import SwiftUI
+
+/// A card view displaying model specs with download controls.
+struct ModelCardView: View {
+    let model: PresetModel
+    @ObservedObject var downloadManager: DownloadManager
+    @State private var isExpanded = false
+
+    private var downloadState: DownloadManager.DownloadState? {
+        downloadManager.activeDownloads[model.filename]
+    }
+
+    private var isDownloaded: Bool {
+        model.isDownloaded || downloadState?.isComplete == true
+    }
+
+    private var isDownloading: Bool {
+        downloadState?.isDownloading == true
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Image(systemName: model.systemImage)
+                            .font(.title2)
+                            .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
+
+                        Text(model.displayName)
+                            .font(LamoTheme.Fonts.headline)
+                    }
+
+                    Text(model.description)
+                        .font(LamoTheme.Fonts.subheadline)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        .lineLimit(isExpanded ? nil : 2)
+                }
+
+                Spacer()
+
+                // Status badge
+                if isDownloaded {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(LamoTheme.Colors.success)
+                        .font(.title3)
+                        .symbolEffect(.bounce, value: isDownloaded)
+                } else if isDownloading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.top, LamoTheme.Spacing.lg)
+            .padding(.bottom, LamoTheme.Spacing.md)
+
+            // Quick stats row
+            HStack(spacing: LamoTheme.Spacing.md) {
+                StatBadge(label: "Size", value: model.fileSizeString, icon: "internaldrive")
+                StatBadge(label: "Params", value: model.parameterCount, icon: "cpu")
+                StatBadge(label: "RAM", value: model.minRAM, icon: "memorychip")
+            }
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.bottom, LamoTheme.Spacing.md)
+
+            // Expandable details
+            if isExpanded {
+                Divider().padding(.horizontal, LamoTheme.Spacing.lg)
+
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("Highlights")
+                        .font(LamoTheme.Fonts.caption)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        .textCase(.uppercase)
+                        .padding(.top, LamoTheme.Spacing.md)
+
+                    ForEach(model.highlights, id: \.self) { highlight in
+                        HStack(spacing: LamoTheme.Spacing.sm) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
+                            Text(highlight)
+                                .font(LamoTheme.Fonts.subheadline)
+                        }
+                    }
+
+                    HStack(spacing: LamoTheme.Spacing.lg) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Speed")
+                                .font(LamoTheme.Fonts.caption)
+                                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                            Text(model.speedTier)
+                                .font(LamoTheme.Fonts.subheadline)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Quality")
+                                .font(LamoTheme.Fonts.caption)
+                                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                            Text(model.qualityTier)
+                                .font(LamoTheme.Fonts.subheadline)
+                        }
+                    }
+                    .padding(.top, LamoTheme.Spacing.xs)
+                }
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.md)
+            }
+
+            // Progress bar (during download)
+            if isDownloading, let state = downloadState, state.totalBytes > 0 {
+                VStack(spacing: LamoTheme.Spacing.xs) {
+                    ProgressView(value: state.progress)
+                        .tint(model.accentColor == "blue" ? .blue : .green)
+
+                    HStack {
+                        Text("\(state.downloadedSizeString) / \(state.totalSizeString)")
+                            .font(LamoTheme.Fonts.caption2)
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        Spacer()
+                        Text("\(state.progressPercentage)%")
+                            .font(LamoTheme.Fonts.caption2.monospacedDigit())
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    }
+                }
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.md)
+            }
+
+            // Error message
+            if let error = downloadState?.error {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(LamoTheme.Colors.error)
+                    Text(error)
+                        .font(LamoTheme.Fonts.caption)
+                        .foregroundStyle(LamoTheme.Colors.error)
+                }
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.md)
+            }
+
+            Divider()
+
+            // Actions row
+            HStack {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Label(isExpanded ? "Less" : "Details", systemImage: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(LamoTheme.Fonts.subheadline)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                if isDownloaded {
+                    Button(role: .destructive) {
+                        downloadManager.deleteModel(model)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                            .font(LamoTheme.Fonts.subheadline)
+                    }
+                    .buttonStyle(.plain)
+                } else if isDownloading {
+                    Button {
+                        downloadManager.cancelDownload(model: model)
+                    } label: {
+                        Label("Cancel", systemImage: "xmark.circle")
+                            .font(LamoTheme.Fonts.subheadline)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        downloadManager.download(model: model)
+                    } label: {
+                        Label("Download", systemImage: "arrow.down.circle.fill")
+                            .font(LamoTheme.Fonts.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
+                }
+            }
+            .padding(LamoTheme.Spacing.lg)
+        }
+        .glassEffect(cornerRadius: LamoTheme.CornerRadius.card)
+    }
+}
+
+// MARK: - Stat Badge
+
+struct StatBadge: View {
+    let label: String
+    let value: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(LamoTheme.Fonts.caption2)
+                    .foregroundStyle(LamoTheme.Colors.textTertiary)
+                Text(value)
+                    .font(LamoTheme.Fonts.subheadline.weight(.medium))
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+            }
+        }
+    }
+}
+
 
 ================================================================================
 Файл: Lamo/Views/Settings/SettingsView.swift
 ================================================================================
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @State private var providerManager = ProviderManager.shared
+    @StateObject private var downloadManager = DownloadManager.shared
+    @State private var isImportingModel = false
+    @State private var availableModels: [String] = []
+
     var body: some View {
         List {
+            // MARK: - Provider Selection
             Section {
-                HStack(spacing: LamoTheme.Spacing.md) {
+                Picker("LLM Provider", selection: $providerManager.selectedProvider) {
+                    ForEach(ProviderType.allCases) { provider in
+                        Label(provider.displayName, systemImage: provider.icon)
+                            .tag(provider)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                switch providerManager.selectedProvider {
+                case .appleIntelligence:
+                    Label("On-device AI — no setup required", systemImage: "checkmark.circle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(LamoTheme.Colors.success)
+
+                case .litertLM:
+                    litertLMSettings
+                }
+            } header: {
+                Label("Provider", systemImage: "cpu")
+            }
+
+            // MARK: - Model Gallery
+            if providerManager.selectedProvider == .litertLM {
+                Section {
+                    ForEach(PresetModel.allCases) { model in
+                        ModelCardView(model: model, downloadManager: downloadManager)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                } header: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Available Models", systemImage: "arrow.down.circle")
+                        Text("Download a Gemma 4 model to get started")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    Label("All models run on-device. Your data never leaves your phone.", systemImage: "lock.shield")
+                        .font(.footnote)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
+            }
+
+            // MARK: - Privacy
+            Section {
+                Label("All processing happens locally on your device", systemImage: "lock.shield.fill")
+                    .font(.footnote)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            } header: {
+                Label("Privacy", systemImage: "hand.raised")
+            }
+
+            // MARK: - About
+            Section {
+                HStack {
                     Image(systemName: "info.circle.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(LamoTheme.Colors.accent)
                         .font(.title3)
                     LabeledContent("Version", value: "1.0")
                 }
-                HStack(spacing: LamoTheme.Spacing.md) {
-                    Image(systemName: "cpu")
-                        .foregroundStyle(.purple)
-                        .font(.title3)
-                    LabeledContent("LLM Provider", value: "Apple Intelligence (Local)")
-                }
             } header: {
-                Text("About")
-            } footer: {
-                Text("Lamo uses local device models to process your data privately and securely.")
+                Label("About", systemImage: "info.circle")
             }
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            refreshModels()
+        }
+    }
+
+    // MARK: - LiteRT-LM Settings
+
+    private var litertLMSettings: some View {
+        Group {
+            // Active model indicator
+            if let current = providerManager.litertLMModelPath {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(LamoTheme.Colors.success)
+                    Text("Active: \(current)")
+                        .font(.footnote)
+                        .lineLimit(1)
+                }
+            }
+
+            // Local model picker
+            if !availableModels.isEmpty {
+                Picker("Local Model", selection: Binding(
+                    get: { providerManager.litertLMModelPath ?? "" },
+                    set: { providerManager.litertLMModelPath = $0.isEmpty ? nil : $0 }
+                )) {
+                    Text("Auto-detect").tag("")
+                    ForEach(availableModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+            }
+
+            // Import button
+            Button {
+                isImportingModel = true
+            } label: {
+                Label("Import Model", systemImage: "square.and.arrow.down")
+            }
+
+            // GPU toggle
+            Toggle(isOn: $providerManager.litertLMUseGPU) {
+                Label("GPU Acceleration", systemImage: "bolt.fill")
+            }
+
+            if providerManager.litertLMUseGPU {
+                Text("Uses Metal for faster inference")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .fileImporter(
+            isPresented: $isImportingModel,
+            allowedContentTypes: [
+                UTType(filenameExtension: "litertlm") ?? .data
+            ],
+            allowsMultipleSelection: false
+        ) { result in
+            handleModelImport(result)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func refreshModels() {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+
+        guard FileManager.default.fileExists(atPath: modelsDir.path) else {
+            availableModels = []
+            return
+        }
+
+        if let files = try? FileManager.default.contentsOfDirectory(
+            at: modelsDir,
+            includingPropertiesForKeys: nil
+        ) {
+            availableModels = files
+                .filter { $0.pathExtension == "litertlm" }
+                .map { $0.lastPathComponent }
+        } else {
+            availableModels = []
+        }
+    }
+
+    private func handleModelImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result,
+              let url = urls.first else { return }
+
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+
+        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+        let destination = modelsDir.appendingPathComponent(url.lastPathComponent)
+
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+            providerManager.litertLMModelPath = url.lastPathComponent
+            refreshModels()
+        } catch {
+            print("Import failed: \(error)")
+        }
     }
 }
 

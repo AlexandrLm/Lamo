@@ -66,43 +66,16 @@ struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(conversation.title)
-                    .font(LamoTheme.Fonts.headline)
-                    .lineLimit(1)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(conversation.title)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+                .lineLimit(1)
 
-                Spacer()
-
-                Text(conversation.updatedAt, style: .relative)
-                    .font(LamoTheme.Fonts.caption)
-                    .foregroundStyle(LamoTheme.Colors.textTertiary)
-            }
-
-            HStack(spacing: LamoTheme.Spacing.sm) {
-                // Avatar
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.blue.opacity(0.2), .purple.opacity(0.15)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 12))
-                        .foregroundStyle(LamoTheme.Colors.accent)
-                }
-
-                Text(lastMessageSnippet)
-                    .font(LamoTheme.Fonts.subheadline)
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
+            Text(lastMessageSnippet)
+                .font(.subheadline)
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .lineLimit(1)
         }
         .padding(.vertical, 4)
     }

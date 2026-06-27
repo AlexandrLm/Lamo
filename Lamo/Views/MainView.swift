@@ -53,23 +53,24 @@ struct MainView: View {
         .navigationTitle("Lamo")
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: LamoTheme.Spacing.sm) {
-                // New Chat Button
                 Button {
                     createNewChat()
                 } label: {
                     HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                        Text("New Chat")
+                        Image(systemName: "square.and.pencil")
                             .font(.headline)
+                        Text("New Chat")
+                            .font(.headline.weight(.semibold))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, LamoTheme.Spacing.sm + 2)
-                    .glassEffect(cornerRadius: LamoTheme.CornerRadius.lg)
+                    .padding(.vertical, 14)
+                    .background(LamoTheme.Colors.accent)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: LamoTheme.Colors.accent.opacity(0.3), radius: 8, y: 4)
                 }
                 .buttonStyle(.plain)
 
-                // Settings Button
                 NavigationLink {
                     SettingsView()
                 } label: {
@@ -84,7 +85,8 @@ struct MainView: View {
                     .glassEffect(cornerRadius: LamoTheme.CornerRadius.md)
                 }
             }
-            .padding(LamoTheme.Spacing.md)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
             .background(.ultraThinMaterial)
         }
     }
@@ -95,21 +97,31 @@ struct MainView: View {
         VStack(spacing: LamoTheme.Spacing.xl) {
             Spacer(minLength: 80)
 
-            // Animated icon
-            Image(systemName: "sparkles")
-                .font(.system(size: 64))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.blue, .purple, .blue],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            ZStack {
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 120, height: 120)
+                    .blur(radius: 35)
+                    .opacity(0.25)
+
+                Circle()
+                    .fill(.purple)
+                    .frame(width: 120, height: 120)
+                    .offset(x: 30, y: 30)
+                    .blur(radius: 35)
+                    .opacity(0.25)
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 48, weight: .light))
+                    .foregroundStyle(
+                        LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
-                )
-                .symbolEffect(.variableColor.iterative, isActive: true)
+                    .symbolEffect(.variableColor.iterative, isActive: true)
+            }
 
             VStack(spacing: LamoTheme.Spacing.sm) {
                 Text("Lamo")
-                    .font(LamoTheme.Fonts.largeTitle)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundStyle(LamoTheme.Colors.textPrimary)
 
                 Text("Local AI Assistant")
@@ -117,7 +129,6 @@ struct MainView: View {
                     .foregroundStyle(LamoTheme.Colors.textSecondary)
             }
 
-            // Quick action cards
             VStack(spacing: LamoTheme.Spacing.md) {
                 QuickPromptCard(
                     icon: "brain.head.profile",

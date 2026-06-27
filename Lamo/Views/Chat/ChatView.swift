@@ -49,6 +49,7 @@ struct ChatView: View {
                     let screenHeight = UIScreen.main.bounds.height
                     isUserNearBottom = maxY < screenHeight + 100
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: viewModel.messages.count) {
                     scrollToBottom(proxy: proxy)
                 }
@@ -66,7 +67,7 @@ struct ChatView: View {
                 onStop: { viewModel.stopGeneration() }
             )
         }
-        .background(LamoTheme.Colors.background)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -87,52 +88,46 @@ struct ChatView: View {
 
     private var emptyChatView: some View {
         VStack(spacing: LamoTheme.Spacing.xl) {
-            Spacer(minLength: 100)
+            Spacer(minLength: 80)
 
-            // Animated welcome icon
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.15), .purple.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 88, height: 88)
+                    .fill(.blue)
+                    .frame(width: 150, height: 150)
+                    .blur(radius: 40)
+                    .opacity(0.3)
+
+                Circle()
+                    .fill(.purple)
+                    .frame(width: 150, height: 150)
+                    .offset(x: 40, y: 40)
+                    .blur(radius: 40)
+                    .opacity(0.3)
 
                 Image(systemName: "sparkles")
-                    .font(.system(size: 40))
+                    .font(.system(size: 56, weight: .light))
                     .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+                        LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
                     .symbolEffect(.variableColor.iterative, isActive: true)
             }
 
-            VStack(spacing: LamoTheme.Spacing.sm) {
-                Text("How can I help you today?")
-                    .font(LamoTheme.Fonts.title3)
+            VStack(spacing: 8) {
+                Text("How can I help?")
+                    .font(.system(size: 28, weight: .semibold, design: .rounded))
                     .foregroundStyle(LamoTheme.Colors.textPrimary)
-                    .multilineTextAlignment(.center)
 
-                Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
-                    .font(LamoTheme.Fonts.subheadline)
+                Text("Powered by local intelligence")
+                    .font(.subheadline)
                     .foregroundStyle(LamoTheme.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, LamoTheme.Spacing.xl)
             }
 
-            // Quick suggestion chips
-            VStack(spacing: LamoTheme.Spacing.sm) {
-                SuggestionChip(text: "Explain quantum computing")
-                SuggestionChip(text: "Write a Swift function")
-                SuggestionChip(text: "Help me debug my code")
+            VStack(spacing: 12) {
+                SuggestionChip(text: "Summarize a complex topic", icon: "doc.text.magnifyingglass")
+                SuggestionChip(text: "Write a Swift function", icon: "chevron.left.forwardslash.chevron.right")
+                SuggestionChip(text: "Help me debug my code", icon: "ladybug")
             }
-            .padding(.top, LamoTheme.Spacing.sm)
+            .padding(.top, 24)
 
             Spacer()
         }
@@ -151,14 +146,21 @@ struct ChatView: View {
 
 struct SuggestionChip: View {
     let text: String
+    var icon: String = "sparkle"
 
     var body: some View {
-        Text(text)
-            .font(LamoTheme.Fonts.subheadline)
-            .foregroundStyle(LamoTheme.Colors.textSecondary)
-            .padding(.horizontal, LamoTheme.Spacing.lg)
-            .padding(.vertical, LamoTheme.Spacing.sm)
-            .glassEffect(cornerRadius: LamoTheme.CornerRadius.xl)
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(LamoTheme.Colors.accent)
+                .font(.subheadline)
+            Text(text)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color(uiColor: .secondarySystemFill))
+        .clipShape(Capsule())
     }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 @MainActor
 @Observable
@@ -59,6 +60,7 @@ final class ChatViewModel {
                 self.isStreaming = false
                 self.conversation.updatedAt = .now
                 self.save()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             },
             onError: { [weak self] error in
                 guard let self, let id = self.streamingMessageID,

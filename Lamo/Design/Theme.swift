@@ -7,16 +7,16 @@ enum LamoTheme {
         static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
         static let tertiaryBackground = Color(uiColor: .tertiarySystemBackground)
 
-        // Accent — 使用 iOS 系统蓝色作为主色调
-        static let accent = Color.accentColor
+        // Accent — deep indigo-violet (Apple Intelligence style)
+        static let accent = Color(red: 0.35, green: 0.35, blue: 1.0)
         static let accentGradient = LinearGradient(
-            colors: [Color.blue, Color.blue.opacity(0.8)],
+            colors: [Color(red: 0.35, green: 0.35, blue: 1.0), Color.purple.opacity(0.8)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
 
         // Bubbles
-        static let userBubble = Color.accentColor
+        static let userBubble = Color(red: 0.35, green: 0.35, blue: 1.0)
         static let assistantBubble = Color(uiColor: .secondarySystemBackground)
         static let bubbleTextUser = Color.white
         static let bubbleTextAssistant = Color.primary
@@ -66,6 +66,8 @@ enum LamoTheme {
         static let footnote = Font.footnote
         static let caption = Font.caption
         static let caption2 = Font.caption2
+        static let roundedCaption = Font.system(.caption, design: .rounded).weight(.medium)
+        static let roundedHeadline = Font.system(.headline, design: .rounded).weight(.semibold)
         static let code = Font.system(.subheadline, design: .monospaced)
         static let codeBlock = Font.system(.callout, design: .monospaced)
     }
@@ -75,22 +77,26 @@ enum LamoTheme {
 
 struct GlassModifier: ViewModifier {
     var cornerRadius: CGFloat = LamoTheme.CornerRadius.card
-    var opacity: Double = 0.06
 
     func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(opacity), lineWidth: 0.5)
+                    .stroke(LinearGradient(
+                        colors: [.white.opacity(0.4), .clear],
+                        startPoint: .top, endPoint: .bottom
+                    ), lineWidth: 0.5)
+                    .blendMode(.overlay)
             )
     }
 }
 
 extension View {
-    func glassEffect(cornerRadius: CGFloat = LamoTheme.CornerRadius.card, opacity: Double = 0.06) -> some View {
-        modifier(GlassModifier(cornerRadius: cornerRadius, opacity: opacity))
+    func glassEffect(cornerRadius: CGFloat = LamoTheme.CornerRadius.card) -> some View {
+        modifier(GlassModifier(cornerRadius: cornerRadius))
     }
 }
 
@@ -137,24 +143,40 @@ struct BubbleShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         let radius: CGFloat = 18
-        let tailSize: CGFloat = 8
 
         var path = Path()
 
         if isUser {
-            // User bubble — tail on bottom-right
             path.addRoundedRect(
-                in: CGRect(x: rect.minX, y: rect.minY, width: rect.width - tailSize, height: rect.height - tailSize),
-                cornerSize: CGSize(width: radius, height: radius)
+                in: rect,
+                cornerSize: CGSize(width: radius, height: radius),
+                style: .continuous
             )
         } else {
-            // Assistant bubble — tail on bottom-left
             path.addRoundedRect(
-                in: CGRect(x: rect.minX + tailSize, y: rect.minY, width: rect.width - tailSize, height: rect.height - tailSize),
-                cornerSize: CGSize(width: radius, height: radius)
+                in: rect,
+                cornerSize: CGSize(width: radius, height: radius),
+                style: .continuous
             )
         }
 
+        return path
+    }
+}
+
+struct AsymmetricRoundedShape: Shape {
+    let topLeft: CGFloat
+    let topRight: CGFloat
+    let bottomLeft: CGFloat
+    let bottomRight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRoundedRect(
+            in: rect,
+            cornerSize: CGSize(width: topLeft, height: topLeft),
+            style: .continuous
+        )
         return path
     }
 }

@@ -197,18 +197,16 @@ struct StatBadge: View {
     let icon: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(LamoTheme.Fonts.caption2)
-                    .foregroundStyle(LamoTheme.Colors.textTertiary)
-                Text(value)
-                    .font(LamoTheme.Fonts.subheadline.weight(.medium))
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
-            }
+                .font(.caption2)
+            Text(value)
+                .font(.system(.caption, design: .rounded).weight(.semibold))
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(uiColor: .tertiarySystemFill))
+        .clipShape(Capsule())
+        .foregroundStyle(LamoTheme.Colors.textSecondary)
     }
 }

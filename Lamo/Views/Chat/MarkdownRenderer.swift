@@ -17,6 +17,7 @@ struct MarkdownRenderer: View {
                         StyledText(content)
                             .font(LamoTheme.Fonts.body)
                             .foregroundStyle(textColor)
+                            .lineSpacing(4)
                     }
                 }
             }
@@ -79,19 +80,19 @@ struct CodeBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
-            // Language label + copy button
             HStack {
                 if !language.isEmpty {
                     Text(language.uppercased())
                         .font(.system(.caption2, design: .monospaced))
                         .bold()
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .foregroundStyle(.blue.opacity(0.8))
                 }
 
                 Spacer()
 
                 Button {
                     UIPasteboard.general.string = code
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     withAnimation {
                         isCopied = true
                     }
@@ -107,25 +108,20 @@ struct CodeBlock: View {
                         Text(isCopied ? "Copied" : "Copy")
                             .font(.caption2)
                     }
-                    .foregroundStyle(LamoTheme.Colors.accent)
+                    .foregroundStyle(.white.opacity(0.6))
                 }
                 .buttonStyle(.plain)
             }
 
-            // Code content
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(LamoTheme.Fonts.codeBlock)
                     .textSelection(.enabled)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .foregroundStyle(.white)
             }
         }
         .padding(LamoTheme.Spacing.md)
-        .background(Color(uiColor: .tertiarySystemBackground))
+        .background(Color(red: 0.1, green: 0.1, blue: 0.12))
         .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous)
-                .stroke(Color(uiColor: .separator), lineWidth: 0.5)
-        )
     }
 }
