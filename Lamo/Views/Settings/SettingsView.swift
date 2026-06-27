@@ -10,74 +10,29 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                // MARK: - Provider Selection
-                Section {
-                    Picker("LLM Provider", selection: $providerManager.selectedProvider) {
-                        ForEach(ProviderType.allCases) { provider in
-                            Label(provider.displayName, systemImage: provider.icon)
-                                .tag(provider)
-                        }
+            ScrollView {
+                VStack(spacing: LamoTheme.Spacing.lg) {
+                    // MARK: - Header
+                    headerSection
+
+                    // MARK: - Provider
+                    providerSection
+
+                    // MARK: - Models
+                    if providerManager.selectedProvider == .litertLM {
+                        modelsSection
                     }
-                    .pickerStyle(.menu)
 
-                    switch providerManager.selectedProvider {
-                    case .appleIntelligence:
-                        Label("On-device AI — no setup required", systemImage: "checkmark.circle.fill")
-                            .font(.footnote)
-                            .foregroundStyle(LamoTheme.Colors.success)
+                    // MARK: - Privacy
+                    privacySection
 
-                    case .litertLM:
-                        litertLMSettings
-                    }
-                } header: {
-                    Label("Provider", systemImage: "cpu")
+                    // MARK: - About
+                    aboutSection
                 }
-
-                // MARK: - Model Gallery
-                if providerManager.selectedProvider == .litertLM {
-                    Section {
-                        ForEach(PresetModel.allCases) { model in
-                            ModelCardView(model: model, downloadManager: downloadManager)
-                                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                        }
-                    } header: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("Available Models", systemImage: "arrow.down.circle")
-                            Text("Download a Gemma 4 model to get started")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    } footer: {
-                        Label("All models run on-device. Your data never leaves your phone.", systemImage: "lock.shield")
-                            .font(.footnote)
-                            .foregroundStyle(LamoTheme.Colors.textSecondary)
-                    }
-                }
-
-                // MARK: - Privacy
-                Section {
-                    Label("All processing happens locally on your device", systemImage: "lock.shield.fill")
-                        .font(.footnote)
-                        .foregroundStyle(LamoTheme.Colors.textSecondary)
-                } header: {
-                    Label("Privacy", systemImage: "hand.raised")
-                }
-
-                // MARK: - About
-                Section {
-                    HStack {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(LamoTheme.Colors.accent)
-                            .font(.title3)
-                        LabeledContent("Version", value: "1.0")
-                    }
-                } header: {
-                    Label("About", systemImage: "info.circle")
-                }
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.xxl)
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -85,6 +40,7 @@ struct SettingsView: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
                 }
             }
             .onAppear {
@@ -93,51 +49,154 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - LiteRT-LM Settings
+    // MARK: - Header
 
-    private var litertLMSettings: some View {
-        Group {
-            // Active model indicator
-            if let current = providerManager.litertLMModelPath {
+    private var headerSection: some View {
+        VStack(spacing: LamoTheme.Spacing.md) {
+            // App icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(LamoTheme.Colors.accentGradient)
+                    .frame(width: 64, height: 64)
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(spacing: 4) {
+                Text("Lamo")
+                    .font(.title2.bold())
+
+                Text("Local AI Assistant")
+                    .font(.subheadline)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, LamoTheme.Spacing.xl)
+    }
+
+    // MARK: - Provider Section
+
+    private var providerSection: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            Text("PROVIDER")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                // Provider picker
                 HStack {
+                    Label("Engine", systemImage: "cpu")
+                        .font(.body)
+                    Spacer()
+                    Picker("", selection: $providerManager.selectedProvider) {
+                        ForEach(ProviderType.allCases) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                if providerManager.selectedProvider == .appleIntelligence {
+                    Divider().padding(.leading, 44)
+
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(LamoTheme.Colors.success)
+                        Text("On-device AI — no setup required")
+                            .font(.subheadline)
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+
+                if providerManager.selectedProvider == .litertLM {
+                    Divider().padding(.leading, 44)
+                    litertLMOptions
+                }
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.card, style: .continuous))
+        }
+    }
+
+    // MARK: - LiteRT-LM Options
+
+    private var litertLMOptions: some View {
+        VStack(spacing: 0) {
+            // Active model
+            if let current = providerManager.litertLMModelPath {
+                HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(LamoTheme.Colors.success)
-                    Text("Active: \(current)")
-                        .font(.footnote)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Active Model")
+                            .font(.caption)
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        Text(current.replacingOccurrences(of: ".litertlm", with: ""))
+                            .font(.subheadline.weight(.medium))
+                    }
+                    Spacer()
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                Divider().padding(.leading, 44)
             }
 
             // Local model picker
             if !availableModels.isEmpty {
-                Picker("Local Model", selection: Binding(
-                    get: { providerManager.litertLMModelPath ?? "" },
-                    set: { providerManager.litertLMModelPath = $0.isEmpty ? nil : $0 }
-                )) {
-                    Text("Auto-detect").tag("")
-                    ForEach(availableModels, id: \.self) { model in
-                        Text(model).tag(model)
+                HStack {
+                    Label("Local Model", systemImage: "internaldrive")
+                        .font(.body)
+                    Spacer()
+                    Picker("", selection: Binding(
+                        get: { providerManager.litertLMModelPath ?? "" },
+                        set: { providerManager.litertLMModelPath = $0.isEmpty ? nil : $0 }
+                    )) {
+                        Text("Auto-detect").tag("")
+                        ForEach(availableModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                Divider().padding(.leading, 44)
             }
 
-            // Import button
+            // Import
             Button {
                 isImportingModel = true
             } label: {
-                Label("Import Model", systemImage: "square.and.arrow.down")
+                HStack(spacing: 12) {
+                    Label("Import Model", systemImage: "square.and.arrow.down")
+                        .font(.body)
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(LamoTheme.Colors.textTertiary)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            Divider().padding(.leading, 44)
 
             // GPU toggle
             Toggle(isOn: $providerManager.litertLMUseGPU) {
                 Label("GPU Acceleration", systemImage: "bolt.fill")
+                    .font(.body)
             }
-
-            if providerManager.litertLMUseGPU {
-                Text("Uses Metal for faster inference")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .fileImporter(
             isPresented: $isImportingModel,
@@ -147,6 +206,91 @@ struct SettingsView: View {
             allowsMultipleSelection: false
         ) { result in
             handleModelImport(result)
+        }
+    }
+
+    // MARK: - Models Section
+
+    private var modelsSection: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            Text("MODELS")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                ForEach(PresetModel.allCases) { model in
+                    ModelCardView(model: model, downloadManager: downloadManager)
+                }
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "lock.shield")
+                    .font(.caption)
+                Text("All models run on-device. Your data never leaves your phone.")
+                    .font(.caption)
+            }
+            .foregroundStyle(LamoTheme.Colors.textTertiary)
+            .padding(.horizontal, 4)
+            .padding(.top, LamoTheme.Spacing.xs)
+        }
+    }
+
+    // MARK: - Privacy Section
+
+    private var privacySection: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            Text("PRIVACY")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            HStack(spacing: 12) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.title3)
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                    .frame(width: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fully Local")
+                        .font(.subheadline.weight(.semibold))
+                    Text("All processing happens on your device")
+                        .font(.caption)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
+                Spacer()
+            }
+            .padding(16)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.card, style: .continuous))
+        }
+    }
+
+    // MARK: - About Section
+
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            Text("ABOUT")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Version")
+                        .font(.body)
+                    Spacer()
+                    Text("1.0")
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.card, style: .continuous))
         }
     }
 
