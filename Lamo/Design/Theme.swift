@@ -7,10 +7,10 @@ enum LamoTheme {
         static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
         static let tertiaryBackground = Color(uiColor: .tertiarySystemBackground)
 
-        // Accent — clean blue (like Claude/ChatGPT)
-        static let accent = Color(red: 0.2, green: 0.4, blue: 0.9)
+        // Accent — black & white
+        static let accent = Color.primary
         static let accentGradient = LinearGradient(
-            colors: [Color(red: 0.2, green: 0.4, blue: 0.9), Color(red: 0.3, green: 0.3, blue: 0.8)],
+            colors: [Color.primary, Color.secondary],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

@@ -7,20 +7,6 @@ struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
     var onNewChat: (() -> Void)?
 
-    struct PromptSuggestion: Identifiable {
-        let id = UUID()
-        let title: String
-        let subtitle: String
-        let prompt: String
-        let icon: String
-    }
-
-    private let suggestions = [
-        PromptSuggestion(title: "Explain Concept", subtitle: "Quantum computing in simple words", prompt: "Explain quantum computing in simple terms for a beginner.", icon: "lightbulb.fill"),
-        PromptSuggestion(title: "Refine Text", subtitle: "Make an email sound polite", prompt: "Please rewrite this text to make it sound highly professional and polite: [paste text here]", icon: "pencil.and.outline"),
-        PromptSuggestion(title: "Code Quickstart", subtitle: "Write a standard Python function", prompt: "Write a clean, documented Python function to calculate the Fibonacci sequence.", icon: "curlybraces")
-    ]
-
     init(
         conversation: Conversation,
         modelContext: ModelContext,
@@ -140,47 +126,6 @@ struct ChatView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-                Text("Try asking:")
-                    .font(.caption.bold())
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 4)
-
-                ForEach(suggestions) { suggestion in
-                    Button {
-                        Task {
-                            await viewModel.sendDirect(suggestion.prompt)
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: suggestion.icon)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.tint)
-                                .frame(width: 32, height: 32)
-                                .glassEffect(.regular, in: .rect(cornerRadius: 8))
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(suggestion.title)
-                                    .font(.subheadline.weight(.semibold))
-                                Text(suggestion.subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .frame(maxWidth: 400)
-            .padding(.top, LamoTheme.Spacing.md)
 
             Spacer()
         }

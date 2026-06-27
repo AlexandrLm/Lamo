@@ -50,7 +50,7 @@ struct ChatInputBar: View {
                             .frame(width: 38, height: 38)
                             .background(
                                 canSend
-                                    ? AnyShapeStyle(Color(.tintColor))
+                                    ? AnyShapeStyle(LamoTheme.Colors.accent)
                                     : AnyShapeStyle(Color(.quaternarySystemFill)),
                                 in: .circle
                             )

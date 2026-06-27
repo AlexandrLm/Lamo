@@ -6,10 +6,10 @@ struct MainView: View {
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
     @State private var selectedConversation: Conversation?
     @State private var showSettings = false
+    @State private var autoNavigate = false
 
     var body: some View {
-        NavigationStack {
-            Group {
+        NavigationStack {            Group {
                 if conversations.isEmpty {
                     emptyState
                 } else {
@@ -42,11 +42,23 @@ struct MainView: View {
                     modelContext: modelContext
                 )
             }
+            .navigationDestination(isPresented: $autoNavigate) {
+                if let conversation = selectedConversation {
+                    ChatView(
+                        conversation: conversation,
+                        modelContext: modelContext
+                    )
+                }
+            }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .tint(LamoTheme.Colors.accent)
             .onAppear {
-                ensureConversationExists()
+                if selectedConversation == nil {
+                    createNewChat()
+                    autoNavigate = true
+                }
             }
         }
     }
@@ -117,10 +129,6 @@ struct MainView: View {
     }
 
     // MARK: - Actions
-
-    private func ensureConversationExists() {
-        // Don't auto-create — let the user start fresh
-    }
 
     private func createNewChat() {
         let conversation = Conversation()
