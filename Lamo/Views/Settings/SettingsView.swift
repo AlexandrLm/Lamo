@@ -6,80 +6,90 @@ struct SettingsView: View {
     @StateObject private var downloadManager = DownloadManager.shared
     @State private var isImportingModel = false
     @State private var availableModels: [String] = []
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List {
-            // MARK: - Provider Selection
-            Section {
-                Picker("LLM Provider", selection: $providerManager.selectedProvider) {
-                    ForEach(ProviderType.allCases) { provider in
-                        Label(provider.displayName, systemImage: provider.icon)
-                            .tag(provider)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                switch providerManager.selectedProvider {
-                case .appleIntelligence:
-                    Label("On-device AI — no setup required", systemImage: "checkmark.circle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(LamoTheme.Colors.success)
-
-                case .litertLM:
-                    litertLMSettings
-                }
-            } header: {
-                Label("Provider", systemImage: "cpu")
-            }
-
-            // MARK: - Model Gallery
-            if providerManager.selectedProvider == .litertLM {
+        NavigationStack {
+            List {
+                // MARK: - Provider Selection
                 Section {
-                    ForEach(PresetModel.allCases) { model in
-                        ModelCardView(model: model, downloadManager: downloadManager)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
+                    Picker("LLM Provider", selection: $providerManager.selectedProvider) {
+                        ForEach(ProviderType.allCases) { provider in
+                            Label(provider.displayName, systemImage: provider.icon)
+                                .tag(provider)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    switch providerManager.selectedProvider {
+                    case .appleIntelligence:
+                        Label("On-device AI — no setup required", systemImage: "checkmark.circle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(LamoTheme.Colors.success)
+
+                    case .litertLM:
+                        litertLMSettings
                     }
                 } header: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("Available Models", systemImage: "arrow.down.circle")
-                        Text("Download a Gemma 4 model to get started")
+                    Label("Provider", systemImage: "cpu")
+                }
+
+                // MARK: - Model Gallery
+                if providerManager.selectedProvider == .litertLM {
+                    Section {
+                        ForEach(PresetModel.allCases) { model in
+                            ModelCardView(model: model, downloadManager: downloadManager)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                        }
+                    } header: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Available Models", systemImage: "arrow.down.circle")
+                            Text("Download a Gemma 4 model to get started")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    } footer: {
+                        Label("All models run on-device. Your data never leaves your phone.", systemImage: "lock.shield")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
                     }
-                } footer: {
-                    Label("All models run on-device. Your data never leaves your phone.", systemImage: "lock.shield")
+                }
+
+                // MARK: - Privacy
+                Section {
+                    Label("All processing happens locally on your device", systemImage: "lock.shield.fill")
                         .font(.footnote)
                         .foregroundStyle(LamoTheme.Colors.textSecondary)
+                } header: {
+                    Label("Privacy", systemImage: "hand.raised")
+                }
+
+                // MARK: - About
+                Section {
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(LamoTheme.Colors.accent)
+                            .font(.title3)
+                        LabeledContent("Version", value: "1.0")
+                    }
+                } header: {
+                    Label("About", systemImage: "info.circle")
                 }
             }
-
-            // MARK: - Privacy
-            Section {
-                Label("All processing happens locally on your device", systemImage: "lock.shield.fill")
-                    .font(.footnote)
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
-            } header: {
-                Label("Privacy", systemImage: "hand.raised")
-            }
-
-            // MARK: - About
-            Section {
-                HStack {
-                    Image(systemName: "info.circle.fill")
-                        .foregroundStyle(LamoTheme.Colors.accent)
-                        .font(.title3)
-                    LabeledContent("Version", value: "1.0")
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
                 }
-            } header: {
-                Label("About", systemImage: "info.circle")
             }
-        }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            refreshModels()
+            .onAppear {
+                refreshModels()
+            }
         }
     }
 

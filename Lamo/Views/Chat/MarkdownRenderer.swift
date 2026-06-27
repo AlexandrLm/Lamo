@@ -85,7 +85,7 @@ struct CodeBlock: View {
                     Text(language.uppercased())
                         .font(.system(.caption2, design: .monospaced))
                         .bold()
-                        .foregroundStyle(.blue.opacity(0.8))
+                        .foregroundStyle(LamoTheme.Colors.accent)
                 }
 
                 Spacer()
@@ -108,7 +108,7 @@ struct CodeBlock: View {
                         Text(isCopied ? "Copied" : "Copy")
                             .font(.caption2)
                     }
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -117,11 +117,11 @@ struct CodeBlock: View {
                 Text(code)
                     .font(LamoTheme.Fonts.codeBlock)
                     .textSelection(.enabled)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
         }
         .padding(LamoTheme.Spacing.md)
-        .background(Color(red: 0.1, green: 0.1, blue: 0.12))
+        .background(Color(uiColor: .tertiarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous))
     }
 }

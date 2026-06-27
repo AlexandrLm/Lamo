@@ -185,7 +185,8 @@ struct ModelCardView: View {
             }
             .padding(LamoTheme.Spacing.lg)
         }
-        .glassEffect(cornerRadius: LamoTheme.CornerRadius.card)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.card, style: .continuous))
     }
 }
 

@@ -10,27 +10,17 @@ struct ChatInputBar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom, spacing: LamoTheme.Spacing.sm) {
-                Button(action: {}) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(LamoTheme.Colors.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .background(Color(uiColor: .tertiarySystemFill))
-                        .clipShape(Circle())
-                }
-                .padding(.bottom, 4)
-
-                TextField("Ask anything...", text: $text, axis: .vertical)
+                TextField("Message...", text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .font(LamoTheme.Fonts.body)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                     .scrollContentBackground(.hidden)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(Color(uiColor: .separator).opacity(0.5), lineWidth: 0.3)
+                        RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous)
+                            .stroke(Color(uiColor: .separator).opacity(0.5), lineWidth: 0.5)
                     )
 
                 if isStreaming {
@@ -62,14 +52,15 @@ struct ChatInputBar: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, LamoTheme.Spacing.md)
+            .frame(maxWidth: LamoTheme.maxContentWidth)
+            .padding(.horizontal, LamoTheme.Spacing.lg)
             .padding(.vertical, LamoTheme.Spacing.sm)
+            .padding(.bottom, LamoTheme.Spacing.xs)
         }
         .background(
             Rectangle()
                 .fill(.regularMaterial)
                 .ignoresSafeArea()
-                .shadow(color: .black.opacity(0.03), radius: 10, y: -5)
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }

@@ -10,22 +10,21 @@ struct MessageBubble: View {
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: LamoTheme.Spacing.xs) {
                 MarkdownRenderer(
                     text: message.content,
-                    textColor: message.role == .user ? LamoTheme.Colors.bubbleTextUser : LamoTheme.Colors.bubbleTextAssistant
+                    textColor: LamoTheme.Colors.textPrimary
                 )
                 .lineSpacing(4)
-                .padding(.horizontal, LamoTheme.Spacing.md)
-                .padding(.vertical, LamoTheme.Spacing.sm + 2)
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.vertical, LamoTheme.Spacing.md)
                 .background(bubbleBackground)
                 .clipShape(
                     .rect(
-                        topLeadingRadius: 18,
-                        bottomLeadingRadius: message.role == .user ? 18 : 4,
-                        bottomTrailingRadius: message.role == .user ? 4 : 18,
-                        topTrailingRadius: 18,
+                        topLeadingRadius: LamoTheme.CornerRadius.bubble,
+                        bottomLeadingRadius: message.role == .user ? LamoTheme.CornerRadius.bubble : 4,
+                        bottomTrailingRadius: message.role == .user ? 4 : LamoTheme.CornerRadius.bubble,
+                        topTrailingRadius: LamoTheme.CornerRadius.bubble,
                         style: .continuous
                     )
                 )
-                .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
 
                 if message.isStreaming {
                     TypingIndicator()

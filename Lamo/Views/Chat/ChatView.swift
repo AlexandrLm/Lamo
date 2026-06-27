@@ -20,7 +20,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: LamoTheme.Spacing.md) {
+                    LazyVStack(spacing: LamoTheme.Spacing.lg) {
                         if viewModel.messages.isEmpty {
                             emptyChatView
                                 .id("empty")
@@ -36,8 +36,9 @@ struct ChatView: View {
                                 .id("typing")
                         }
                     }
-                    .padding(.horizontal, LamoTheme.Spacing.md)
-                    .padding(.vertical, LamoTheme.Spacing.lg)
+                    .frame(maxWidth: LamoTheme.maxContentWidth)
+                    .padding(.horizontal, LamoTheme.Spacing.lg)
+                    .padding(.vertical, LamoTheme.Spacing.xl)
                     .background(GeometryReader { geometry in
                         Color.clear.preference(
                             key: ScrollOffsetPreferenceKey.self,
@@ -84,50 +85,27 @@ struct ChatView: View {
         }
     }
 
-    // MARK: - Empty State
+    // MARK: - Empty State (Claude-style)
 
     private var emptyChatView: some View {
-        VStack(spacing: LamoTheme.Spacing.xl) {
+        VStack(spacing: LamoTheme.Spacing.xxl) {
             Spacer(minLength: 80)
 
-            ZStack {
-                Circle()
-                    .fill(.blue)
-                    .frame(width: 150, height: 150)
-                    .blur(radius: 40)
-                    .opacity(0.3)
-
-                Circle()
-                    .fill(.purple)
-                    .frame(width: 150, height: 150)
-                    .offset(x: 40, y: 40)
-                    .blur(radius: 40)
-                    .opacity(0.3)
-
+            VStack(spacing: LamoTheme.Spacing.md) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 56, weight: .light))
-                    .foregroundStyle(
-                        LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .symbolEffect(.variableColor.iterative, isActive: true)
-            }
+                    .font(.system(size: 40, weight: .light))
+                    .foregroundStyle(LamoTheme.Colors.accent)
 
-            VStack(spacing: 8) {
-                Text("How can I help?")
-                    .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                VStack(spacing: LamoTheme.Spacing.sm) {
+                    Text("How can I help?")
+                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .foregroundStyle(LamoTheme.Colors.textPrimary)
 
-                Text("Powered by local intelligence")
-                    .font(.subheadline)
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    Text("Powered by local intelligence")
+                        .font(.subheadline)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
             }
-
-            VStack(spacing: 12) {
-                SuggestionChip(text: "Summarize a complex topic", icon: "doc.text.magnifyingglass")
-                SuggestionChip(text: "Write a Swift function", icon: "chevron.left.forwardslash.chevron.right")
-                SuggestionChip(text: "Help me debug my code", icon: "ladybug")
-            }
-            .padding(.top, 24)
 
             Spacer()
         }
@@ -139,28 +117,6 @@ struct ChatView: View {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
-    }
-}
-
-// MARK: - Suggestion Chip
-
-struct SuggestionChip: View {
-    let text: String
-    var icon: String = "sparkle"
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(LamoTheme.Colors.accent)
-                .font(.subheadline)
-            Text(text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(LamoTheme.Colors.textPrimary)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color(uiColor: .secondarySystemFill))
-        .clipShape(Capsule())
     }
 }
 

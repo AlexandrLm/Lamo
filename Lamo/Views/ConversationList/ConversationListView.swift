@@ -33,7 +33,7 @@ struct ConversationListView: View {
                             viewModel?.deleteConversations(indexSet, from: conversations)
                         }
                     }
-                    .listStyle(.insetGrouped)
+                    .listStyle(.plain)
                 }
             }
             .navigationTitle("Lamo")
@@ -57,33 +57,5 @@ struct ConversationListView: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Conversation Row
-
-struct ConversationRow: View {
-    let conversation: Conversation
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(conversation.title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(LamoTheme.Colors.textPrimary)
-                .lineLimit(1)
-
-            Text(lastMessageSnippet)
-                .font(.subheadline)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-                .lineLimit(1)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var lastMessageSnippet: String {
-        if let lastMessage = conversation.messages.sorted(by: { $0.timestamp < $1.timestamp }).last {
-            return lastMessage.content.isEmpty ? "..." : lastMessage.content
-        }
-        return "No messages yet"
     }
 }
