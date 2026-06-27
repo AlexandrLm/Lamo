@@ -9,7 +9,8 @@ struct MainView: View {
     @State private var autoNavigate = false
 
     var body: some View {
-        NavigationStack {            Group {
+        NavigationStack {
+            Group {
                 if conversations.isEmpty {
                     emptyState
                 } else {
@@ -89,18 +90,18 @@ struct MainView: View {
         VStack(spacing: LamoTheme.Spacing.xxl) {
             Spacer()
 
-            VStack(spacing: LamoTheme.Spacing.md) {
+            VStack(spacing: 12) {
                 Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 48, weight: .light))
-                    .foregroundStyle(LamoTheme.Colors.textTertiary)
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(.tertiary)
 
-                VStack(spacing: LamoTheme.Spacing.sm) {
+                VStack(spacing: 4) {
                     Text("Lamo")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(LamoTheme.Colors.textPrimary)
 
                     Text("Local AI Assistant")
-                        .font(LamoTheme.Fonts.subheadline)
+                        .font(.subheadline)
                         .foregroundStyle(LamoTheme.Colors.textSecondary)
                 }
             }
@@ -118,8 +119,8 @@ struct MainView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(LamoTheme.Colors.accent)
                 .foregroundStyle(.white)
+                .background(Color.primary)
                 .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -149,9 +150,9 @@ struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(conversation.title)
-                .font(.headline.weight(.semibold))
+                .font(.headline)
                 .foregroundStyle(LamoTheme.Colors.textPrimary)
                 .lineLimit(1)
 
@@ -160,12 +161,12 @@ struct ConversationRow: View {
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
                 .lineLimit(1)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     private var lastMessageSnippet: String {
         if let lastMessage = conversation.messages.sorted(by: { $0.timestamp < $1.timestamp }).last {
-            return lastMessage.content.isEmpty ? "..." : lastMessage.content
+            return lastMessage.content.isEmpty ? "No messages yet" : lastMessage.content
         }
         return "No messages yet"
     }

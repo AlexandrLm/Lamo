@@ -8,7 +8,7 @@ struct MarkdownRenderer: View {
         if text.isEmpty {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .code(let code, let language):
@@ -17,7 +17,7 @@ struct MarkdownRenderer: View {
                         StyledText(content)
                             .font(.body)
                             .foregroundStyle(textColor)
-                            .lineSpacing(4)
+                            .lineSpacing(3)
                     }
                 }
             }
@@ -79,13 +79,12 @@ struct CodeBlock: View {
     @State private var isCopied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 if !language.isEmpty {
                     Text(language.uppercased())
                         .font(.system(.caption2, design: .monospaced))
-                        .bold()
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -102,7 +101,7 @@ struct CodeBlock: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
                             .font(.caption2)
                         Text(isCopied ? "Copied" : "Copy")
@@ -119,7 +118,8 @@ struct CodeBlock: View {
                     .textSelection(.enabled)
             }
         }
-        .padding(LamoTheme.Spacing.md)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .padding(10)
+        .background(Color(.tertiarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

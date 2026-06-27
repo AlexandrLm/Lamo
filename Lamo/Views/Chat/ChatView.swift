@@ -21,7 +21,7 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ZStack(alignment: .bottomTrailing) {
                     ScrollView {
-                        LazyVStack(spacing: LamoTheme.Spacing.lg) {
+                        LazyVStack(spacing: 16) {
                             if viewModel.messages.isEmpty {
                                 emptyChatView
                                     .id("empty")
@@ -36,8 +36,8 @@ struct ChatView: View {
                                 .id(message.id)
                             }
                         }
-                        .padding(.horizontal, LamoTheme.Spacing.lg)
-                        .padding(.vertical, LamoTheme.Spacing.xl)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
                         .background(GeometryReader { geometry in
                             Color.clear.preference(
                                 key: ScrollOffsetPreferenceKey.self,
@@ -67,14 +67,15 @@ struct ChatView: View {
                             scrollToBottom(proxy: proxy)
                         } label: {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.primary)
-                                .frame(width: 32, height: 32)
-                                .glassEffect(.regular, in: .circle)
+                                .frame(width: 30, height: 30)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                         }
                         .buttonStyle(.plain)
-                        .padding(.trailing, LamoTheme.Spacing.lg)
-                        .padding(.bottom, LamoTheme.Spacing.lg)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 16)
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -108,18 +109,19 @@ struct ChatView: View {
 
     private var emptyChatView: some View {
         VStack(spacing: LamoTheme.Spacing.xxl) {
-            Spacer(minLength: 40)
+            Spacer(minLength: 60)
 
-            VStack(spacing: LamoTheme.Spacing.md) {
+            VStack(spacing: 12) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(.tint)
-                    .frame(width: 72, height: 72)
-                    .glassEffect(.regular, in: .circle)
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 64, height: 64)
+                    .background(Color(.systemGray6))
+                    .clipShape(Circle())
 
-                VStack(spacing: LamoTheme.Spacing.sm) {
+                VStack(spacing: 4) {
                     Text("How can I help?")
-                        .font(.title2.bold())
+                        .font(.title3.weight(.semibold))
 
                     Text("Powered by offline intelligence")
                         .font(.subheadline)

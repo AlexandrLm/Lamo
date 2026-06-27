@@ -2,21 +2,16 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
-        // Backgrounds — clean, minimal
+        // Backgrounds — native iOS
         static let background = Color(uiColor: .systemBackground)
         static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
         static let tertiaryBackground = Color(uiColor: .tertiarySystemBackground)
 
         // Accent — black & white
         static let accent = Color.primary
-        static let accentGradient = LinearGradient(
-            colors: [Color.primary, Color.secondary],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
 
         // Bubbles
-        static let userBubble = Color(uiColor: .systemFill)
+        static let userBubble = Color(uiColor: .systemGray5)
         static let assistantBubble = Color.clear
         static let bubbleTextUser = Color.primary
         static let bubbleTextAssistant = Color.primary
@@ -50,8 +45,8 @@ enum LamoTheme {
         static let md: CGFloat = 12
         static let lg: CGFloat = 16
         static let xl: CGFloat = 20
-        static let bubble: CGFloat = 16
-        static let input: CGFloat = 24
+        static let bubble: CGFloat = 18
+        static let input: CGFloat = 20
         static let card: CGFloat = 12
     }
 
@@ -69,37 +64,7 @@ enum LamoTheme {
         static let codeBlock = Font.system(.callout, design: .monospaced)
     }
 
-    // Max width for chat content (iPad optimization)
     static let maxContentWidth: CGFloat = 768
-}
-
-// MARK: - Bubble Shape (asymmetric for natural feel)
-
-struct BubbleShape: Shape {
-    let isUser: Bool
-
-    func path(in rect: CGRect) -> Path {
-        let radius: CGFloat = LamoTheme.CornerRadius.bubble
-        var path = Path()
-
-        if isUser {
-            // User: rounded top-left, sharp bottom-left
-            path.addRoundedRect(
-                in: rect,
-                cornerSize: CGSize(width: radius, height: radius),
-                style: .continuous
-            )
-        } else {
-            // Assistant: rounded corners everywhere
-            path.addRoundedRect(
-                in: rect,
-                cornerSize: CGSize(width: radius, height: radius),
-                style: .continuous
-            )
-        }
-
-        return path
-    }
 }
 
 // MARK: - Separator
@@ -107,7 +72,7 @@ struct BubbleShape: Shape {
 struct CompactDivider: View {
     var body: some View {
         Rectangle()
-            .fill(LamoTheme.Colors.separator.opacity(0.4))
+            .fill(LamoTheme.Colors.separator.opacity(0.35))
             .frame(height: 0.5)
     }
 }

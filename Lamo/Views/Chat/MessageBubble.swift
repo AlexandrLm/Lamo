@@ -17,21 +17,23 @@ struct MessageBubble: View {
     private var userMessage: some View {
         HStack {
             Spacer(minLength: 48)
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 3) {
                 if isErrorMessage {
                     errorBubble
                 } else {
                     Text(message.content)
                         .font(.body)
                         .foregroundStyle(.primary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(LamoTheme.Colors.userBubble)
+                        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble, style: .continuous))
                 }
                 if !message.isStreaming {
                     Text(message.timestamp, style: .time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .padding(.trailing, 2)
                 }
             }
         }
@@ -44,7 +46,7 @@ struct MessageBubble: View {
     // MARK: - Assistant Message
 
     private var assistantMessage: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             if message.isStreaming && message.content.isEmpty {
                 TypingIndicator()
             } else {
@@ -52,11 +54,11 @@ struct MessageBubble: View {
                     text: message.content,
                     textColor: .primary
                 )
-                .lineSpacing(4)
+                .lineSpacing(3)
             }
 
             if !message.isStreaming && !message.content.isEmpty {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button {
                         UIPasteboard.general.string = message.content
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -90,12 +92,12 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var errorBubble: some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(Color(.systemRed))
                 Text("Inference Error")
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color(.systemRed))
             }
 
@@ -104,20 +106,22 @@ struct MessageBubble: View {
 
             if let onRetry {
                 Button(action: onRetry) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
+                            .font(.caption)
                         Text("Retry")
+                            .font(.caption.weight(.medium))
                     }
-                    .font(.footnote.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .glassEffect(.regular, in: .capsule)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.systemGray5))
+                    .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 2)
             }
         }
-        .padding(LamoTheme.Spacing.lg)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(12)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

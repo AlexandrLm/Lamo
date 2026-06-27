@@ -9,21 +9,24 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .bottom, spacing: LamoTheme.Spacing.sm) {
+            CompactDivider()
+
+            HStack(alignment: .bottom, spacing: 10) {
                 TextField("", text: $text, axis: .vertical)
                     .lineLimit(1...8)
                     .font(.body)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                     .scrollContentBackground(.hidden)
-                    .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 26))
+                    .background(Color(.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
-                            Text("Message...")
+                            Text("Message")
                                 .font(.body)
                                 .foregroundStyle(.tertiary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
                                 .allowsHitTesting(false)
                         }
                     }
@@ -32,10 +35,11 @@ struct ChatInputBar: View {
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 38, height: 38)
-                            .glassEffect(.regular, in: .circle)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Color(.systemRed))
+                            .clipShape(Circle())
                     }
                     .transition(.scale.combined(with: .opacity))
                 } else {
@@ -45,14 +49,12 @@ struct ChatInputBar: View {
                         onSend()
                     }) {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 17, weight: .bold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(canSend ? .white : Color(.tertiaryLabel))
-                            .frame(width: 38, height: 38)
+                            .frame(width: 34, height: 34)
                             .background(
-                                canSend
-                                    ? AnyShapeStyle(LamoTheme.Colors.accent)
-                                    : AnyShapeStyle(Color(.quaternarySystemFill)),
-                                in: .circle
+                                canSend ? Color.primary : Color(.quaternarySystemFill),
+                                in: Circle()
                             )
                             .animation(.easeInOut(duration: 0.15), value: canSend)
                     }
@@ -61,9 +63,9 @@ struct ChatInputBar: View {
                 }
             }
             .frame(maxWidth: LamoTheme.maxContentWidth)
-            .padding(.horizontal, LamoTheme.Spacing.lg)
-            .padding(.vertical, 10)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .padding(.bottom, 4)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }
