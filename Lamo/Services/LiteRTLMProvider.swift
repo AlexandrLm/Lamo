@@ -31,7 +31,7 @@ final class LiteRTLMProvider: LLMProvider {
     /// Whether the provider's conversation still matches the incoming message list.
     private func isCacheValid(for messages: [ChatMessage]) -> Bool {
         return cachedConversation != nil
-            && messages.hashValue == cachedMessagesHash
+            && messageHash(messages) == cachedMessagesHash
     }
 
     init(
@@ -63,6 +63,15 @@ final class LiteRTLMProvider: LLMProvider {
     func invalidateConversationCache() {
         cachedConversation = nil
         cachedMessagesHash = 0
+    }
+
+    private func messageHash(_ messages: [ChatMessage]) -> Int {
+        var hasher = Hasher()
+        for msg in messages {
+            hasher.combine(msg.role.rawValue)
+            hasher.combine(msg.content)
+        }
+        return hasher.finalize()
     }
 
     // MARK: - Private
@@ -98,11 +107,11 @@ final class LiteRTLMProvider: LLMProvider {
         // Reuse or rebuild conversation
         let conversation: LiteRTLM.Conversation
         if isCacheValid(for: messages) {
-            conversation = try cachedConversation.unwrap()
+            conversation = cachedConversation!
         } else {
             conversation = try await buildConversation(engine: resolvedEngine, messages: messages)
             cachedConversation = conversation
-            cachedMessagesHash = messages.hashValue
+            cachedMessagesHash = messageHash(messages)
         }
 
         // Send the last user message and stream the response
@@ -111,7 +120,7 @@ final class LiteRTLMProvider: LLMProvider {
 
             for try await chunk in conversation.sendMessageStream(message) {
                 if Task.isCancelled { break }
-                continuation.yield(.text(chunk.toString))
+                continuation.yield(.delta(chunk.toString))
             }
         }
 

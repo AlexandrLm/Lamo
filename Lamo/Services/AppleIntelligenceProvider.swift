@@ -10,7 +10,7 @@ struct AppleIntelligenceProvider: LLMProvider {
 
                 let responses = generateLocalResponse(for: prompt)
                 for response in responses {
-                    continuation.yield(.text(response))
+                    continuation.yield(.delta(response))
                     try? await Task.sleep(for: .milliseconds(30))
                 }
                 continuation.yield(.done)

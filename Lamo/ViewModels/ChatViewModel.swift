@@ -44,10 +44,10 @@ final class ChatViewModel {
         // Reuse the shared ChatService — engine is already loaded
         chatService.sendMessage(
             messages: chatMessages,
-            onToken: { [weak self] accumulated in
+            onDelta: { [weak self] delta in
                 guard let self, let id = self.streamingMessageID,
                       let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
-                self.messages[index].content = accumulated
+                self.messages[index].content += delta
             },
             onComplete: { [weak self] in
                 guard let self, let id = self.streamingMessageID,
@@ -92,10 +92,10 @@ final class ChatViewModel {
 
         chatService.sendMessage(
             messages: chatMessages,
-            onToken: { [weak self] accumulated in
+            onDelta: { [weak self] delta in
                 guard let self, let id = self.streamingMessageID,
                       let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
-                self.messages[index].content = accumulated
+                self.messages[index].content += delta
             },
             onComplete: { [weak self] in
                 guard let self, let id = self.streamingMessageID,
