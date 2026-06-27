@@ -74,22 +74,15 @@ struct ChatView: View {
                         }
                     }
 
-                    // Floating Scroll-to-Bottom Button
                     if !isUserNearBottom, !viewModel.messages.isEmpty {
                         Button {
                             scrollToBottom(proxy: proxy)
                         } label: {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(LamoTheme.Colors.textPrimary)
-                                .frame(width: 36, height: 36)
-                                .background(.regularMaterial)
-                                .clipShape(Circle())
-                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color(uiColor: .separator).opacity(0.3), lineWidth: 0.5)
-                                )
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .frame(width: 32, height: 32)
+                                .glassEffect(.regular, in: .circle)
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, LamoTheme.Spacing.lg)
@@ -106,7 +99,7 @@ struct ChatView: View {
                 onStop: { viewModel.stopGeneration() }
             )
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -116,45 +109,40 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "square.and.pencil")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .foregroundStyle(.tint)
                 }
                 .sensoryFeedback(.selection, trigger: viewModel.messages.count)
             }
         }
     }
 
-    // MARK: - Empty State (Claude-style with suggestions)
+    // MARK: - Empty State
 
     private var emptyChatView: some View {
         VStack(spacing: LamoTheme.Spacing.xxl) {
             Spacer(minLength: 40)
 
             VStack(spacing: LamoTheme.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(LamoTheme.Colors.accent.opacity(0.12))
-                        .frame(width: 80, height: 80)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(LamoTheme.Colors.accent)
-                }
+                Image(systemName: "sparkles")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundStyle(.tint)
+                    .frame(width: 72, height: 72)
+                    .glassEffect(.regular, in: .circle)
 
                 VStack(spacing: LamoTheme.Spacing.sm) {
                     Text("How can I help?")
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LamoTheme.Colors.textPrimary)
+                        .font(.title2.bold())
 
                     Text("Powered by offline intelligence")
                         .font(.subheadline)
-                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
                 Text("Try asking:")
-                    .font(.caption)
-                    .bold()
-                    .foregroundStyle(LamoTheme.Colors.textTertiary)
+                    .font(.caption.bold())
+                    .foregroundStyle(.tertiary)
                     .padding(.horizontal, 4)
 
                 ForEach(suggestions) { suggestion in
@@ -164,36 +152,27 @@ struct ChatView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(LamoTheme.Colors.accent.opacity(0.1))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: suggestion.icon)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(LamoTheme.Colors.accent)
-                            }
+                            Image(systemName: suggestion.icon)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.tint)
+                                .frame(width: 32, height: 32)
+                                .glassEffect(.regular, in: .rect(cornerRadius: 8))
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(suggestion.title)
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(LamoTheme.Colors.textPrimary)
                                 Text(suggestion.subtitle)
                                     .font(.caption)
-                                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
                             Image(systemName: "arrow.up.right")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(LamoTheme.Colors.textTertiary)
+                                .foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color(uiColor: .separator).opacity(0.3), lineWidth: 0.5)
-                        )
+                        .glassEffect(.regular, in: .rect(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                 }

@@ -15,7 +15,7 @@ struct MarkdownRenderer: View {
                         CodeBlock(code: code, language: language)
                     case .text(let content):
                         StyledText(content)
-                            .font(LamoTheme.Fonts.body)
+                            .font(.body)
                             .foregroundStyle(textColor)
                             .lineSpacing(4)
                     }
@@ -85,7 +85,7 @@ struct CodeBlock: View {
                     Text(language.uppercased())
                         .font(.system(.caption2, design: .monospaced))
                         .bold()
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .foregroundStyle(.tint)
                 }
 
                 Spacer()
@@ -108,20 +108,18 @@ struct CodeBlock: View {
                         Text(isCopied ? "Copied" : "Copy")
                             .font(.caption2)
                     }
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(LamoTheme.Fonts.codeBlock)
+                    .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
         }
         .padding(LamoTheme.Spacing.md)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 }
