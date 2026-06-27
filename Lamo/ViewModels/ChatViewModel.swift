@@ -11,7 +11,6 @@ final class ChatViewModel {
 
     var conversationTitle: String { conversation.title }
 
-    private let chatService: ChatService
     private let modelContext: ModelContext
     private let conversation: Conversation
     private var streamingMessageID: UUID?
@@ -19,30 +18,36 @@ final class ChatViewModel {
     init(conversation: Conversation, modelContext: ModelContext) {
         self.conversation = conversation
         self.modelContext = modelContext
-        // Use the shared ChatService from ProviderManager.
-        // This reuses the cached provider/engine — no reload per message.
-        self.chatService = ProviderManager.shared.chatService
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private var chatService: ChatService {
+        ChatService(provider: ProviderManager.shared.currentProvider)
     }
 
     func send() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        // 1) Add user message
         let userMessage = Message(content: text, role: .user, conversation: conversation)
         addMessage(userMessage)
         inputText = ""
         updateConversationTitleIfNeeded(firstMessage: text)
 
+        // 2) Add empty assistant message (streaming placeholder)
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id
         isStreaming = true
 
-        let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
+        // 3) Build chat history for the provider (snapshot before streaming starts)
+        let chatMessages = messages.filter { !$0.content.isEmpty || $0.role == .user }
+            .map { ChatMessage(role: $0.role, content: $0.content) }
 
-        // Reuse the shared ChatService — engine is already loaded
-        chatService.sendMessage(
+        // 4) Stream response
+        let service = chatService
+        service.sendMessage(
             messages: chatMessages,
             onDelta: { [weak self] delta in
                 guard let self, let id = self.streamingMessageID,
@@ -80,17 +85,18 @@ final class ChatViewModel {
         guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
 
         messages.removeLast()
-        conversation.messages.removeAll(where: { $0.id == lastMsg.id })
         modelContext.delete(lastMsg)
-        
+
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id
         isStreaming = true
 
-        let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
+        let chatMessages = messages.filter { !$0.content.isEmpty || $0.role == .user }
+            .map { ChatMessage(role: $0.role, content: $0.content) }
 
-        chatService.sendMessage(
+        let service = chatService
+        service.sendMessage(
             messages: chatMessages,
             onDelta: { [weak self] delta in
                 guard let self, let id = self.streamingMessageID,
@@ -130,8 +136,10 @@ final class ChatViewModel {
     }
 
     private func addMessage(_ message: Message) {
+        // message.conversation is already set in Message.init,
+        // so SwiftData handles the inverse relationship automatically.
+        // Do NOT also append to conversation.messages — that double-adds.
         messages.append(message)
-        conversation.messages.append(message)
         conversation.updatedAt = .now
         save()
     }

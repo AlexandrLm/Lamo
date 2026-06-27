@@ -24,6 +24,7 @@ struct MessageBubble: View {
                     Text(message.content)
                         .font(.body)
                         .foregroundStyle(LamoTheme.Colors.textPrimary)
+                        .textSelection(.enabled)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(Color(.systemGray5))
@@ -40,7 +41,7 @@ struct MessageBubble: View {
     // MARK: - Assistant Message
 
     private var assistantMessage: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 0) {
             if message.isStreaming && message.content.isEmpty {
                 TypingIndicator()
             } else {
@@ -48,11 +49,11 @@ struct MessageBubble: View {
                     text: message.content,
                     textColor: LamoTheme.Colors.textPrimary
                 )
-                .lineSpacing(3)
             }
 
             if !message.isStreaming && !message.content.isEmpty {
-                HStack(spacing: 10) {
+                HStack(spacing: 14) {
+                    // Copy button
                     Button {
                         UIPasteboard.general.string = message.content
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -63,9 +64,19 @@ struct MessageBubble: View {
                     }
                     .buttonStyle(.plain)
 
+                    // Regenerate button
+                    if let onRetry {
+                        Button(action: onRetry) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     Spacer()
                 }
-                .padding(.top, 2)
+                .padding(.top, 6)
             }
         }
         .transition(.asymmetric(

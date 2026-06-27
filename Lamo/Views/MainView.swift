@@ -4,7 +4,7 @@ import SwiftData
 struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
-    @State private var selectedConversation: Conversation?
+    @State private var selectedID: UUID?
     @State private var showSettings = false
     @State private var searchText = ""
     @State private var hasAppeared = false
@@ -16,6 +16,10 @@ struct MainView: View {
         return conversations.filter {
             $0.title.localizedCaseInsensitiveContains(searchText)
         }
+    }
+
+    private var selectedConversation: Conversation? {
+        conversations.first { $0.id == selectedID }
     }
 
     var body: some View {
@@ -39,8 +43,7 @@ struct MainView: View {
     // MARK: - Sidebar
 
     private var sidebarContent: some View {
-        List(selection: $selectedConversation) {
-            // New Chat button at top
+        List(selection: $selectedID) {
             Button {
                 startNewChat()
             } label: {
@@ -54,11 +57,10 @@ struct MainView: View {
             }
             .listRowBackground(Color(.tertiarySystemFill))
 
-            // Conversations
             Section {
                 ForEach(filteredConversations) { conversation in
                     ConversationRow(conversation: conversation)
-                        .tag(conversation)
+                        .tag(conversation.id)
                 }
             }
         }
@@ -109,14 +111,14 @@ struct MainView: View {
         let conversation = Conversation()
         modelContext.insert(conversation)
         try? modelContext.save()
-        selectedConversation = conversation
+        selectedID = conversation.id
     }
 
     private func deleteConversation(_ conversation: Conversation) {
         modelContext.delete(conversation)
         try? modelContext.save()
-        if selectedConversation?.id == conversation.id {
-            selectedConversation = nil
+        if selectedID == conversation.id {
+            selectedID = nil
         }
     }
 }
