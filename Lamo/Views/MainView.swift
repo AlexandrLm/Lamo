@@ -35,6 +35,7 @@ struct MainView: View {
         .onAppear {
             if !hasAppeared {
                 hasAppeared = true
+                cleanupEmptyConversations()
                 startNewChat()
             }
         }
@@ -61,6 +62,19 @@ struct MainView: View {
                 ForEach(filteredConversations) { conversation in
                     ConversationRow(conversation: conversation)
                         .tag(conversation.id)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                deleteConversation(conversation)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+            } header: {
+                if !filteredConversations.isEmpty {
+                    Text("Recent")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
@@ -108,6 +122,7 @@ struct MainView: View {
     // MARK: - Actions
 
     private func startNewChat() {
+        cleanupEmptyConversations()
         let conversation = Conversation()
         modelContext.insert(conversation)
         try? modelContext.save()
@@ -115,11 +130,20 @@ struct MainView: View {
     }
 
     private func deleteConversation(_ conversation: Conversation) {
-        modelContext.delete(conversation)
-        try? modelContext.save()
         if selectedID == conversation.id {
             selectedID = nil
         }
+        modelContext.delete(conversation)
+        try? modelContext.save()
+    }
+
+    private func cleanupEmptyConversations() {
+        for conv in conversations where conv.messages.isEmpty {
+            if selectedID != conv.id {
+                modelContext.delete(conv)
+            }
+        }
+        try? modelContext.save()
     }
 }
 
@@ -129,10 +153,20 @@ struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(conversation.title)
                 .font(.body)
                 .lineLimit(1)
+
+            if let lastMessage = conversation.messages
+                .sorted(by: { $0.timestamp < $1.timestamp })
+                .last {
+                Text(lastMessage.content)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
+        .padding(.vertical, 2)
     }
 }

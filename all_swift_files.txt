@@ -1,0 +1,3241 @@
+================================================================================
+Файл: Lamo/ContentView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct ContentView: View {
+    var body: some View {
+        MainView()
+    }
+}
+
+#Preview {
+    ContentView()
+}
+
+
+================================================================================
+Файл: Lamo/Design/Theme.swift
+================================================================================
+
+import SwiftUI
+
+enum LamoTheme {
+    enum Colors {
+        // Backgrounds — pure black
+        static let background = Color.black
+        static let secondaryBackground = Color.black
+        static let tertiaryBackground = Color.black
+
+        // Accent — ChatGPT green
+        static let accent = Color(red: 0.06, green: 0.64, blue: 0.50) // #10a37f
+
+        // Bubbles
+        static let userBubble = Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0.22, green: 0.22, blue: 0.22, alpha: 1.0)  // #383838
+                : UIColor.systemGray5
+        })
+        static let assistantBubble = Color.clear
+        static let bubbleTextUser = Color.primary
+        static let bubbleTextAssistant = Color.primary
+
+        // Text
+        static let textPrimary = Color.primary
+        static let textSecondary = Color.secondary
+        static let textTertiary = Color(uiColor: .tertiaryLabel)
+
+        // Semantic
+        static let success = Color.green
+        static let warning = Color.orange
+        static let error = Color.red
+
+        // Separators
+        static let separator = Color(uiColor: .separator)
+    }
+
+    enum Spacing {
+        static let xs: CGFloat = 4
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 24
+        static let xxl: CGFloat = 32
+        static let xxxl: CGFloat = 48
+    }
+
+    enum CornerRadius {
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 20
+        static let bubble: CGFloat = 18
+        static let input: CGFloat = 24
+        static let card: CGFloat = 12
+    }
+
+    enum Fonts {
+        static let largeTitle = Font.largeTitle.bold()
+        static let title = Font.title2.bold()
+        static let title3 = Font.title3.bold()
+        static let headline = Font.headline.weight(.semibold)
+        static let body = Font.body
+        static let subheadline = Font.subheadline
+        static let footnote = Font.footnote
+        static let caption = Font.caption
+        static let caption2 = Font.caption2
+        static let code = Font.system(.subheadline, design: .monospaced)
+        static let codeBlock = Font.system(.callout, design: .monospaced)
+    }
+
+    static let maxContentWidth: CGFloat = 768
+}
+
+// MARK: - Separator
+
+struct CompactDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(LamoTheme.Colors.separator.opacity(0.35))
+            .frame(height: 0.5)
+    }
+}
+
+
+================================================================================
+Файл: Lamo/LamoApp.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+@main
+struct LamoApp: App {
+    init() {
+        // Pre-initialize the LiteRT-LM engine in background.
+        Task {
+            await ProviderManager.shared.initializeEngineIfNeeded()
+        }
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            MainView()
+                .preferredColorScheme(.dark)
+        }
+        .modelContainer(for: [Conversation.self, Message.self])
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Models/Conversation.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@Model
+final class Conversation {
+    var id: UUID
+    var title: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    @Relationship(deleteRule: .cascade)
+    var messages: [Message]
+
+    init(
+        id: UUID = UUID(),
+        title: String = "New Chat",
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        messages: [Message] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.messages = messages
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Models/DeviceBenchmark.swift
+================================================================================
+
+import Foundation
+import UIKit
+import Metal
+import Combine
+
+/// Analyzes device capabilities and estimates AI performance.
+@MainActor
+final class DeviceBenchmark: ObservableObject {
+    @Published var result: BenchmarkResult?
+    @Published var isRunning = false
+    @Published var progress: Double = 0
+    @Published var errorMessage: String?
+
+    struct BenchmarkResult {
+        let deviceName: String
+        let chipName: String
+        let ramGB: Double
+        let storageFreeGB: Double
+        let hasGPU: Bool
+        let gpuCoreCount: Int
+        let computeScore: Double
+        let aiTier: AITier
+        let recommendations: [Recommendation]
+
+        var aiTierLabel: String {
+            switch aiTier {
+            case .excellent: return "Excellent"
+            case .good: return "Good"
+            case .moderate: return "Moderate"
+            case .limited: return "Limited"
+            }
+        }
+
+        var aiTierIcon: String {
+            switch aiTier {
+            case .excellent: return "bolt.fill"
+            case .good: return "hand.thumbsup.fill"
+            case .moderate: return "gauge.medium"
+            case .limited: return "exclamationmark.triangle.fill"
+            }
+        }
+
+        var aiTierColor: String {
+            switch aiTier {
+            case .excellent: return "green"
+            case .good: return "blue"
+            case .moderate: return "orange"
+            case .limited: return "red"
+            }
+        }
+    }
+
+    enum AITier {
+        case excellent, good, moderate, limited
+    }
+
+    struct Recommendation: Identifiable {
+        let id = UUID()
+        let icon: String
+        let title: String
+        let detail: String
+    }
+
+    func runBenchmark() async {
+        guard !isRunning else { return }
+        isRunning = true
+        progress = 0
+        result = nil
+        errorMessage = nil
+
+        do {
+            // Phase 1: Device info (instant)
+            progress = 0.1
+            let deviceName = await getDeviceName()
+            let chipName = getChipName()
+            let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+            let storageFree = getFreeStorageGB()
+            let gpuInfo = getGPUInfo()
+            let hasGPU = gpuInfo.hasGPU
+            let gpuCores = gpuInfo.coreCount
+
+            progress = 0.3
+
+            // Phase 2: Compute benchmark
+            let computeScore = runComputeTest()
+            progress = 0.8
+
+            // Phase 3: Rate the device
+            let tier = rateDevice(ramGB: ramGB, computeScore: computeScore, gpuCores: gpuCores, hasGPU: hasGPU)
+
+            // Phase 4: Build recommendations
+            let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
+
+            progress = 1.0
+
+            result = BenchmarkResult(
+                deviceName: deviceName,
+                chipName: chipName,
+                ramGB: ramGB,
+                storageFreeGB: storageFree,
+                hasGPU: hasGPU,
+                gpuCoreCount: gpuCores,
+                computeScore: computeScore,
+                aiTier: tier,
+                recommendations: recs
+            )
+        } catch {
+            errorMessage = "Benchmark failed: \(error.localizedDescription)"
+        }
+
+        isRunning = false
+    }
+
+    // MARK: - Device Info
+
+    private func getDeviceName() async -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machineMirror = Mirror(reflecting: systemInfo.machine)
+        let identifier = machineMirror.children.reduce("") { identifier, element in
+            guard let value = element.value as? Int8, value != 0 else { return identifier }
+            return identifier + String(UnicodeScalar(UInt8(value)))
+        }
+        return mapDeviceIdentifier(identifier)
+    }
+
+    private func getChipName() -> String {
+        var size = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        var chip = [CChar](repeating: 0, count: size + 1)
+        sysctlbyname("machdep.cpu.brand_string", &chip, &size, nil, 0)
+        return String(cString: chip)
+    }
+
+    private func getFreeStorageGB() -> Double {
+        guard let attrs = try? FileManager.default.attributesOfFileSystem(
+            forPath: NSHomeDirectory()
+        ),
+              let freeBytes = attrs[.systemFreeSize] as? UInt64 else { return 0 }
+        return Double(freeBytes) / 1_073_741_824
+    }
+
+    private func getGPUInfo() -> (hasGPU: Bool, coreCount: Int) {
+        guard let device = MTLCreateSystemDefaultDevice() else { return (false, 0) }
+        let cores: Int = {
+            if device.supportsFamily(.apple9) { return 6 }
+            if device.supportsFamily(.apple8) { return 5 }
+            if device.supportsFamily(.apple7) { return 5 }
+            if device.supportsFamily(.apple6) { return 4 }
+            if device.supportsFamily(.apple5) { return 4 }
+            return 3
+        }()
+        return (true, cores)
+    }
+
+    // MARK: - Compute Benchmark
+
+    /// Runs a matrix multiplication benchmark to measure raw compute.
+    /// Returns time in seconds (lower = better).
+    private func runComputeTest() -> Double {
+        let size = 256
+        var a = [Float](repeating: 0, count: size * size)
+        var b = [Float](repeating: 0, count: size * size)
+        var c = [Float](repeating: 0, count: size * size)
+
+        for i in 0..<(size * size) {
+            a[i] = Float.random(in: -1...1)
+            b[i] = Float.random(in: -1...1)
+        }
+
+        let start = CFAbsoluteTimeGetCurrent()
+
+        for i in 0..<size {
+            for k in 0..<size {
+                let aik = a[i * size + k]
+                for j in 0..<size {
+                    c[i * size + j] += aik * b[k * size + j]
+                }
+            }
+        }
+
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+        _ = c[0]
+
+        return elapsed
+    }
+
+    // MARK: - Rating
+
+    private func rateDevice(ramGB: Double, computeScore: Double, gpuCores: Int, hasGPU: Bool) -> AITier {
+        var score = 0
+
+        if ramGB >= 7 { score += 3 }
+        else if ramGB >= 5 { score += 2 }
+        else if ramGB >= 3 { score += 1 }
+
+        if hasGPU {
+            score += gpuCores >= 5 ? 2 : 1
+        }
+
+        if computeScore < 0.5 { score += 3 }
+        else if computeScore < 1.0 { score += 2 }
+        else if computeScore < 2.0 { score += 1 }
+
+        if score >= 7 { return .excellent }
+        if score >= 5 { return .good }
+        if score >= 3 { return .moderate }
+        return .limited
+    }
+
+    // MARK: - Recommendations
+
+    private func buildRecommendations(tier: AITier, ramGB: Double, hasGPU: Bool, storageFree: Double) -> [Recommendation] {
+        var recs: [Recommendation] = []
+
+        switch tier {
+        case .excellent:
+            recs.append(Recommendation(
+                icon: "sparkles",
+                title: "Best Experience",
+                detail: "Your device handles all models. Try Gemma 4 E4B for the highest quality."
+            ))
+        case .good:
+            recs.append(Recommendation(
+                icon: "hand.thumbsup",
+                title: "Great Performance",
+                detail: "Your device works well with both models. E4B for quality, E2B for speed."
+            ))
+        case .moderate:
+            recs.append(Recommendation(
+                icon: "bolt.horizontal",
+                title: "Recommended: Compact Model",
+                detail: "Use Gemma 4 E2B for the best balance of speed and quality."
+            ))
+        case .limited:
+            recs.append(Recommendation(
+                icon: "exclamationmark.triangle",
+                title: "Performance May Be Slow",
+                detail: "AI models will work but responses will take longer. Use E2B for best results."
+            ))
+        }
+
+        if !hasGPU {
+            recs.append(Recommendation(
+                icon: "gpu",
+                title: "No GPU Detected",
+                detail: "GPU acceleration is unavailable. Inference will use CPU only."
+            ))
+        }
+
+        if ramGB < 4 {
+            recs.append(Recommendation(
+                icon: "memorychip",
+                title: "Low Memory",
+                detail: "Close other apps before using AI to free up memory."
+            ))
+        }
+
+        if storageFree < 5 {
+            recs.append(Recommendation(
+                icon: "internaldrive",
+                title: "Low Storage",
+                detail: "You have \(String(format: "%.1f", storageFree)) GB free. Models need 2–4 GB."
+            ))
+        }
+
+        return recs
+    }
+
+    // MARK: - Device Mapping
+
+    private func mapDeviceIdentifier(_ id: String) -> String {
+        let map: [String: String] = [
+            "iPhone18,1": "iPhone 17",
+            "iPhone18,2": "iPhone 17 Pro",
+            "iPhone18,3": "iPhone 17 Pro Max",
+            "iPhone18,4": "iPhone 17 Air",
+            "iPhone17,1": "iPhone 16 Pro Max",
+            "iPhone17,2": "iPhone 16 Pro",
+            "iPhone17,3": "iPhone 16",
+            "iPhone17,4": "iPhone 16 Plus",
+            "iPhone17,5": "iPhone 16e",
+            "iPhone16,1": "iPhone 15 Pro Max",
+            "iPhone16,2": "iPhone 15 Pro",
+            "iPhone16,3": "iPhone 15",
+            "iPhone16,4": "iPhone 15 Plus",
+            "iPhone15,2": "iPhone 14 Pro",
+            "iPhone15,3": "iPhone 14 Pro Max",
+            "iPhone15,4": "iPhone 14",
+            "iPhone15,5": "iPhone 14 Plus",
+            "iPhone14,2": "iPhone 13 Pro",
+            "iPhone14,3": "iPhone 13 Pro Max",
+            "iPhone14,4": "iPhone 13 mini",
+            "iPhone14,5": "iPhone 13",
+            "iPad16,3": "iPad Pro (M4)",
+            "iPad16,4": "iPad Pro (M4)",
+            "iPad14,3": "iPad Pro (M2)",
+            "iPad14,4": "iPad Pro (M2)",
+            "iPad13,4": "iPad Pro (M1)",
+            "iPad13,5": "iPad Pro (M1)",
+            "iPad14,8": "iPad Air (M2)",
+            "iPad14,9": "iPad Air (M2)",
+            "iPad13,16": "iPad Air (M1)",
+            "iPad13,17": "iPad Air (M1)",
+        ]
+        return map[id] ?? id
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Models/Message.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@Model
+final class Message {
+    var id: UUID
+    var content: String
+    var roleRaw: String
+    var timestamp: Date
+    var isStreaming: Bool
+
+    @Relationship(inverse: \Conversation.messages)
+    var conversation: Conversation?
+
+    var role: MessageRole {
+        get { MessageRole(rawValue: roleRaw) ?? .user }
+        set { roleRaw = newValue.rawValue }
+    }
+
+    init(
+        id: UUID = UUID(),
+        content: String,
+        role: MessageRole,
+        timestamp: Date = .now,
+        isStreaming: Bool = false,
+        conversation: Conversation? = nil
+    ) {
+        self.id = id
+        self.content = content
+        self.roleRaw = role.rawValue
+        self.timestamp = timestamp
+        self.isStreaming = isStreaming
+        self.conversation = conversation
+    }
+}
+
+enum MessageRole: String, Codable, Sendable {
+    case user
+    case assistant
+}
+
+
+================================================================================
+Файл: Lamo/Services/AppleIntelligenceProvider.swift
+================================================================================
+
+import Foundation
+
+struct AppleIntelligenceProvider: LLMProvider {
+    let name = "Apple Intelligence"
+
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
+        AsyncStream { continuation in
+            Task {
+                let prompt = messages.last?.content ?? ""
+
+                let responses = generateLocalResponse(for: prompt)
+                for response in responses {
+                    continuation.yield(.delta(response))
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                continuation.yield(.done)
+                continuation.finish()
+            }
+        }
+    }
+
+    private func generateLocalResponse(for prompt: String) -> [String] {
+        let words = [
+            "Это", "заглушка", "локальной", "LLM-модели.", 
+            "В", "реальном", "приложении", "здесь", "будет", 
+            "интеграция", "с", "Apple Intelligence", "или", 
+            "Core ML", "моделью.", "Архитектура", "готова", 
+            "к", "подключению", "любого", "провайдера."
+        ]
+        return words.map { $0 + " " }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/ChatService.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+/// Service that coordinates streaming LLM responses.
+///
+/// Design:
+/// - Provider yields token **deltas** (not accumulated strings).
+/// - Consumers append deltas to build the final response. This avoids
+///   per-token string copying and reduces GC / retain churn.
+@MainActor
+final class ChatService {
+    private let provider: any LLMProvider
+    private var currentTask: Task<Void, Never>?
+
+    init(provider: (any LLMProvider)? = nil) {
+        self.provider = provider ?? AppleIntelligenceProvider()
+    }
+
+    /// Streaming method that emits **delta** strings.
+    ///
+    /// - Parameters:
+    ///   - messages:   Full message history.
+    ///   - onDelta:    Called for every new token chunk.
+    ///   - onComplete: Called when the stream ends successfully.
+    ///   - onError:    Called if an error occurs.
+    func sendMessage(
+        messages: [ChatMessage],
+        onDelta: @escaping @MainActor (String) -> Void,
+        onComplete: @escaping @MainActor () -> Void,
+        onError: @escaping @MainActor (Error) -> Void
+    ) {
+        currentTask?.cancel()
+        currentTask = Task {
+            for await token in provider.streamResponse(messages: messages) {
+                if Task.isCancelled { break }
+
+                switch token {
+                case .delta(let text):
+                    onDelta(text)   // <- delta, not accumulated string
+                case .done:
+                    onComplete()
+                case .error(let error):
+                    onError(error)
+                }
+            }
+        }
+    }
+
+    func stopGeneration() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/DownloadManager.swift
+================================================================================
+
+import Foundation
+import Combine
+import SwiftUI
+
+/// Manages downloading LiteRT-LM models from HuggingFace.
+@MainActor
+final class DownloadManager: ObservableObject {
+    static let shared = DownloadManager()
+
+    @Published var activeDownloads: [String: DownloadState] = [:]
+
+    private var tasks: [String: URLSessionDownloadTask] = [:]
+    private var observations: [String: NSKeyValueObservation] = [:]
+    private var resumeData: [String: Data] = [:]
+    private let session: URLSession
+
+    struct DownloadState {
+        var progress: Double = 0
+        var bytesWritten: Int64 = 0
+        var totalBytes: Int64 = 0
+        var isDownloading: Bool = false
+        var error: String? = nil
+        var isComplete: Bool = false
+
+        var progressPercentage: Int {
+            guard totalBytes > 0 else { return 0 }
+            return Int(bytesWritten * 100 / totalBytes)
+        }
+
+        var downloadedSizeString: String {
+            ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
+        }
+
+        var totalSizeString: String {
+            ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+        }
+    }
+
+    init() {
+        let config = URLSessionConfiguration.default
+        config.allowsCellularAccess = true
+        session = URLSession(configuration: config)
+    }
+
+    func download(model: PresetModel) {
+        guard let url = model.downloadURL else { return }
+        guard activeDownloads[model.filename]?.isDownloading != true else { return }
+
+        // Check if already downloaded
+        if model.isDownloaded {
+            activeDownloads[model.filename] = DownloadState(progress: 1.0, isComplete: true)
+            return
+        }
+
+        // Create models directory
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+        let destination = modelsDir.appendingPathComponent(model.filename)
+
+        activeDownloads[model.filename] = DownloadState(isDownloading: true)
+
+        let task: URLSessionDownloadTask
+        if let data = resumeData.removeValue(forKey: model.filename) {
+            // Resume from saved data
+            task = session.downloadTask(withResumeData: data) { [weak self] tempURL, response, error in
+                self?.handleDownloadCompletion(model: model, tempURL: tempURL, response: response, error: error)
+            }
+        } else {
+            // Fresh download
+            task = session.downloadTask(with: url) { [weak self] tempURL, response, error in
+                self?.handleDownloadCompletion(model: model, tempURL: tempURL, response: response, error: error)
+            }
+        }
+
+        // Track progress
+        let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            Task { @MainActor in
+                self?.activeDownloads[model.filename]?.progress = progress.fractionCompleted
+                self?.activeDownloads[model.filename]?.bytesWritten = progress.completedUnitCount
+                self?.activeDownloads[model.filename]?.totalBytes = progress.totalUnitCount
+            }
+        }
+
+        observations[model.filename] = observation
+        tasks[model.filename] = task
+        task.resume()
+    }
+
+    func cancelDownload(model: PresetModel) {
+        // Save resume data before cancelling
+        if let task = tasks[model.filename] {
+            let semaphore = DispatchSemaphore(value: 0)
+            var savedData: Data?
+            task.cancel { data in
+                savedData = data
+                semaphore.signal()
+            }
+            semaphore.wait()
+            if let data = savedData {
+                resumeData[model.filename] = data
+            }
+        }
+        tasks[model.filename]?.cancel()
+        activeDownloads[model.filename]?.isDownloading = false
+        observations.removeValue(forKey: model.filename)
+        tasks.removeValue(forKey: model.filename)
+    }
+
+    func deleteModel(_ model: PresetModel) {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let fileURL = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
+        try? FileManager.default.removeItem(at: fileURL)
+        activeDownloads.removeValue(forKey: model.filename)
+
+        // If this was the active model, invalidate engine so it reloads
+        // litertLMModelPath stores just the filename, compare with model.filename
+        if ProviderManager.shared.litertLMModelPath == model.filename {
+            ProviderManager.shared.litertLMModelPath = nil
+            ProviderManager.shared.invalidateEngine()
+        }
+    }
+
+    private func handleDownloadCompletion(
+        model: PresetModel,
+        tempURL: URL?,
+        response: URLResponse?,
+        error: Error?
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            if let error = error {
+                self.activeDownloads[model.filename]?.error = error.localizedDescription
+                self.activeDownloads[model.filename]?.isDownloading = false
+                return
+            }
+
+            guard let tempURL = tempURL else {
+                self.activeDownloads[model.filename]?.error = "Download failed: no data"
+                self.activeDownloads[model.filename]?.isDownloading = false
+                return
+            }
+
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let destination = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
+
+            do {
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.moveItem(at: tempURL, to: destination)
+                self.activeDownloads[model.filename]?.isComplete = true
+                self.activeDownloads[model.filename]?.isDownloading = false
+                self.activeDownloads[model.filename]?.progress = 1.0
+
+                // Notify ProviderManager to reload engine with the new model
+                ProviderManager.shared.reloadEngine()
+            } catch {
+                self.activeDownloads[model.filename]?.error = error.localizedDescription
+                self.activeDownloads[model.filename]?.isDownloading = false
+            }
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/LLMProvider.swift
+================================================================================
+
+import Foundation
+
+enum StreamingToken: Sendable {
+    case delta(String)
+    case done
+    case error(Error)
+}
+
+struct ChatMessage: Sendable {
+    let role: MessageRole
+    let content: String
+}
+
+protocol LLMProvider: Sendable {
+    var name: String { get }
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken>
+}
+
+
+================================================================================
+Файл: Lamo/Services/LiteRTLMProvider.swift
+================================================================================
+
+import Foundation
+import LiteRTLM
+
+/// Provider that runs a local LLM via Google's LiteRT-LM framework.
+/// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
+///
+/// Performance notes:
+/// - Conversation is reused across utterances as long as message history remains compatible.
+/// - Only new messages trigger inference; prefill is incremental.
+final class LiteRTLMProvider: LLMProvider {
+    let name = "LiteRT-LM"
+
+    /// Path to the .litertlm model file.
+    private let modelPath: String?
+
+    /// Backend selection
+    private let useGPU: Bool
+
+    /// Max tokens for KV-cache. nil = model default.
+    private let maxNumTokens: Int?
+
+    /// Cached engine — injected by ProviderManager to avoid reloading.
+    private let engine: LiteRTLM.Engine?
+
+    // MARK: - Persistent Conversation Cache
+
+    /// Cached native conversation — reused to avoid KV-cache rebuild.
+    private var cachedConversation: LiteRTLM.Conversation?
+    /// Hash of the messages last used to build `cachedConversation`.
+    private var cachedMessagesHash: Int = 0
+    /// Whether the provider's conversation still matches the incoming message list.
+    private func isCacheValid(for messages: [ChatMessage]) -> Bool {
+        return cachedConversation != nil
+            && messageHash(messages) == cachedMessagesHash
+    }
+
+    init(
+        modelPath: String? = nil,
+        useGPU: Bool = true,
+        maxNumTokens: Int? = 4096,
+        engine: LiteRTLM.Engine? = nil
+    ) {
+        self.modelPath = modelPath
+        self.useGPU = useGPU
+        self.maxNumTokens = maxNumTokens
+        self.engine = engine
+    }
+
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
+        AsyncStream { continuation in
+            Task {
+                do {
+                    try await runInference(messages: messages, continuation: continuation)
+                } catch {
+                    continuation.yield(.error(error))
+                    continuation.finish()
+                }
+            }
+        }
+    }
+
+    /// Invalidate cached conversation (e.g. when model or GPU setting changes).
+    func invalidateConversationCache() {
+        cachedConversation = nil
+        cachedMessagesHash = 0
+    }
+
+    private func messageHash(_ messages: [ChatMessage]) -> Int {
+        var hasher = Hasher()
+        for msg in messages {
+            hasher.combine(msg.role.rawValue)
+            hasher.combine(msg.content)
+        }
+        return hasher.finalize()
+    }
+
+    // MARK: - Private
+
+    private func runInference(
+        messages: [ChatMessage],
+        continuation: AsyncStream<StreamingToken>.Continuation
+    ) async throws {
+        // Reuse cached engine, or create new one
+        let resolvedEngine: LiteRTLM.Engine
+        if let cached = engine {
+            resolvedEngine = cached
+        } else {
+            let resolvedPath = try resolveModelPath()
+            let backend: LiteRTLM.Backend = useGPU
+                ? .gpu
+                : .cpu(threadCount: autoThreadCount)
+
+            let engineConfig = try LiteRTLM.EngineConfig(
+                modelPath: resolvedPath,
+                backend: backend,
+                visionBackend: nil,
+                audioBackend: nil,
+                maxNumTokens: maxNumTokens,
+                cacheDir: NSTemporaryDirectory()
+            )
+
+            let newEngine = LiteRTLM.Engine(engineConfig: engineConfig)
+            try await newEngine.initialize()
+            resolvedEngine = newEngine
+        }
+
+        // Reuse or rebuild conversation
+        let conversation: LiteRTLM.Conversation
+        if isCacheValid(for: messages) {
+            conversation = cachedConversation!
+        } else {
+            conversation = try await buildConversation(engine: resolvedEngine, messages: messages)
+            cachedConversation = conversation
+            cachedMessagesHash = messageHash(messages)
+        }
+
+        // Send the last user message and stream the response
+        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
+            let message = LiteRTLM.Message(lastUserMessage.content)
+
+            for try await chunk in conversation.sendMessageStream(message) {
+                if Task.isCancelled { break }
+                continuation.yield(.delta(chunk.toString))
+            }
+        }
+
+        continuation.yield(.done)
+        continuation.finish()
+    }
+
+    /// Build a fresh Conversation from the full message history.
+    private func buildConversation(
+        engine: LiteRTLM.Engine,
+        messages: [ChatMessage]
+    ) async throws -> LiteRTLM.Conversation {
+        var initialMessages: [LiteRTLM.Message] = []
+        for msg in messages.dropLast() {
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            initialMessages.append(LiteRTLM.Message(msg.content, role: role))
+        }
+
+        let samplerConfig = try LiteRTLM.SamplerConfig(
+            topK: 40,
+            topP: 0.95,
+            temperature: 0.7,
+            seed: Int.random(in: 0..<Int(Int32.max))
+        )
+
+        let conversationConfig = LiteRTLM.ConversationConfig(
+            systemMessage: LiteRTLM.Message(
+                "You are a helpful, concise assistant. Answer in the same language the user writes in.",
+                role: .system
+            ),
+            initialMessages: initialMessages,
+            tools: [],
+            samplerConfig: samplerConfig
+        )
+
+        return try await engine.createConversation(with: conversationConfig)
+    }
+
+    /// Auto-select sensible CPU thread count.
+    private var autoThreadCount: Int? {
+        let cores = ProcessInfo.processInfo.processorCount
+        return min(cores, 8) // Cap at 8 to keep UI responsive
+    }
+
+    private func resolveModelPath() throws -> String {
+        if let custom = modelPath {
+            guard FileManager.default.fileExists(atPath: custom) else {
+                throw LiteRTLMError.modelNotFound(custom)
+            }
+            return custom
+        }
+
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+
+        guard FileManager.default.fileExists(atPath: modelsDir.path) else {
+            throw LiteRTLMError.modelsDirectoryMissing
+        }
+
+        let models = try FileManager.default.contentsOfDirectory(
+            at: modelsDir,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "litertlm" }
+
+        guard let first = models.first else {
+            throw LiteRTLMError.noModelFound
+        }
+
+        return first.path
+    }
+}
+
+// MARK: - Errors
+
+enum LiteRTLMError: LocalizedError {
+    case modelNotFound(String)
+    case modelsDirectoryMissing
+    case noModelFound
+
+    var errorDescription: String? {
+        switch self {
+        case .modelNotFound(let path):
+            return "Model file not found at: \(path)"
+        case .modelsDirectoryMissing:
+            return "Models directory not found. Create ~/Documents/models/ and place a .litertlm file there."
+        case .noModelFound:
+            return "No .litertlm files found in ~/Documents/models/. Download a model first."
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/PresetModels.swift
+================================================================================
+
+import Foundation
+
+/// Known Gemma 4 models available for download via LiteRT-LM.
+enum PresetModel: String, CaseIterable, Identifiable {
+    case gemma4E4B = "gemma-4-E4B-it"
+    case gemma4E2B = "gemma-4-E2B-it"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gemma4E4B: return "Gemma 4 E4B"
+        case .gemma4E2B: return "Gemma 4 E2B"
+        }
+    }
+
+    var huggingFaceRepo: String {
+        switch self {
+        case .gemma4E4B: return "litert-community/gemma-4-E4B-it-litert-lm"
+        case .gemma4E2B: return "litert-community/gemma-4-E2B-it-litert-lm"
+        }
+    }
+
+    var filename: String {
+        switch self {
+        case .gemma4E4B: return "gemma-4-E4B-it.litertlm"
+        case .gemma4E2B: return "gemma-4-E2B-it.litertlm"
+        }
+    }
+
+    var downloadURL: URL? {
+        URL(string: "https://huggingface.co/\(huggingFaceRepo)/resolve/main/\(filename)")
+    }
+
+    var fileSizeGB: Double {
+        switch self {
+        case .gemma4E4B: return 3.66
+        case .gemma4E2B: return 2.0
+        }
+    }
+
+    var fileSizeString: String {
+        let gb = fileSizeGB
+        return String(format: "%.2f GB", gb)
+    }
+
+    var parameterCount: String {
+        switch self {
+        case .gemma4E4B: return "4B"
+        case .gemma4E2B: return "2B"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gemma4E4B:
+            return "Larger model with better reasoning. Best for complex tasks, coding, and multi-step problems."
+        case .gemma4E2B:
+            return "Compact model optimized for speed. Great for simple Q&A, summaries, and fast responses."
+        }
+    }
+
+    var highlights: [String] {
+        switch self {
+        case .gemma4E4B:
+            return [
+                "Text decoder: 2.24 GB weights",
+                "Embeddings: 0.67 GB (memory-mapped)",
+                "Best quality on-device",
+                "Supports tool calling & vision"
+            ]
+        case .gemma4E2B:
+            return [
+                "Optimized mobile quantization",
+                "Fastest inference speed",
+                "Lowest memory footprint",
+                "Ideal for older devices"
+            ]
+        }
+    }
+
+    var minRAM: String {
+        switch self {
+        case .gemma4E4B: return "~6 GB"
+        case .gemma4E2B: return "~3 GB"
+        }
+    }
+
+    var speedTier: String {
+        switch self {
+        case .gemma4E4B: return "⚡⚡⚡ Moderate"
+        case .gemma4E2B: return "⚡⚡⚡⚡⚡ Fast"
+        }
+    }
+
+    var qualityTier: String {
+        switch self {
+        case .gemma4E4B: return "🏆🏆🏆🏆 High"
+        case .gemma4E2B: return "🏆🏆🏆 Good"
+        }
+    }
+
+    var accentColor: String {
+        switch self {
+        case .gemma4E4B: return "blue"
+        case .gemma4E2B: return "green"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .gemma4E4B: return "brain.head.profile"
+        case .gemma4E2B: return "bolt.fill"
+        }
+    }
+
+    /// Check if this model is already downloaded in ~/Documents/models/
+    var isDownloaded: Bool {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        let fileURL = modelsDir.appendingPathComponent(filename)
+        return FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
+    /// Local path after download
+    var localPath: String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documents.appendingPathComponent("models").appendingPathComponent(filename).path
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/ProviderManager.swift
+================================================================================
+
+import Foundation
+import LiteRTLM
+import Combine
+
+/// Available LLM providers in the app.
+enum ProviderType: String, CaseIterable, Identifiable {
+    case appleIntelligence = "apple"
+    case litertLM = "litertlm"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .appleIntelligence: return "Apple Intelligence"
+        case .litertLM: return "On-Device AI"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .appleIntelligence: return "apple.logo"
+        case .litertLM: return "cpu"
+        }
+    }
+}
+
+/// Manages the active LLM provider, engine lifecycle, and shared ChatService.
+///
+/// Responsibilities:
+/// - Caches the LiteRT-LM engine (loaded once, reused across conversations)
+/// - Invalidates cache when model path or GPU setting changes
+/// - Provides a shared ChatService that reuses the same provider
+/// - Notifies observers when engine state changes
+@MainActor
+final class ProviderManager: ObservableObject {
+    static let shared = ProviderManager()
+
+    // MARK: - Published State
+
+    /// Whether the engine is currently loaded and ready.
+    @Published var isEngineReady: Bool = false
+
+    /// Error message if engine initialization failed.
+    @Published var engineError: String?
+
+    // MARK: - Settings (persisted via UserDefaults)
+
+    var selectedProvider: ProviderType {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: "selectedProvider"),
+                  let type = ProviderType(rawValue: raw) else { return .litertLM }
+            return type
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "selectedProvider")
+            invalidateEngine()
+        }
+    }
+
+    var litertLMModelPath: String? {
+        get { UserDefaults.standard.string(forKey: "litertLMModelPath") }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "litertLMModelPath")
+            invalidateEngine()
+        }
+    }
+
+    var litertLMUseGPU: Bool {
+        get { UserDefaults.standard.object(forKey: "litertLMUseGPU") as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "litertLMUseGPU")
+            invalidateEngine()
+        }
+    }
+
+    // MARK: - Internal State
+    // MARK: - Internal State
+    /// Cached engine. Nil when invalidated or not yet loaded.
+    private var cachedEngine: LiteRTLM.Engine?
+
+    /// The provider wrapping the cached engine.
+    private var cachedProvider: (any LLMProvider)?
+
+    /// Shared chat service that reuses the cached provider.
+    private(set) lazy var chatService: ChatService = {
+        ChatService(provider: currentProvider)
+    }()
+
+    /// Debounce: prevents rapid re-initialization when settings change quickly.
+    private var invalidateTask: Task<Void, Never>?
+
+    /// The currently active provider (Apple Intelligence or LiteRT-LM).
+    var currentProvider: any LLMProvider {
+        switch selectedProvider {
+        case .appleIntelligence:
+            return AppleIntelligenceProvider()
+        case .litertLM:
+            if let cached = cachedProvider {
+                return cached
+            }
+            // Fallback: create provider without engine (will create engine on first inference)
+            return LiteRTLMProvider(
+                modelPath: litertLMModelPath,
+                useGPU: litertLMUseGPU,
+                engine: nil
+            )
+        }
+    }
+
+    // MARK: - Engine Lifecycle
+
+    /// Initializes and caches the engine. Safe to call multiple times —
+    /// subsequent calls return immediately if already loaded.
+    func initializeEngineIfNeeded() async {
+        guard selectedProvider == .litertLM else {
+            isEngineReady = true  // Apple Intelligence doesn't need engine
+            return
+        }
+        guard cachedEngine == nil else {
+            isEngineReady = true
+            return
+        }
+
+        engineError = nil
+        isEngineReady = false
+
+        let resolvedPath: String
+        if let custom = litertLMModelPath {
+            guard FileManager.default.fileExists(atPath: custom) else {
+                engineError = "Model file not found: \(custom)"
+                return
+            }
+            resolvedPath = custom
+        } else {
+            guard let path = Self.findFirstModel() else {
+                engineError = "No .litertlm model found in ~/Documents/models/"
+                return
+            }
+            resolvedPath = path
+        }
+
+        let backend: LiteRTLM.Backend = litertLMUseGPU ? .gpu : .cpu(threadCount: nil)
+        guard let engineConfig = try? LiteRTLM.EngineConfig(
+            modelPath: resolvedPath,
+            backend: backend,
+            visionBackend: nil,
+            audioBackend: nil,
+            maxNumTokens: 4096,
+            cacheDir: NSTemporaryDirectory()
+        ) else {
+            engineError = "Failed to create engine config"
+            return
+        }
+
+        let engine = LiteRTLM.Engine(engineConfig: engineConfig)
+        do {
+            try await engine.initialize()
+        } catch {
+            engineError = "Engine init failed: \(error.localizedDescription)"
+            return
+        }
+
+        cachedEngine = engine
+        let provider = LiteRTLMProvider(
+            modelPath: litertLMModelPath,
+            useGPU: litertLMUseGPU,
+            engine: engine
+        )
+        cachedProvider = provider
+        chatService = ChatService(provider: provider)
+        isEngineReady = true
+    }
+
+    /// Invalidates the cached engine. Next inference will reload from disk.
+    /// Called automatically when model path or GPU setting changes.
+    /// Debounced: rapid changes within 300ms are coalesced.
+    func invalidateEngine() {
+        cachedEngine = nil
+        cachedProvider = nil
+        isEngineReady = false
+        // Cancel any pending re-initialization
+        invalidateTask?.cancel()
+        // Re-initialize after 300ms debounce
+        invalidateTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await initializeEngineIfNeeded()
+        }
+    }
+
+    /// Force-reload the engine (e.g., after model download completes).
+    func reloadEngine() {
+        invalidateEngine()
+    }
+
+    // MARK: - Model Discovery
+
+    /// Finds the first .litertlm file in ~/Documents/models/.
+    static func findFirstModel() -> String? {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        guard FileManager.default.fileExists(atPath: modelsDir.path) else { return nil }
+        guard let first = try? FileManager.default.contentsOfDirectory(
+            at: modelsDir, includingPropertiesForKeys: nil
+        ).first(where: { $0.pathExtension == "litertlm" }) else { return nil }
+        return first.path
+    }
+
+    /// Lists all .litertlm files in ~/Documents/models/.
+    static func listModels() -> [String] {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: modelsDir, includingPropertiesForKeys: nil
+        ) else { return [] }
+        return files
+            .filter { $0.pathExtension == "litertlm" }
+            .map { $0.lastPathComponent }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/ViewModels/ChatViewModel.swift
+================================================================================
+
+import Foundation
+import SwiftData
+import UIKit
+
+@MainActor
+@Observable
+final class ChatViewModel {
+    var messages: [Message] = []
+    var inputText: String = ""
+    var isStreaming: Bool = false
+
+    var conversationTitle: String { conversation.title }
+
+    private let modelContext: ModelContext
+    private let conversation: Conversation
+    private var streamingMessageID: UUID?
+
+    init(conversation: Conversation, modelContext: ModelContext) {
+        self.conversation = conversation
+        self.modelContext = modelContext
+        self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private var chatService: ChatService {
+        ChatService(provider: ProviderManager.shared.currentProvider)
+    }
+
+    func send() async {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        // 1) Add user message
+        let userMessage = Message(content: text, role: .user, conversation: conversation)
+        addMessage(userMessage)
+        inputText = ""
+        updateConversationTitleIfNeeded(firstMessage: text)
+
+        // 2) Add empty assistant message (streaming placeholder)
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
+        addMessage(assistantMessage)
+        streamingMessageID = assistantMessage.id
+        isStreaming = true
+
+        // 3) Build chat history for the provider (snapshot before streaming starts)
+        let chatMessages = messages.filter { !$0.content.isEmpty || $0.role == .user }
+            .map { ChatMessage(role: $0.role, content: $0.content) }
+
+        // 4) Stream response
+        let service = chatService
+        service.sendMessage(
+            messages: chatMessages,
+            onDelta: { [weak self] delta in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content += delta
+            },
+            onComplete: { [weak self] in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
+                self.isStreaming = false
+                self.conversation.updatedAt = .now
+                self.save()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            },
+            onError: { [weak self] error in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = "Error: \(error.localizedDescription)"
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
+                self.isStreaming = false
+                self.save()
+            }
+        )
+    }
+
+    func sendDirect(_ text: String) async {
+        inputText = text
+        await send()
+    }
+
+    func retryLastMessage() async {
+        guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
+
+        messages.removeLast()
+        modelContext.delete(lastMsg)
+
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
+        addMessage(assistantMessage)
+        streamingMessageID = assistantMessage.id
+        isStreaming = true
+
+        let chatMessages = messages.filter { !$0.content.isEmpty || $0.role == .user }
+            .map { ChatMessage(role: $0.role, content: $0.content) }
+
+        let service = chatService
+        service.sendMessage(
+            messages: chatMessages,
+            onDelta: { [weak self] delta in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content += delta
+            },
+            onComplete: { [weak self] in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
+                self.isStreaming = false
+                self.conversation.updatedAt = .now
+                self.save()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            },
+            onError: { [weak self] error in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = "Error: \(error.localizedDescription)"
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
+                self.isStreaming = false
+                self.save()
+            }
+        )
+    }
+
+    func stopGeneration() {
+        chatService.stopGeneration()
+        if let id = streamingMessageID,
+           let index = messages.firstIndex(where: { $0.id == id }) {
+            messages[index].isStreaming = false
+        }
+        streamingMessageID = nil
+        isStreaming = false
+    }
+
+    private func addMessage(_ message: Message) {
+        // message.conversation is already set in Message.init,
+        // so SwiftData handles the inverse relationship automatically.
+        // Do NOT also append to conversation.messages — that double-adds.
+        messages.append(message)
+        conversation.updatedAt = .now
+        save()
+    }
+
+    private func updateConversationTitleIfNeeded(firstMessage: String) {
+        if conversation.title == "New Chat" {
+            let title = String(firstMessage.prefix(40))
+            conversation.title = title
+        }
+    }
+
+    private func save() {
+        try? modelContext.save()
+    }
+}
+
+
+================================================================================
+Файл: Lamo/ViewModels/ConversationListViewModel.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@MainActor
+@Observable
+final class ConversationListViewModel {
+    private let modelContext: ModelContext
+
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
+
+    func createConversation() -> Conversation {
+        let conversation = Conversation()
+        modelContext.insert(conversation)
+        save()
+        return conversation
+    }
+
+    func deleteConversations(_ conversations: IndexSet, from allConversations: [Conversation]) {
+        for index in conversations {
+            let conversation = allConversations[index]
+            modelContext.delete(conversation)
+        }
+        save()
+    }
+
+    private func save() {
+        try? modelContext.save()
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/ChatInputBar.swift
+================================================================================
+
+import SwiftUI
+
+struct ChatInputBar: View {
+    @Binding var text: String
+    let isStreaming: Bool
+    let onSend: () -> Void
+    let onStop: () -> Void
+    @FocusState private var isTextFieldFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField("", text: $text, axis: .vertical)
+                    .lineLimit(1...8)
+                    .font(.body)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .scrollContentBackground(.hidden)
+                    .background(Color(.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(alignment: .topLeading) {
+                        if text.isEmpty {
+                            Text("Message")
+                                .font(.body)
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .focused($isTextFieldFocused)
+
+                if isStreaming {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Color(.systemRed))
+                            .clipShape(Circle())
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                } else {
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        isTextFieldFocused = false
+                        onSend()
+                    }) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .foregroundStyle(canSend ? Color.white : Color(.tertiaryLabel))
+                            .background(canSend ? Color.black : Color(.quaternarySystemFill), in: Circle())
+                            .animation(.easeInOut(duration: 0.15), value: canSend)
+                    }
+                    .disabled(!canSend)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(maxWidth: LamoTheme.maxContentWidth)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .padding(.bottom, 6)
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
+    }
+
+    private var canSend: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/ChatView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct ChatView: View {
+    @State private var viewModel: ChatViewModel
+    @State private var isUserNearBottom = true
+    @Environment(\.modelContext) private var modelContext
+    var onNewChat: (() -> Void)?
+
+    init(
+        conversation: Conversation,
+        modelContext: ModelContext,
+        onNewChat: (() -> Void)? = nil
+    ) {
+        _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
+        self.onNewChat = onNewChat
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            if viewModel.messages.isEmpty {
+                                emptyChatView
+                                    .id("empty")
+                            }
+
+                            ForEach(viewModel.messages) { message in
+                                MessageBubble(message: message, onRetry: {
+                                    Task {
+                                        await viewModel.retryLastMessage()
+                                    }
+                                })
+                                .id(message.id)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
+                        .background(GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geometry.frame(in: .global).maxY
+                            )
+                        })
+                    }
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { maxY in
+                        let screenHeight = UIScreen.main.bounds.height
+                        isUserNearBottom = maxY < screenHeight + 150
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onTapGesture {
+                        hideKeyboard()
+                    }
+                    .onChange(of: viewModel.messages.count) {
+                        scrollToBottom(proxy: proxy)
+                    }
+                    .onChange(of: viewModel.messages.last?.content) {
+                        if isUserNearBottom {
+                            scrollToBottom(proxy: proxy)
+                        }
+                    }
+
+                    if !isUserNearBottom, !viewModel.messages.isEmpty {
+                        Button {
+                            scrollToBottom(proxy: proxy)
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .frame(width: 30, height: 30)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 16)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+            }
+
+            ChatInputBar(
+                text: $viewModel.inputText,
+                isStreaming: viewModel.isStreaming,
+                onSend: { Task { await viewModel.send() } },
+                onStop: { viewModel.stopGeneration() }
+            )
+        }
+        .background(LamoTheme.Colors.background)
+        .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Empty State
+
+    private var emptyChatView: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 60)
+
+            VStack(spacing: 20) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                    .frame(width: 64, height: 64)
+                    .background(LamoTheme.Colors.accent.opacity(0.1), in: Circle())
+
+                Text("How can I help you today?")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+            }
+
+            Spacer()
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let last = viewModel.messages.last {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+// MARK: - Scroll Offset
+
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/MarkdownRenderer.swift
+================================================================================
+
+import SwiftUI
+
+struct MarkdownRenderer: View {
+    let text: String
+    let textColor: Color
+
+    var body: some View {
+        if text.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case .code(let code, let language):
+                        CodeBlock(code: code, language: language)
+                            .padding(.vertical, 4)
+                    case .header(let text, let level):
+                        HeaderText(text: text, level: level)
+                            .padding(.top, level == 1 ? 8 : 4)
+                            .padding(.bottom, 2)
+                    case .listItem(let text, let indent):
+                        ListItemText(text: text, indent: indent)
+                            .padding(.leading, CGFloat(indent) * 16)
+                            .padding(.vertical, 1)
+                    case .text(let content):
+                        if !content.trimmingCharacters(in: .whitespaces).isEmpty {
+                            RichText(text: content, textColor: textColor)
+                                .padding(.vertical, 2)
+                        }
+                    }
+                }
+            }
+            .textSelection(.enabled)
+        }
+    }
+
+    // MARK: - Block Parsing
+
+    private func parseBlocks() -> [Block] {
+        var blocks: [Block] = []
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        var inCodeBlock = false
+        var codeBuffer: [String] = []
+        var language = ""
+
+        for line in lines {
+            let lineStr = String(line)
+
+            // Code block toggle
+            if lineStr.hasPrefix("```") {
+                if inCodeBlock {
+                    blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
+                    codeBuffer = []
+                    language = ""
+                    inCodeBlock = false
+                } else {
+                    language = String(lineStr.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                    inCodeBlock = true
+                }
+                continue
+            }
+
+            if inCodeBlock {
+                codeBuffer.append(lineStr)
+                continue
+            }
+
+            // Headers
+            if lineStr.hasPrefix("### ") {
+                blocks.append(.header(String(lineStr.dropFirst(4)), level: 3))
+            } else if lineStr.hasPrefix("## ") {
+                blocks.append(.header(String(lineStr.dropFirst(3)), level: 2))
+            } else if lineStr.hasPrefix("# ") {
+                blocks.append(.header(String(lineStr.dropFirst(2)), level: 1))
+            }
+            // List items
+            else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
+                let indent = 0
+                let content = String(lineStr.dropFirst(2))
+                blocks.append(.listItem(content, indent: indent))
+            } else if lineStr.hasPrefix("  - ") || lineStr.hasPrefix("  * ") {
+                let content = String(lineStr.dropFirst(4))
+                blocks.append(.listItem(content, indent: 1))
+            }
+            // Numbered list items
+            else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                let content = lineStr.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
+                blocks.append(.listItem(content, indent: 0))
+            }
+            // Empty lines — skip duplicates
+            else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
+                if let last = blocks.last, case .text(let t) = last, t.trimmingCharacters(in: .whitespaces).isEmpty {
+                    // skip consecutive empty lines
+                } else {
+                    blocks.append(.text(""))
+                }
+            }
+            // Regular text
+            else {
+                blocks.append(.text(lineStr))
+            }
+        }
+
+        if inCodeBlock {
+            blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
+        }
+
+        return blocks
+    }
+
+    // MARK: - Block Types
+
+    private enum Block {
+        case text(String)
+        case code(code: String, language: String)
+        case header(String, level: Int)
+        case listItem(String, indent: Int)
+    }
+}
+
+// MARK: - Rich Text (Bold, Italic, Inline Code, Links)
+
+struct RichText: View {
+    let text: String
+    let textColor: Color
+
+    var body: some View {
+        if let attributed = try? AttributedString(markdown: text) {
+            Text(attributed)
+                .font(.body)
+                .foregroundStyle(textColor)
+                .lineSpacing(4)
+        } else {
+            Text(text)
+                .font(.body)
+                .foregroundStyle(textColor)
+                .lineSpacing(4)
+        }
+    }
+}
+
+// MARK: - Header Text
+
+struct HeaderText: View {
+    let text: String
+    let level: Int
+
+    var body: some View {
+        Text(text)
+            .font(headerFont)
+            .foregroundStyle(LamoTheme.Colors.textPrimary)
+            .lineSpacing(2)
+    }
+
+    private var headerFont: Font {
+        switch level {
+        case 1: return .title2.bold()
+        case 2: return .title3.bold()
+        default: return .headline.bold()
+        }
+    }
+}
+
+// MARK: - List Item
+
+struct ListItemText: View {
+    let text: String
+    let indent: Int
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text("•")
+                .foregroundStyle(LamoTheme.Colors.textTertiary)
+                .font(.body)
+            if let attributed = try? AttributedString(markdown: text) {
+                Text(attributed)
+                    .font(.body)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .lineSpacing(3)
+            } else {
+                Text(text)
+                    .font(.body)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .lineSpacing(3)
+            }
+        }
+    }
+}
+
+// MARK: - Code Block
+
+struct CodeBlock: View {
+    let code: String
+    let language: String
+    @State private var isCopied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header bar
+            HStack {
+                if !language.isEmpty {
+                    Text(language.uppercased())
+                        .font(.system(.caption2, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = code
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation {
+                        isCopied = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            isCopied = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                        Text(isCopied ? "Copied" : "Copy")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.quaternarySystemFill))
+
+            // Code content
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .textSelection(.enabled)
+                    .padding(12)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/MessageBubble.swift
+================================================================================
+
+import SwiftUI
+
+struct MessageBubble: View {
+    let message: Message
+    var onRetry: (() -> Void)? = nil
+
+    var body: some View {
+        if message.role == .user {
+            userMessage
+        } else {
+            assistantMessage
+        }
+    }
+
+    // MARK: - User Message
+
+    private var userMessage: some View {
+        HStack {
+            Spacer(minLength: 48)
+            VStack(alignment: .trailing, spacing: 3) {
+                if isErrorMessage {
+                    errorBubble
+                } else {
+                    Text(message.content)
+                        .font(.body)
+                        .foregroundStyle(LamoTheme.Colors.textPrimary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            }
+        }
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
+        ))
+    }
+
+    // MARK: - Assistant Message
+
+    private var assistantMessage: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if message.isStreaming && message.content.isEmpty {
+                TypingIndicator()
+            } else {
+                MarkdownRenderer(
+                    text: message.content,
+                    textColor: LamoTheme.Colors.textPrimary
+                )
+            }
+
+            if !message.isStreaming && !message.content.isEmpty {
+                HStack(spacing: 14) {
+                    // Copy button
+                    Button {
+                        UIPasteboard.general.string = message.content
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+
+                    // Regenerate button
+                    if let onRetry {
+                        Button(action: onRetry) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+                }
+                .padding(.top, 6)
+            }
+        }
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
+        ))
+    }
+
+    // MARK: - Error Bubble
+
+    private var isErrorMessage: Bool {
+        message.content.hasPrefix("Ошибка:") || message.content.hasPrefix("Error:")
+    }
+
+    @ViewBuilder
+    private var errorBubble: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color(.systemRed))
+                Text("Inference Error")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color(.systemRed))
+            }
+
+            Text(message.content.replacingOccurrences(of: "Ошибка: ", with: "").replacingOccurrences(of: "Error: ", with: ""))
+                .font(.subheadline)
+
+            if let onRetry {
+                Button(action: onRetry) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
+                        Text("Retry")
+                            .font(.caption.weight(.medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.systemGray5))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/TypingIndicator.swift
+================================================================================
+
+import SwiftUI
+
+struct TypingIndicator: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(.tertiary)
+                    .frame(width: 5, height: 5)
+                    .scaleEffect(isAnimating ? 1.0 : 0.3)
+                    .opacity(isAnimating ? 1.0 : 0.4)
+                    .animation(
+                        .easeInOut(duration: 0.5)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double(index) * 0.15),
+                        value: isAnimating
+                    )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .onAppear {
+            isAnimating = true
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/ConversationList/ConversationListView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct ConversationListView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: ConversationListViewModel?
+    @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if conversations.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Conversations", systemImage: "bubble.left.and.bubble.right")
+                    } description: {
+                        Text("Start a new chat to begin")
+                    } actions: {
+                        Button {
+                            _ = viewModel?.createConversation()
+                        } label: {
+                            Label("New Chat", systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else {
+                    List {
+                        ForEach(conversations) { conversation in
+                            NavigationLink(value: conversation) {
+                                ConversationRow(conversation: conversation)
+                            }
+                        }
+                        .onDelete { indexSet in
+                            viewModel?.deleteConversations(indexSet, from: conversations)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Lamo")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        _ = viewModel?.createConversation()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.body.weight(.medium))
+                    }
+                    .sensoryFeedback(.impact(weight: .light), trigger: conversations.count)
+                }
+            }
+            .navigationDestination(for: Conversation.self) { conversation in
+                ChatView(conversation: conversation, modelContext: modelContext)
+            }
+            .onAppear {
+                if viewModel == nil {
+                    viewModel = ConversationListViewModel(modelContext: modelContext)
+                }
+            }
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/MainView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct MainView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
+    @State private var selectedID: UUID?
+    @State private var showSettings = false
+    @State private var searchText = ""
+    @State private var hasAppeared = false
+
+    private var filteredConversations: [Conversation] {
+        if searchText.isEmpty {
+            return conversations
+        }
+        return conversations.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var selectedConversation: Conversation? {
+        conversations.first { $0.id == selectedID }
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            sidebarContent
+        } detail: {
+            detailContent
+        }
+        .tint(LamoTheme.Colors.accent)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .onAppear {
+            if !hasAppeared {
+                hasAppeared = true
+                cleanupEmptyConversations()
+                startNewChat()
+            }
+        }
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebarContent: some View {
+        List(selection: $selectedID) {
+            Button {
+                startNewChat()
+            } label: {
+                Label {
+                    Text("New Chat")
+                        .font(.body)
+                } icon: {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                }
+            }
+            .listRowBackground(Color(.tertiarySystemFill))
+
+            Section {
+                ForEach(filteredConversations) { conversation in
+                    ConversationRow(conversation: conversation)
+                        .tag(conversation.id)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                deleteConversation(conversation)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+            } header: {
+                if !filteredConversations.isEmpty {
+                    Text("Recent")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("Chats")
+        .searchable(text: $searchText, prompt: "Search chats")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Detail
+
+    private var detailContent: some View {
+        Group {
+            if let conversation = selectedConversation {
+                ChatView(
+                    conversation: conversation,
+                    modelContext: modelContext,
+                    onNewChat: {
+                        startNewChat()
+                    }
+                )
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 48, weight: .ultraLight))
+                        .foregroundStyle(.tertiary)
+                    Text("Select or start a new chat")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func startNewChat() {
+        cleanupEmptyConversations()
+        let conversation = Conversation()
+        modelContext.insert(conversation)
+        try? modelContext.save()
+        selectedID = conversation.id
+    }
+
+    private func deleteConversation(_ conversation: Conversation) {
+        if selectedID == conversation.id {
+            selectedID = nil
+        }
+        modelContext.delete(conversation)
+        try? modelContext.save()
+    }
+
+    private func cleanupEmptyConversations() {
+        for conv in conversations where conv.messages.isEmpty {
+            if selectedID != conv.id {
+                modelContext.delete(conv)
+            }
+        }
+        try? modelContext.save()
+    }
+}
+
+// MARK: - Conversation Row
+
+struct ConversationRow: View {
+    let conversation: Conversation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(conversation.title)
+                .font(.body)
+                .lineLimit(1)
+
+            if let lastMessage = conversation.messages
+                .sorted(by: { $0.timestamp < $1.timestamp })
+                .last {
+                Text(lastMessage.content)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Settings/ModelCardView.swift
+================================================================================
+
+import SwiftUI
+
+struct ModelCardView: View {
+    let model: PresetModel
+    @ObservedObject var downloadManager: DownloadManager
+    @State private var isExpanded = false
+
+    private var downloadState: DownloadManager.DownloadState? {
+        downloadManager.activeDownloads[model.filename]
+    }
+
+    private var isDownloaded: Bool {
+        model.isDownloaded || downloadState?.isComplete == true
+    }
+
+    private var isDownloading: Bool {
+        downloadState?.isDownloading == true
+    }
+
+    private var themeColor: Color {
+        model.accentColor == "blue" ? .blue : .green
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(themeColor.opacity(0.1))
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: model.systemImage)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(themeColor)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.displayName)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text(model.description)
+                        .font(.subheadline)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        .lineLimit(isExpanded ? nil : 1)
+                }
+
+                Spacer()
+
+                if isDownloaded {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(LamoTheme.Colors.success)
+                        .font(.title3)
+                        .symbolEffect(.bounce, value: isDownloaded)
+                } else if isDownloading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .padding([.top, .horizontal], 16)
+
+            // Stats row
+            HStack(spacing: 6) {
+                StatBadge(value: model.fileSizeString, icon: "internaldrive")
+                StatBadge(value: model.parameterCount + " params", icon: "cpu")
+                StatBadge(value: model.minRAM + " RAM", icon: "memorychip")
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+
+            // Expandable details
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(model.highlights, id: \.self) { highlight in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(themeColor)
+                                    .padding(.top, 3)
+                                Text(highlight)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SPEED")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.tertiary)
+                            Text(model.speedTier)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("QUALITY")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.tertiary)
+                            Text(model.qualityTier)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Progress bar
+            if isDownloading, let state = downloadState, state.totalBytes > 0 {
+                VStack(spacing: 6) {
+                    ProgressView(value: state.progress)
+                        .tint(themeColor)
+
+                    HStack {
+                        Text("\(state.downloadedSizeString) / \(state.totalSizeString)")
+                            .font(.caption2)
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        Spacer()
+                        Text("\(state.progressPercentage)%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+
+            // Error
+            if let error = downloadState?.error {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(LamoTheme.Colors.error)
+                        .font(.caption)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(LamoTheme.Colors.error)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+
+            Divider()
+
+            // Action row
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(isExpanded ? "Less" : "Details")
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                if isDownloaded {
+                    Button(role: .destructive) {
+                        downloadManager.deleteModel(model)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .foregroundStyle(.red)
+                } else if isDownloading {
+                    Button {
+                        downloadManager.cancelDownload(model: model)
+                    } label: {
+                        Label("Cancel", systemImage: "xmark.circle")
+                    }
+                    .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        downloadManager.download(model: model)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down.circle.fill")
+                            Text("Download")
+                        }
+                        .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(themeColor)
+                }
+            }
+            .font(.subheadline)
+            .buttonStyle(.plain)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.4))
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.lg, style: .continuous)
+                .stroke(Color(.separator).opacity(0.4), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 3)
+    }
+}
+
+// MARK: - Stat Badge
+
+struct StatBadge: View {
+    let value: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+            Text(value)
+                .font(.system(.caption2, design: .rounded).weight(.medium))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color(uiColor: .quaternarySystemFill))
+        .clipShape(Capsule())
+        .foregroundStyle(LamoTheme.Colors.textSecondary)
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Settings/SettingsView.swift
+================================================================================
+
+import SwiftUI
+import UniformTypeIdentifiers
+
+struct SettingsView: View {
+    @ObservedObject private var providerManager = ProviderManager.shared
+    @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var benchmark = DeviceBenchmark()
+    @State private var isImportingModel = false
+    @State private var availableModels: [String] = []
+    @State private var importError: String?
+    @State private var importSuccess = false
+    @State private var importedModelName = ""
+    @State private var isCopyingFile = false
+    @State private var showError = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                // MARK: - AI Engine
+                providerSection
+
+                // MARK: - Models
+                if providerManager.selectedProvider == .litertLM {
+                    modelsSection
+                }
+
+                // MARK: - Device Performance
+                devicePerformanceSection
+
+                // MARK: - Privacy
+                privacySection
+
+                // MARK: - About
+                aboutSection
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: providerManager.selectedProvider)
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                refreshModels()
+            }
+            .fileImporter(
+                isPresented: $isImportingModel,
+                allowedContentTypes: [.data],
+                allowsMultipleSelection: false
+            ) { result in
+                handleModelImport(result)
+            }
+            .overlay {
+                if isCopyingFile {
+                    ZStack {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Importing model…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(24)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+            }
+            .alert("Import Error", isPresented: $showError) {
+                Button("OK") { importError = nil }
+            } message: {
+                if let error = importError {
+                    Text(error)
+                }
+            }
+            .alert("Model Imported", isPresented: $importSuccess) {
+                Button("Use Now") {
+                    providerManager.litertLMModelPath = importedModelName
+                    refreshModels()
+                }
+                Button("Later", role: .cancel) {
+                    refreshModels()
+                }
+            } message: {
+                Text("\(displayModelName(importedModelName)) is ready to use.")
+            }
+        }
+    }
+
+    // MARK: - Provider Section
+
+    private var providerSection: some View {
+        Section {
+            Picker(selection: $providerManager.selectedProvider) {
+                ForEach(ProviderType.allCases) { provider in
+                    HStack {
+                        Image(systemName: provider.icon)
+                        Text(provider.displayName)
+                    }
+                    .tag(provider)
+                }
+            } label: {
+                Label("AI Engine", systemImage: "cpu")
+            }
+            .pickerStyle(.navigationLink)
+
+            // Engine status
+            engineStatusRow
+        } header: {
+            Text("AI Engine")
+        } footer: {
+            if providerManager.selectedProvider == .litertLM {
+                Text("Runs AI models directly on your device. No internet needed, full privacy.")
+            } else {
+                Text("Uses Apple's built-in AI. Requires Apple Intelligence enabled in system settings.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var engineStatusRow: some View {
+        if providerManager.selectedProvider == .litertLM {
+            if providerManager.isEngineReady {
+                Label("Model loaded", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.subheadline)
+            } else if let error = providerManager.engineError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.subheadline)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading model…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+
+        if providerManager.selectedProvider == .litertLM {
+            litertLMOptions
+        }
+    }
+
+    // MARK: - LiteRT-LM Options
+
+    @ViewBuilder
+    private var litertLMOptions: some View {
+        if let current = providerManager.litertLMModelPath {
+            HStack {
+                Label("Active Model", systemImage: "bolt.horizontal.circle.fill")
+                    .foregroundStyle(LamoTheme.Colors.success)
+                Spacer()
+                Text(displayModelName(current))
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        if !availableModels.isEmpty {
+            Picker(selection: Binding(
+                get: { providerManager.litertLMModelPath ?? "" },
+                set: { providerManager.litertLMModelPath = $0.isEmpty ? nil : $0 }
+            )) {
+                Text("Auto-detect").tag("")
+                ForEach(availableModels, id: \.self) { model in
+                    Text(displayModelName(model)).tag(model)
+                }
+            } label: {
+                Label("Local Model", systemImage: "internaldrive")
+            }
+        }
+
+        Button {
+            isImportingModel = true
+        } label: {
+            HStack {
+                if isCopyingFile {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Importing…")
+                } else {
+                    Label("Import Model", systemImage: "square.and.arrow.down")
+                }
+                Spacer()
+                if !isCopyingFile {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .foregroundStyle(LamoTheme.Colors.accent)
+        .disabled(isCopyingFile)
+
+        Toggle(isOn: $providerManager.litertLMUseGPU) {
+            Label("GPU Acceleration", systemImage: "bolt.fill")
+        }
+        .tint(LamoTheme.Colors.accent)
+    }
+
+    // MARK: - Models Section
+
+    private var modelsSection: some View {
+        Section {
+            ForEach(PresetModel.allCases) { model in
+                ModelCardView(model: model, downloadManager: downloadManager)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            }
+        } header: {
+            Text("Models")
+        } footer: {
+            Text("All models run on-device. Your data never leaves your phone.")
+        }
+    }
+
+    // MARK: - Device Performance Section
+
+    private var devicePerformanceSection: some View {
+        Section {
+            if let result = benchmark.result {
+                // Device info header
+                VStack(spacing: 12) {
+                    // Device name + tier badge
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.deviceName)
+                                .font(.headline)
+                            Text(result.chipName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        tierBadge(result)
+                    }
+
+                    Divider()
+
+                    // Stats grid
+                    HStack(spacing: 0) {
+                        statItem("Memory", value: String(format: "%.0f GB", result.ramGB), icon: "memorychip")
+                        Spacer()
+                        statItem("GPU", value: result.hasGPU ? "Metal" : "None", icon: "gpu")
+                        Spacer()
+                        statItem("Storage", value: String(format: "%.0f GB", result.storageFreeGB), icon: "internaldrive")
+                    }
+
+                    // Compute score
+                    HStack {
+                        Text("Compute Speed")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(String(format: "%.2fs", result.computeScore))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Text(computeLabel(result.computeScore))
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(computeColor(result.computeScore).opacity(0.15))
+                            .foregroundStyle(computeColor(result.computeScore))
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.vertical, 4)
+
+                // Recommendations
+                if !result.recommendations.isEmpty {
+                    ForEach(result.recommendations) { rec in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: rec.icon)
+                                .font(.subheadline)
+                                .foregroundStyle(LamoTheme.Colors.accent)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(rec.title)
+                                    .font(.subheadline.weight(.medium))
+                                Text(rec.detail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
+            // Run button
+            Button {
+                Task { await benchmark.runBenchmark() }
+            } label: {
+                HStack {
+                    if benchmark.isRunning {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Testing…")
+                    } else {
+                        Image(systemName: benchmark.result != nil ? "arrow.clockwise" : "gauge.with.dots.fill")
+                        Text(benchmark.result != nil ? "Test Again" : "Check Performance")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .fontWeight(.medium)
+            }
+            .disabled(benchmark.isRunning)
+            .foregroundStyle(LamoTheme.Colors.accent)
+        } header: {
+            Text("Device Performance")
+        } footer: {
+            Text("Tests your device's ability to run AI models locally.")
+        }
+    }
+
+    // MARK: - Privacy Section
+
+    private var privacySection: some View {
+        Section {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.green)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fully Private")
+                        .font(.body)
+                        .fontWeight(.medium)
+                    Text("All processing happens on your device. No data is sent anywhere.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("Privacy")
+        }
+    }
+
+    // MARK: - About Section
+
+    private var aboutSection: some View {
+        Section {
+            HStack {
+                Text("Version")
+                Spacer()
+                Text(appVersion)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("About")
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
+    private func displayModelName(_ path: String) -> String {
+        path
+            .replacingOccurrences(of: ".litertlm", with: "")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func refreshModels() {
+        availableModels = ProviderManager.listModels()
+    }
+
+    private func handleModelImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result,
+              let url = urls.first else { return }
+
+        // Validate file extension
+        let ext = url.pathExtension.lowercased()
+        guard ext == "litertlm" || ext == "bin" || ext == "tflite" else {
+            importError = "Unsupported file type '.\(ext)'. Please select a .litertlm file."
+            showError = true
+            return
+        }
+
+        // Validate file size
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSize = attrs?[.size] as? UInt64 ?? 0
+        guard fileSize > 1_000_000 else {  // At least 1MB
+            importError = "File is too small (\(formatBytes(fileSize))). It doesn't look like a valid model."
+            showError = true
+            return
+        }
+
+        // Copy in background to avoid UI freeze
+        isCopyingFile = true
+        Task.detached {
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let modelsDir = documents.appendingPathComponent("models")
+            try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+            let fileName = url.lastPathComponent
+            let destination = modelsDir.appendingPathComponent(fileName)
+
+            do {
+                // Check access to source file (security-scoped)
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer {
+                    if accessing { url.stopAccessingSecurityScopedResource() }
+                }
+
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.copyItem(at: url, to: destination)
+
+                await MainActor.run {
+                    self.isCopyingFile = false
+                    self.importedModelName = fileName
+                    self.importSuccess = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.isCopyingFile = false
+                    self.importError = "Import failed: \(error.localizedDescription)"
+                    self.showError = true
+                }
+            }
+        }
+    }
+
+    private func formatBytes(_ bytes: UInt64) -> String {
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1_048_576 { return String(format: "%.1f KB", Double(bytes) / 1024) }
+        if bytes < 1_073_741_824 { return String(format: "%.1f MB", Double(bytes) / 1_048_576) }
+        return String(format: "%.2f GB", Double(bytes) / 1_073_741_824)
+    }
+
+    // MARK: - Benchmark UI Helpers
+
+    @ViewBuilder
+    private func tierBadge(_ result: DeviceBenchmark.BenchmarkResult) -> some View {
+        let color: Color = {
+            switch result.aiTierColor {
+            case "green": return .green
+            case "blue": return .blue
+            case "orange": return .orange
+            default: return .red
+            }
+        }()
+
+        HStack(spacing: 4) {
+            Image(systemName: result.aiTierIcon)
+                .font(.caption)
+            Text(result.aiTierLabel)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.15))
+        .foregroundStyle(color)
+        .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private func statItem(_ title: String, value: String, icon: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func computeLabel(_ seconds: Double) -> String {
+        if seconds < 0.5 { return "Fast" }
+        if seconds < 1.0 { return "Normal" }
+        if seconds < 2.0 { return "Slow" }
+        return "Very Slow"
+    }
+
+    private func computeColor(_ seconds: Double) -> Color {
+        if seconds < 0.5 { return .green }
+        if seconds < 1.0 { return .blue }
+        if seconds < 2.0 { return .orange }
+        return .red
+    }
+}
+
+
