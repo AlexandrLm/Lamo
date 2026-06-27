@@ -1,17 +1,14 @@
-//
-//  LamoApp.swift
-//  Lamo
-//
-//  Created by Aleksandr on 6/27/26.
-//
-
 import SwiftUI
+import SwiftData
 
 @main
 struct LamoApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            NavigationStack {
+                MainView()
+            }
         }
+        .modelContainer(for: [Conversation.self, Message.self])
     }
 }
