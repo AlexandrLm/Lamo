@@ -183,14 +183,23 @@ struct SettingsView: View {
             isImportingModel = true
         } label: {
             HStack {
-                Label("Import Model", systemImage: "square.and.arrow.down")
+                if isCopyingFile {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Importing…")
+                } else {
+                    Label("Import Model", systemImage: "square.and.arrow.down")
+                }
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tertiary)
+                if !isCopyingFile {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
         .foregroundStyle(LamoTheme.Colors.accent)
+        .disabled(isCopyingFile)
 
         Toggle(isOn: $providerManager.litertLMUseGPU) {
             Label("GPU Acceleration", systemImage: "bolt.fill")
@@ -379,21 +388,62 @@ struct SettingsView: View {
         guard case .success(let urls) = result,
               let url = urls.first else { return }
 
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-
-        let destination = modelsDir.appendingPathComponent(url.lastPathComponent)
-        do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: url, to: destination)
-            providerManager.litertLMModelPath = url.lastPathComponent
-            refreshModels()
-        } catch {
-            print("Import failed: \(error)")
+        // Validate file extension
+        let ext = url.pathExtension.lowercased()
+        guard ext == "litertlm" || ext == "bin" || ext == "tflite" else {
+            importError = "Unsupported file type '.\(ext)'. Please select a .litertlm file."
+            return
         }
+
+        // Validate file size
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSize = attrs?[.size] as? UInt64 ?? 0
+        guard fileSize > 1_000_000 else {  // At least 1MB
+            importError = "File is too small (\(formatBytes(fileSize))). It doesn't look like a valid model."
+            return
+        }
+
+        // Copy in background to avoid UI freeze
+        isCopyingFile = true
+        Task.detached {
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let modelsDir = documents.appendingPathComponent("models")
+            try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+            let fileName = url.lastPathComponent
+            let destination = modelsDir.appendingPathComponent(fileName)
+
+            do {
+                // Check access to source file (security-scoped)
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer {
+                    if accessing { url.stopAccessingSecurityScopedResource() }
+                }
+
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.copyItem(at: url, to: destination)
+
+                await MainActor.run {
+                    self.isCopyingFile = false
+                    self.importedModelName = fileName
+                    self.importSuccess = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.isCopyingFile = false
+                    self.importError = "Import failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func formatBytes(_ bytes: UInt64) -> String {
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1_048_576 { return String(format: "%.1f KB", Double(bytes) / 1024) }
+        if bytes < 1_073_741_824 { return String(format: "%.1f MB", Double(bytes) / 1_048_576) }
+        return String(format: "%.2f GB", Double(bytes) / 1_073_741_824)
     }
 
     // MARK: - Benchmark UI Helpers
