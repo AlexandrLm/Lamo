@@ -50,7 +50,6 @@ struct ChatView: View {
                                 .id(message.id)
                             }
                         }
-                        .frame(maxWidth: LamoTheme.maxContentWidth)
                         .padding(.horizontal, LamoTheme.Spacing.lg)
                         .padding(.vertical, LamoTheme.Spacing.xl)
                         .background(GeometryReader { geometry in
@@ -65,6 +64,9 @@ struct ChatView: View {
                         isUserNearBottom = maxY < screenHeight + 150
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    .onTapGesture {
+                        hideKeyboard()
+                    }
                     .onChange(of: viewModel.messages.count) {
                         scrollToBottom(proxy: proxy)
                     }
@@ -190,6 +192,10 @@ struct ChatView: View {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
+    }
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

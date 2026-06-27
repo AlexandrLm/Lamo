@@ -44,7 +44,7 @@ struct MessageBubble: View {
     // MARK: - Assistant Message
 
     private var assistantMessage: some View {
-        HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             if message.isStreaming && message.content.isEmpty {
                 TypingIndicator()
             } else {
@@ -54,7 +54,27 @@ struct MessageBubble: View {
                 )
                 .lineSpacing(4)
             }
-            Spacer(minLength: 48)
+
+            if !message.isStreaming && !message.content.isEmpty {
+                HStack(spacing: 12) {
+                    Button {
+                        UIPasteboard.general.string = message.content
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text(message.timestamp, style: .time)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+
+                    Spacer()
+                }
+                .padding(.top, 2)
+            }
         }
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),

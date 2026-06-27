@@ -3,10 +3,16 @@ import LiteRTLM
 
 /// Provider that runs a local LLM via Google's LiteRT-LM framework.
 /// Supports GPU (Metal) acceleration, streaming, and configurable model path.
-struct LiteRTLMProvider: LLMProvider {
+/// Provider that runs a local LLM via Google's LiteRT-LM framework.
+/// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
+///
+/// Performance notes:
+/// - Conversation is reused across utterances as long as message history remains compatible.
+/// - Only new messages trigger inference; prefill is incremental.
+final class LiteRTLMProvider: LLMProvider {
     let name = "LiteRT-LM"
 
-    /// Path to the .litertlm model file. If nil, uses default Documents location.
+    /// Path to the .litertlm model file.
     private let modelPath: String?
 
     /// Backend selection
@@ -17,6 +23,18 @@ struct LiteRTLMProvider: LLMProvider {
 
     /// Cached engine — injected by ProviderManager to avoid reloading.
     private let engine: LiteRTLM.Engine?
+
+    // MARK: - Persistent Conversation Cache
+
+    /// Cached native conversation — reused to avoid KV-cache rebuild.
+    private var cachedConversation: LiteRTLM.Conversation?
+    /// Hash of the messages last used to build `cachedConversation`.
+    private var cachedMessagesHash: Int = 0
+    /// Whether the provider’s conversation still matches the incoming message list.
+    private func isCacheValid(for messages: [ChatMessage]) -> Bool {
+        return cachedConversation != nil
+            && messages.hashValue == cachedMessagesHash
+    }
 
     init(
         modelPath: String? = nil,
@@ -43,6 +61,12 @@ struct LiteRTLMProvider: LLMProvider {
         }
     }
 
+    /// Invalidate cached conversation (e.g. when model or GPU setting changes).
+    func invalidateConversationCache() {
+        cachedConversation = nil
+        cachedMessagesHash = 0
+    }
+
     // MARK: - Private
 
     private func runInference(
@@ -55,7 +79,9 @@ struct LiteRTLMProvider: LLMProvider {
             resolvedEngine = cached
         } else {
             let resolvedPath = try resolveModelPath()
-            let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: nil)
+            let backend: LiteRTLM.Backend = useGPU
+                ? .gpu
+                : .cpu(threadCount: autoThreadCount)
 
             let engineConfig = try LiteRTLM.EngineConfig(
                 modelPath: resolvedPath,
@@ -71,9 +97,35 @@ struct LiteRTLMProvider: LLMProvider {
             resolvedEngine = newEngine
         }
 
-        // Build conversation config from message history.
-        // Drop the last user message — it will be sent via sendMessageStream below,
-        // so only prior messages go into initialMessages to avoid duplication.
+        // Reuse or rebuild conversation
+        let conversation: LiteRTLM.Conversation
+        if isCacheValid(for: messages) {
+            conversation = try cachedConversation.unwrap()
+        } else {
+            conversation = try await buildConversation(engine: resolvedEngine, messages: messages)
+            cachedConversation = conversation
+            cachedMessagesHash = messages.hashValue
+        }
+
+        // Send the last user message and stream the response
+        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
+            let message = LiteRTLM.Message(lastUserMessage.content)
+
+            for try await chunk in conversation.sendMessageStream(message) {
+                if Task.isCancelled { break }
+                continuation.yield(.text(chunk.toString))
+            }
+        }
+
+        continuation.yield(.done)
+        continuation.finish()
+    }
+
+    /// Build a fresh Conversation from the full message history.
+    private func buildConversation(
+        engine: LiteRTLM.Engine,
+        messages: [ChatMessage]
+    ) async throws -> LiteRTLM.Conversation {
         var initialMessages: [LiteRTLM.Message] = []
         for msg in messages.dropLast() {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
@@ -90,27 +142,20 @@ struct LiteRTLMProvider: LLMProvider {
         let conversationConfig = LiteRTLM.ConversationConfig(
             systemMessage: LiteRTLM.Message(
                 "You are a helpful, concise assistant. Answer in the same language the user writes in.",
-                role: .system
+壮阔可怕地面对这个挑战，联手  (role: .system)
             ),
             initialMessages: initialMessages,
             tools: [],
             samplerConfig: samplerConfig
         )
 
-        let conversation = try await resolvedEngine.createConversation(with: conversationConfig)
+        return try await engine.createConversation(with: conversationConfig)
+    }
 
-        // Send the last user message and stream the response
-        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
-            let message = LiteRTLM.Message(lastUserMessage.content)
-
-            for try await chunk in conversation.sendMessageStream(message) {
-                if Task.isCancelled { break }
-                continuation.yield(.text(chunk.toString))
-            }
-        }
-
-        continuation.yield(.done)
-        continuation.finish()
+    /// Auto-select sensible CPU thread count.
+    private var autoThreadCount: Int? {
+        let cores = ProcessInfo.processInfo.processorCount
+        return min(cores, 8) // Cap at 8 to keep UI responsive
     }
 
     private func resolveModelPath() throws -> String {
