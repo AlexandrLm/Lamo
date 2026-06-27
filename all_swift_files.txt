@@ -1,0 +1,992 @@
+================================================================================
+Файл: Lamo/ContentView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct ContentView: View {
+    var body: some View {
+        MainView()
+    }
+}
+
+#Preview {
+    ContentView()
+}
+
+
+================================================================================
+Файл: Lamo/Design/Theme.swift
+================================================================================
+
+import SwiftUI
+
+enum LamoTheme {
+    enum Colors {
+        static let background = Color.clear
+        static let secondaryBackground = Color.gray.opacity(0.1)
+        static let userBubble = Color.blue
+        static let assistantBubble = Color.gray.opacity(0.12)
+        static let accent = Color.accentColor
+        static let textPrimary = Color.primary
+        static let textSecondary = Color.secondary
+    }
+
+    enum Spacing {
+        static let xs: CGFloat = 4
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 24
+    }
+
+    enum CornerRadius {
+        static let bubble: CGFloat = 16
+        static let input: CGFloat = 20
+    }
+
+    enum Fonts {
+        static let body = Font.body
+        static let headline = Font.headline
+        static let caption = Font.caption
+        static let code = Font.system(.body, design: .monospaced)
+    }
+}
+
+
+================================================================================
+Файл: Lamo/LamoApp.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+@main
+struct LamoApp: App {
+    var body: some Scene {
+        WindowGroup {
+            NavigationStack {
+                MainView()
+            }
+        }
+        .modelContainer(for: [Conversation.self, Message.self])
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Models/Conversation.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@Model
+final class Conversation {
+    var id: UUID
+    var title: String
+    var createdAt: Date
+    var updatedAt: Date
+    var messages: [Message]
+
+    init(
+        id: UUID = UUID(),
+        title: String = "New Chat",
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        messages: [Message] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.messages = messages
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Models/Message.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@Model
+final class Message {
+    var id: UUID
+    var content: String
+    var roleRaw: String
+    var timestamp: Date
+    var isStreaming: Bool
+
+    @Relationship(inverse: \Conversation.messages)
+    var conversation: Conversation?
+
+    var role: MessageRole {
+        get { MessageRole(rawValue: roleRaw) ?? .user }
+        set { roleRaw = newValue.rawValue }
+    }
+
+    init(
+        id: UUID = UUID(),
+        content: String,
+        role: MessageRole,
+        timestamp: Date = .now,
+        isStreaming: Bool = false
+    ) {
+        self.id = id
+        self.content = content
+        self.roleRaw = role.rawValue
+        self.timestamp = timestamp
+        self.isStreaming = isStreaming
+    }
+}
+
+enum MessageRole: String, Codable, Sendable {
+    case user
+    case assistant
+}
+
+
+================================================================================
+Файл: Lamo/Services/AppleIntelligenceProvider.swift
+================================================================================
+
+import Foundation
+
+struct AppleIntelligenceProvider: LLMProvider {
+    let name = "Apple Intelligence"
+
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
+        AsyncStream { continuation in
+            Task {
+                let prompt = messages.last?.content ?? ""
+
+                let responses = generateLocalResponse(for: prompt)
+                for response in responses {
+                    continuation.yield(.text(response))
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                continuation.yield(.done)
+                continuation.finish()
+            }
+        }
+    }
+
+    private func generateLocalResponse(for prompt: String) -> [String] {
+        let words = [
+            "Это", "заглушка", "локальной", "LLM-модели.", 
+            "В", "реальном", "приложении", "здесь", "будет", 
+            "интеграция", "с", "Apple Intelligence", "или", 
+            "Core ML", "моделью.", "Архитектура", "готова", 
+            "к", "подключению", "любого", "провайдера."
+        ]
+        return words.map { $0 + " " }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/ChatService.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@MainActor
+final class ChatService {
+    private let provider: any LLMProvider
+    private var currentTask: Task<Void, Never>?
+
+    init(provider: (any LLMProvider)? = nil) {
+        self.provider = provider ?? AppleIntelligenceProvider()
+    }
+
+    func sendMessage(
+        messages: [ChatMessage],
+        onToken: @escaping @MainActor (String) -> Void,
+        onComplete: @escaping @MainActor () -> Void,
+        onError: @escaping @MainActor (Error) -> Void
+    ) {
+        currentTask?.cancel()
+        currentTask = Task {
+            var accumulated = ""
+
+            for await token in provider.streamResponse(messages: messages) {
+                if Task.isCancelled { break }
+
+                switch token {
+                case .text(let text):
+                    accumulated += text
+                    onToken(accumulated)
+                case .done:
+                    onComplete()
+                case .error(let error):
+                    onError(error)
+                }
+            }
+        }
+    }
+
+    func stopGeneration() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Services/LLMProvider.swift
+================================================================================
+
+import Foundation
+
+enum StreamingToken: Sendable {
+    case text(String)
+    case done
+    case error(Error)
+}
+
+struct ChatMessage: Sendable {
+    let role: MessageRole
+    let content: String
+}
+
+protocol LLMProvider: Sendable {
+    var name: String { get }
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken>
+}
+
+
+================================================================================
+Файл: Lamo/ViewModels/ChatViewModel.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@MainActor
+@Observable
+final class ChatViewModel {
+    var messages: [Message] = []
+    var inputText: String = ""
+    var isStreaming: Bool = false
+
+    var conversationTitle: String { conversation.title }
+
+    private let chatService: ChatService
+    private let modelContext: ModelContext
+    private let conversation: Conversation
+    private var streamingMessageIndex: Int?
+
+    init(conversation: Conversation, modelContext: ModelContext, provider: (any LLMProvider)? = nil) {
+        self.conversation = conversation
+        self.modelContext = modelContext
+        self.chatService = ChatService(provider: provider)
+        self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    func send() async {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        let userMessage = Message(content: text, role: .user)
+        addMessage(userMessage)
+        inputText = ""
+        updateConversationTitleIfNeeded(firstMessage: text)
+
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true)
+        addMessage(assistantMessage)
+        streamingMessageIndex = messages.count - 1
+        isStreaming = true
+
+        let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
+
+        chatService.sendMessage(
+            messages: chatMessages,
+            onToken: { [weak self] accumulated in
+                guard let self, let idx = self.streamingMessageIndex else { return }
+                self.messages[idx].content = accumulated
+            },
+            onComplete: { [weak self] in
+                guard let self, let idx = self.streamingMessageIndex else { return }
+                self.messages[idx].isStreaming = false
+                self.streamingMessageIndex = nil
+                self.isStreaming = false
+                self.conversation.updatedAt = .now
+                self.save()
+            },
+            onError: { [weak self] error in
+                guard let self, let idx = self.streamingMessageIndex else { return }
+                self.messages[idx].content = "Ошибка: \(error.localizedDescription)"
+                self.messages[idx].isStreaming = false
+                self.streamingMessageIndex = nil
+                self.isStreaming = false
+                self.save()
+            }
+        )
+    }
+
+    func stopGeneration() {
+        chatService.stopGeneration()
+        if let idx = streamingMessageIndex {
+            messages[idx].isStreaming = false
+        }
+        streamingMessageIndex = nil
+        isStreaming = false
+    }
+
+    private func addMessage(_ message: Message) {
+        messages.append(message)
+        conversation.messages.append(message)
+        conversation.updatedAt = .now
+        save()
+    }
+
+    private func updateConversationTitleIfNeeded(firstMessage: String) {
+        if conversation.title == "New Chat" {
+            let title = String(firstMessage.prefix(40))
+            conversation.title = title
+        }
+    }
+
+    private func save() {
+        try? modelContext.save()
+    }
+}
+
+
+================================================================================
+Файл: Lamo/ViewModels/ConversationListViewModel.swift
+================================================================================
+
+import Foundation
+import SwiftData
+
+@MainActor
+@Observable
+final class ConversationListViewModel {
+    private let modelContext: ModelContext
+
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
+
+    func createConversation() -> Conversation {
+        let conversation = Conversation()
+        modelContext.insert(conversation)
+        save()
+        return conversation
+    }
+
+    func deleteConversations(_ conversations: IndexSet, from allConversations: [Conversation]) {
+        for index in conversations {
+            let conversation = allConversations[index]
+            for message in conversation.messages {
+                modelContext.delete(message)
+            }
+            modelContext.delete(conversation)
+        }
+        save()
+    }
+
+    private func save() {
+        try? modelContext.save()
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/ChatInputBar.swift
+================================================================================
+
+import SwiftUI
+
+struct ChatInputBar: View {
+    @Binding var text: String
+    let isStreaming: Bool
+    let onSend: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        HStack(spacing: LamoTheme.Spacing.sm) {
+            TextField("Message...", text: $text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...5)
+                .padding(.horizontal, LamoTheme.Spacing.md)
+                .padding(.vertical, LamoTheme.Spacing.sm)
+                .background(LamoTheme.Colors.secondaryBackground)
+                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input))
+                .onSubmit {
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        onSend()
+                    }
+                }
+
+            if isStreaming {
+                Button(action: onStop) {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
+            } else {
+                Button(action: onSend) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(canSend ? LamoTheme.Colors.accent : LamoTheme.Colors.textSecondary)
+                }
+                .disabled(!canSend)
+            }
+        }
+        .padding(.horizontal, LamoTheme.Spacing.md)
+        .padding(.vertical, LamoTheme.Spacing.sm)
+    }
+
+    private var canSend: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/ChatView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct ChatView: View {
+    @State private var viewModel: ChatViewModel
+    var onToggleSidebar: (() -> Void)?
+    var onNewChat: (() -> Void)?
+
+    init(
+        conversation: Conversation,
+        modelContext: ModelContext,
+        onToggleSidebar: (() -> Void)? = nil,
+        onNewChat: (() -> Void)? = nil
+    ) {
+        _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
+        self.onToggleSidebar = onToggleSidebar
+        self.onNewChat = onNewChat
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            headerBar
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: LamoTheme.Spacing.sm) {
+                        if viewModel.messages.isEmpty {
+                            emptyChatView
+                                .id("empty")
+                        }
+
+                        ForEach(viewModel.messages) { message in
+                            MessageBubble(message: message)
+                                .id(message.id)
+                        }
+
+                        if viewModel.isStreaming, let last = viewModel.messages.last, last.role == .assistant, last.content.isEmpty {
+                            TypingIndicator()
+                                .id("typing")
+                        }
+                    }
+                    .padding(LamoTheme.Spacing.md)
+                }
+                .onChange(of: viewModel.messages.count) {
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: viewModel.messages.last?.content) {
+                    scrollToBottom(proxy: proxy)
+                }
+            }
+
+            Divider()
+
+            ChatInputBar(
+                text: $viewModel.inputText,
+                isStreaming: viewModel.isStreaming,
+                onSend: { Task { await viewModel.send() } },
+                onStop: { viewModel.stopGeneration() }
+            )
+        }
+        .background(LamoTheme.Colors.background)
+    }
+
+    private var headerBar: some View {
+        HStack {
+            Button {
+                onToggleSidebar?()
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text(viewModel.conversationTitle)
+                .font(LamoTheme.Fonts.headline)
+                .lineLimit(1)
+
+            Spacer()
+
+            Button {
+                onNewChat?()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, LamoTheme.Spacing.md)
+        .padding(.vertical, LamoTheme.Spacing.sm)
+    }
+
+    private var emptyChatView: some View {
+        VStack(spacing: LamoTheme.Spacing.lg) {
+            Spacer()
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 40))
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+            Text("How can I help you?")
+                .font(.title2)
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+            Spacer()
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let last = viewModel.messages.last {
+            withAnimation {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/MarkdownRenderer.swift
+================================================================================
+
+import SwiftUI
+
+struct MarkdownRenderer: View {
+    let text: String
+
+    var body: some View {
+        if text.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case .code(let code, let language):
+                        CodeBlock(code: code, language: language)
+                    case .text(let content):
+                        StyledText(content)
+                            .font(LamoTheme.Fonts.body)
+                    }
+                }
+            }
+        }
+    }
+
+    private func parseBlocks() -> [Block] {
+        var blocks: [Block] = []
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        var inCodeBlock = false
+        var codeBuffer: [String] = []
+        var language = ""
+
+        for line in lines {
+            let lineStr = String(line)
+            if lineStr.hasPrefix("```") {
+                if inCodeBlock {
+                    blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
+                    codeBuffer = []
+                    language = ""
+                    inCodeBlock = false
+                } else {
+                    language = String(lineStr.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                    inCodeBlock = true
+                }
+            } else if inCodeBlock {
+                codeBuffer.append(lineStr)
+            } else {
+                blocks.append(.text(lineStr))
+            }
+        }
+
+        if inCodeBlock {
+            blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
+        }
+
+        return blocks
+    }
+
+    private func StyledText(_ text: String) -> some View {
+        let attributed = parseInlineFormatting(text)
+        return Text(attributed)
+    }
+
+    private func parseInlineFormatting(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+
+        let boldPattern = /\*\*(.+?)\*\*/
+        for match in text.matches(of: boldPattern) {
+            let matchStr = String(match.output.0)
+            if let range = result.range(of: matchStr) {
+                result[range].font = .body.bold()
+            }
+        }
+
+        let italicPattern = /\*(.+?)\*/
+        for match in text.matches(of: italicPattern) {
+            let matchStr = String(match.output.0)
+            if let range = result.range(of: matchStr) {
+                result[range].font = .body.italic()
+            }
+        }
+
+        let inlineCodePattern = /`(.+?)`/
+        for match in text.matches(of: inlineCodePattern) {
+            let matchStr = String(match.output.0)
+            if let range = result.range(of: matchStr) {
+                result[range].font = LamoTheme.Fonts.code
+                result[range].foregroundColor = .orange
+            }
+        }
+
+        return result
+    }
+
+    private enum Block {
+        case text(String)
+        case code(code: String, language: String)
+    }
+}
+
+struct CodeBlock: View {
+    let code: String
+    let language: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
+            if !language.isEmpty {
+                Text(language)
+                    .font(LamoTheme.Fonts.caption)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(LamoTheme.Fonts.code)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(LamoTheme.Spacing.md)
+        .background(LamoTheme.Colors.assistantBubble)
+        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble))
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/MessageBubble.swift
+================================================================================
+
+import SwiftUI
+
+struct MessageBubble: View {
+    let message: Message
+
+    var body: some View {
+        HStack {
+            if message.role == .user { Spacer(minLength: 60) }
+
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: LamoTheme.Spacing.xs) {
+                MarkdownRenderer(text: message.content)
+                    .padding(LamoTheme.Spacing.md)
+                    .background(bubbleBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble))
+
+                if message.isStreaming {
+                    TypingIndicator()
+                        .padding(.horizontal, LamoTheme.Spacing.xs)
+                }
+            }
+
+            if message.role == .assistant { Spacer(minLength: 60) }
+        }
+    }
+
+    @ViewBuilder
+    private var bubbleBackground: some View {
+        if message.role == .user {
+            LamoTheme.Colors.userBubble
+        } else {
+            LamoTheme.Colors.assistantBubble
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Chat/TypingIndicator.swift
+================================================================================
+
+import SwiftUI
+
+struct TypingIndicator: View {
+    @State private var phase = 0.0
+
+    var body: some View {
+        HStack(spacing: LamoTheme.Spacing.xs) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(LamoTheme.Colors.textSecondary)
+                    .frame(width: 6, height: 6)
+                    .offset(y: sin(phase + Double(index) * 0.8) * 3)
+            }
+        }
+        .padding(LamoTheme.Spacing.sm)
+        .onAppear {
+            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                phase = .pi * 2
+            }
+        }
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/ConversationList/ConversationListView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct ConversationListView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: ConversationListViewModel?
+    @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if conversations.isEmpty {
+                    ContentUnavailableView(
+                        "No Conversations",
+                        systemImage: "bubble.left.and.bubble.right",
+                        description: Text("Start a new chat")
+                    )
+                } else {
+                    List {
+                        ForEach(conversations) { conversation in
+                            NavigationLink(value: conversation) {
+                                ConversationRow(conversation: conversation)
+                            }
+                        }
+                        .onDelete { indexSet in
+                                viewModel?.deleteConversations(indexSet, from: conversations)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Lamo")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        _ = viewModel?.createConversation()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
+            .navigationDestination(for: Conversation.self) { conversation in
+                ChatView(conversation: conversation, modelContext: modelContext)
+            }
+            .onAppear {
+                if viewModel == nil {
+                    viewModel = ConversationListViewModel(modelContext: modelContext)
+                }
+            }
+        }
+    }
+}
+
+struct ConversationRow: View {
+    let conversation: Conversation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
+            Text(conversation.title)
+                .font(LamoTheme.Fonts.headline)
+                .lineLimit(1)
+
+            Text(conversation.updatedAt, style: .relative)
+                .font(LamoTheme.Fonts.caption)
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+        }
+        .padding(.vertical, LamoTheme.Spacing.xs)
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/MainView.swift
+================================================================================
+
+import SwiftUI
+import SwiftData
+
+struct MainView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
+    @State private var selectedConversationID: UUID?
+    @State private var showSidebar = false
+
+    private var selectedConversation: Conversation? {
+        conversations.first { $0.id == selectedConversationID }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if showSidebar {
+                sidebarView
+                    .frame(width: 260)
+                    .transition(.move(edge: .leading))
+            }
+
+            if let conversation = selectedConversation {
+                ChatView(
+                    conversation: conversation,
+                    modelContext: modelContext,
+                    onToggleSidebar: { withAnimation { showSidebar.toggle() } },
+                    onNewChat: { createNewChat() }
+                )
+            } else {
+                emptyState
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showSidebar)
+        .onAppear {
+            ensureConversationExists()
+        }
+    }
+
+    private var sidebarView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    createNewChat()
+                } label: {
+                    Label("New Chat", systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .padding(LamoTheme.Spacing.md)
+
+                Button {
+                    withAnimation { showSidebar = false }
+                } label: {
+                    Image(systemName: "xmark")
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, LamoTheme.Spacing.md)
+            }
+
+            Divider()
+
+            List(conversations) { conversation in
+                Button {
+                    selectedConversationID = conversation.id
+                    withAnimation { showSidebar = false }
+                } label: {
+                    ConversationRow(conversation: conversation)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(
+                    conversation.id == selectedConversationID
+                        ? LamoTheme.Colors.accent.opacity(0.15)
+                        : Color.clear
+                )
+            }
+            .listStyle(.sidebar)
+
+            Divider()
+
+            NavigationLink {
+                SettingsView()
+            } label: {
+                Label("Settings", systemImage: "gear")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(LamoTheme.Spacing.md)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(LamoTheme.Colors.secondaryBackground)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: LamoTheme.Spacing.lg) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 48))
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+            Text("Lamo")
+                .font(.largeTitle.bold())
+            Text("Start a new conversation")
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+            Button("New Chat") {
+                createNewChat()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func ensureConversationExists() {
+        if let first = conversations.first {
+            selectedConversationID = first.id
+        } else {
+            createNewChat()
+        }
+    }
+
+    private func createNewChat() {
+        let conversation = Conversation()
+        modelContext.insert(conversation)
+        try? modelContext.save()
+        selectedConversationID = conversation.id
+    }
+}
+
+
+================================================================================
+Файл: Lamo/Views/Settings/SettingsView.swift
+================================================================================
+
+import SwiftUI
+
+struct SettingsView: View {
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("About") {
+                    LabeledContent("Version", value: "1.0")
+                    LabeledContent("LLM Provider", value: "Apple Intelligence (Local)")
+                }
+            }
+            .navigationTitle("Settings")
+        }
+    }
+}
+
+
