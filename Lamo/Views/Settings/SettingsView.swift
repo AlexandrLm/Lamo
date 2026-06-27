@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var importSuccess = false
     @State private var importedModelName = ""
     @State private var isCopyingFile = false
+    @State private var showError = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -70,7 +71,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .alert("Import Error", isPresented: .constant(importError != nil)) {
+            .alert("Import Error", isPresented: $showError) {
                 Button("OK") { importError = nil }
             } message: {
                 if let error = importError {
@@ -392,6 +393,7 @@ struct SettingsView: View {
         let ext = url.pathExtension.lowercased()
         guard ext == "litertlm" || ext == "bin" || ext == "tflite" else {
             importError = "Unsupported file type '.\(ext)'. Please select a .litertlm file."
+            showError = true
             return
         }
 
@@ -400,6 +402,7 @@ struct SettingsView: View {
         let fileSize = attrs?[.size] as? UInt64 ?? 0
         guard fileSize > 1_000_000 else {  // At least 1MB
             importError = "File is too small (\(formatBytes(fileSize))). It doesn't look like a valid model."
+            showError = true
             return
         }
 
@@ -434,6 +437,7 @@ struct SettingsView: View {
                 await MainActor.run {
                     self.isCopyingFile = false
                     self.importError = "Import failed: \(error.localizedDescription)"
+                    self.showError = true
                 }
             }
         }
