@@ -3,31 +3,54 @@ import SwiftUI
 struct MarkdownRenderer: View {
     let text: String
     let textColor: Color
+    let isStreaming: Bool
+
+    init(text: String, textColor: Color, isStreaming: Bool = false) {
+        self.text = text
+        self.textColor = textColor
+        self.isStreaming = isStreaming
+    }
 
     var body: some View {
         if text.isEmpty {
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
-                    switch block {
-                    case .code(let code, let language):
-                        CodeBlock(code: code, language: language)
-                            .padding(.vertical, 4)
-                    case .header(let text, let level):
-                        HeaderText(text: text, level: level)
-                            .padding(.top, level == 1 ? 8 : 4)
-                            .padding(.bottom, 2)
-                    case .listItem(let text, let indent):
-                        ListItemText(text: text, indent: indent)
-                            .padding(.leading, CGFloat(indent) * 16)
-                            .padding(.vertical, 1)
-                    case .text(let content):
-                        if !content.trimmingCharacters(in: .whitespaces).isEmpty {
-                            RichText(text: content, textColor: textColor)
-                                .padding(.vertical, 2)
+                let blocks = parseBlocks()
+                ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+                    let isLast = index == blocks.count - 1
+                    Group {
+                        switch block {
+                        case .code(let code, let language):
+                            CodeBlock(code: code, language: language)
+                                .padding(.vertical, 4)
+                        case .header(let text, let level):
+                            HeaderText(text: text, level: level)
+                                .padding(.top, level == 1 ? 8 : 4)
+                                .padding(.bottom, 2)
+                        case .listItem(let text, let indent):
+                            ListItemText(text: text, indent: indent)
+                                .padding(.leading, CGFloat(indent) * 16)
+                                .padding(.vertical, 1)
+                        case .text(let content):
+                            if !content.trimmingCharacters(in: .whitespaces).isEmpty {
+                                RichText(text: content, textColor: textColor)
+                                    .padding(.vertical, 2)
+                            }
                         }
                     }
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .bottom)),
+                        removal: .opacity
+                    ))
+                    .animation(.easeOut(duration: 0.25), value: blocks.count)
+                }
+
+                // Streaming cursor
+                if isStreaming {
+                    StreamingCursor()
+                        .padding(.top, 2)
+                        .transition(.opacity)
                 }
             }
             .textSelection(.enabled)
@@ -46,7 +69,6 @@ struct MarkdownRenderer: View {
         for line in lines {
             let lineStr = String(line)
 
-            // Code block toggle
             if lineStr.hasPrefix("```") {
                 if inCodeBlock {
                     blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
@@ -65,38 +87,26 @@ struct MarkdownRenderer: View {
                 continue
             }
 
-            // Headers
             if lineStr.hasPrefix("### ") {
                 blocks.append(.header(String(lineStr.dropFirst(4)), level: 3))
             } else if lineStr.hasPrefix("## ") {
                 blocks.append(.header(String(lineStr.dropFirst(3)), level: 2))
             } else if lineStr.hasPrefix("# ") {
                 blocks.append(.header(String(lineStr.dropFirst(2)), level: 1))
-            }
-            // List items
-            else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
-                let indent = 0
-                let content = String(lineStr.dropFirst(2))
-                blocks.append(.listItem(content, indent: indent))
+            } else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
+                blocks.append(.listItem(String(lineStr.dropFirst(2)), indent: 0))
             } else if lineStr.hasPrefix("  - ") || lineStr.hasPrefix("  * ") {
-                let content = String(lineStr.dropFirst(4))
-                blocks.append(.listItem(content, indent: 1))
-            }
-            // Numbered list items
-            else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                blocks.append(.listItem(String(lineStr.dropFirst(4)), indent: 1))
+            } else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
                 let content = lineStr.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
                 blocks.append(.listItem(content, indent: 0))
-            }
-            // Empty lines — skip duplicates
-            else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
+            } else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
                 if let last = blocks.last, case .text(let t) = last, t.trimmingCharacters(in: .whitespaces).isEmpty {
                     // skip consecutive empty lines
                 } else {
                     blocks.append(.text(""))
                 }
-            }
-            // Regular text
-            else {
+            } else {
                 blocks.append(.text(lineStr))
             }
         }
@@ -108,8 +118,6 @@ struct MarkdownRenderer: View {
         return blocks
     }
 
-    // MARK: - Block Types
-
     private enum Block {
         case text(String)
         case code(code: String, language: String)
@@ -118,7 +126,25 @@ struct MarkdownRenderer: View {
     }
 }
 
-// MARK: - Rich Text (Bold, Italic, Inline Code, Links)
+// MARK: - Streaming Cursor
+
+struct StreamingCursor: View {
+    @State private var visible = true
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(LamoTheme.Colors.accent)
+            .frame(width: 8, height: 16)
+            .opacity(visible ? 1 : 0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever()) {
+                    visible.toggle()
+                }
+            }
+    }
+}
+
+// MARK: - Rich Text
 
 struct RichText: View {
     let text: String
@@ -196,7 +222,6 @@ struct CodeBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header bar
             HStack {
                 if !language.isEmpty {
                     Text(language.uppercased())
@@ -230,7 +255,6 @@ struct CodeBlock: View {
             .padding(.vertical, 8)
             .background(Color(.quaternarySystemFill))
 
-            // Code content
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(.system(.callout, design: .monospaced))

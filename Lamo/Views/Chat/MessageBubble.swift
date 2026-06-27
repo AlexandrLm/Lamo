@@ -36,6 +36,7 @@ struct MessageBubble: View {
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .opacity
         ))
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: message.id)
     }
 
     // MARK: - Assistant Message
@@ -44,16 +45,18 @@ struct MessageBubble: View {
         VStack(alignment: .leading, spacing: 0) {
             if message.isStreaming && message.content.isEmpty {
                 TypingIndicator()
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
             } else {
                 MarkdownRenderer(
                     text: message.content,
-                    textColor: LamoTheme.Colors.textPrimary
+                    textColor: LamoTheme.Colors.textPrimary,
+                    isStreaming: message.isStreaming
                 )
+                .transition(.opacity)
             }
 
             if !message.isStreaming && !message.content.isEmpty {
                 HStack(spacing: 14) {
-                    // Copy button
                     Button {
                         UIPasteboard.general.string = message.content
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -64,7 +67,6 @@ struct MessageBubble: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Regenerate button
                     if let onRetry {
                         Button(action: onRetry) {
                             Image(systemName: "arrow.clockwise")
@@ -77,12 +79,14 @@ struct MessageBubble: View {
                     Spacer()
                 }
                 .padding(.top, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .opacity
         ))
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: message.id)
     }
 
     // MARK: - Error Bubble
