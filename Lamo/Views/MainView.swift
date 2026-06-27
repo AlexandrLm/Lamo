@@ -6,7 +6,6 @@ struct MainView: View {
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
     @State private var selectedConversation: Conversation?
     @State private var showSettings = false
-    @State private var autoNavigate = false
     @State private var searchText = ""
 
     private var filteredConversations: [Conversation] {
@@ -21,7 +20,38 @@ struct MainView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if conversations.isEmpty {
+                if let conversation = selectedConversation {
+                    ChatView(
+                        conversation: conversation,
+                        modelContext: modelContext,
+                        onBack: {
+                            selectedConversation = nil
+                        },
+                        onNewChat: {
+                            createNewChat()
+                        }
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                selectedConversation = nil
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } else if conversations.isEmpty {
                     emptyState
                 } else {
                     conversationList
@@ -30,50 +60,32 @@ struct MainView: View {
             .navigationTitle("Lamo")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(LamoTheme.Colors.textSecondary)
+                if selectedConversation == nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                        }
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        createNewChat()
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.body.weight(.medium))
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            createNewChat()
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .font(.body.weight(.medium))
+                        }
+                        .sensoryFeedback(.impact(weight: .light), trigger: conversations.count)
                     }
-                    .sensoryFeedback(.impact(weight: .light), trigger: conversations.count)
                 }
             }
             .searchable(text: $searchText, prompt: "Search chats")
-            .navigationDestination(for: Conversation.self) { conversation in
-                ChatView(
-                    conversation: conversation,
-                    modelContext: modelContext
-                )
-            }
-            .navigationDestination(isPresented: $autoNavigate) {
-                if let conversation = selectedConversation {
-                    ChatView(
-                        conversation: conversation,
-                        modelContext: modelContext
-                    )
-                }
-            }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
             .tint(LamoTheme.Colors.accent)
-            .onAppear {
-                if selectedConversation == nil {
-                    createNewChat()
-                    autoNavigate = true
-                }
-            }
         }
     }
 
@@ -82,9 +94,12 @@ struct MainView: View {
     private var conversationList: some View {
         List {
             ForEach(filteredConversations) { conversation in
-                NavigationLink(value: conversation) {
+                Button {
+                    selectedConversation = conversation
+                } label: {
                     ConversationRow(conversation: conversation)
                 }
+                .buttonStyle(.plain)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         deleteConversation(conversation)
@@ -134,8 +149,8 @@ struct MainView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .foregroundStyle(.white)
-                .background(Color.primary)
+                .foregroundStyle(.background)
+                .background(.primary)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -156,6 +171,9 @@ struct MainView: View {
     private func deleteConversation(_ conversation: Conversation) {
         modelContext.delete(conversation)
         try? modelContext.save()
+        if selectedConversation?.id == conversation.id {
+            selectedConversation = nil
+        }
     }
 }
 
@@ -202,7 +220,7 @@ struct ConversationRow: View {
                     if messageCount > 0 {
                         Text("\(messageCount)")
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.background)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color(.systemGray3))

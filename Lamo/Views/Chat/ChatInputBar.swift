@@ -50,12 +50,10 @@ struct ChatInputBar: View {
                     }) {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(canSend ? .white : Color(.tertiaryLabel))
                             .frame(width: 34, height: 34)
-                            .background(
-                                canSend ? Color.primary : Color(.quaternarySystemFill),
-                                in: Circle()
-                            )
+                            .foregroundStyle(canSend ? Color.white : Color(.tertiaryLabel))
+                            .background(canSend ? Color.black : Color(.quaternarySystemFill), in: Circle())
+                            .animation(.easeInOut(duration: 0.15), value: canSend)
                             .animation(.easeInOut(duration: 0.15), value: canSend)
                     }
                     .disabled(!canSend)

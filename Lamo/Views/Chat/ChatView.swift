@@ -5,14 +5,17 @@ struct ChatView: View {
     @State private var viewModel: ChatViewModel
     @State private var isUserNearBottom = true
     @Environment(\.modelContext) private var modelContext
+    var onBack: (() -> Void)?
     var onNewChat: (() -> Void)?
 
     init(
         conversation: Conversation,
         modelContext: ModelContext,
+        onBack: (() -> Void)? = nil,
         onNewChat: (() -> Void)? = nil
     ) {
         _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
+        self.onBack = onBack
         self.onNewChat = onNewChat
     }
 
@@ -91,18 +94,6 @@ struct ChatView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    onNewChat?()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.tint)
-                }
-                .sensoryFeedback(.selection, trigger: viewModel.messages.count)
-            }
-        }
     }
 
     // MARK: - Empty State
