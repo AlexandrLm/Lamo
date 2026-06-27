@@ -21,18 +21,18 @@ struct SettingsView: View {
 
                 switch providerManager.selectedProvider {
                 case .appleIntelligence:
-                    Text("Uses on-device Apple Intelligence. No setup required.")
+                    Label("On-device AI — no setup required", systemImage: "checkmark.circle.fill")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LamoTheme.Colors.success)
 
                 case .litertLM:
                     litertLMSettings
                 }
             } header: {
-                Text("Provider")
+                Label("Provider", systemImage: "cpu")
             }
 
-            // MARK: - Model Gallery (only when LiteRT-LM is selected)
+            // MARK: - Model Gallery
             if providerManager.selectedProvider == .litertLM {
                 Section {
                     ForEach(PresetModel.allCases) { model in
@@ -43,29 +43,37 @@ struct SettingsView: View {
                     }
                 } header: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Available Models")
-                        Text("Download a Gemma 4 model to get started. Larger models = better quality, smaller = faster.")
+                        Label("Available Models", systemImage: "arrow.down.circle")
+                        Text("Download a Gemma 4 model to get started")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 } footer: {
-                    Text("Models run entirely on-device. No data leaves your phone.")
+                    Label("All models run on-device. Your data never leaves your phone.", systemImage: "lock.shield")
                         .font(.footnote)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
                 }
+            }
+
+            // MARK: - Privacy
+            Section {
+                Label("All processing happens locally on your device", systemImage: "lock.shield.fill")
+                    .font(.footnote)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            } header: {
+                Label("Privacy", systemImage: "hand.raised")
             }
 
             // MARK: - About
             Section {
-                HStack(spacing: LamoTheme.Spacing.md) {
+                HStack {
                     Image(systemName: "info.circle.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(LamoTheme.Colors.accent)
                         .font(.title3)
                     LabeledContent("Version", value: "1.0")
                 }
             } header: {
-                Text("About")
-            } footer: {
-                Text("Lamo uses local device models to process your data privately and securely.")
+                Label("About", systemImage: "info.circle")
             }
         }
         .navigationTitle("Settings")
@@ -83,14 +91,14 @@ struct SettingsView: View {
             if let current = providerManager.litertLMModelPath {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(LamoTheme.Colors.success)
                     Text("Active: \(current)")
                         .font(.footnote)
                         .lineLimit(1)
                 }
             }
 
-            // Local model picker (from Documents/models/)
+            // Local model picker
             if !availableModels.isEmpty {
                 Picker("Local Model", selection: Binding(
                     get: { providerManager.litertLMModelPath ?? "" },
@@ -107,16 +115,16 @@ struct SettingsView: View {
             Button {
                 isImportingModel = true
             } label: {
-                Label("Import Model Manually", systemImage: "square.and.arrow.down")
+                Label("Import Model", systemImage: "square.and.arrow.down")
             }
 
             // GPU toggle
             Toggle(isOn: $providerManager.litertLMUseGPU) {
-                Label("GPU Acceleration (Metal)", systemImage: "bolt.fill")
+                Label("GPU Acceleration", systemImage: "bolt.fill")
             }
 
             if providerManager.litertLMUseGPU {
-                Text("Uses Metal for faster inference. Disable if model doesn't support GPU.")
+                Text("Uses Metal for faster inference")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -166,20 +174,15 @@ struct SettingsView: View {
 
         let destination = modelsDir.appendingPathComponent(url.lastPathComponent)
 
-        let didAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess { url.stopAccessingSecurityScopedResource() }
-        }
-
         do {
             if FileManager.default.fileExists(atPath: destination.path) {
                 try FileManager.default.removeItem(at: destination)
             }
             try FileManager.default.copyItem(at: url, to: destination)
-            providerManager.litertLMModelPath = destination.lastPathComponent
+            providerManager.litertLMModelPath = url.lastPathComponent
             refreshModels()
         } catch {
-            print("Failed to import model: \(error)")
+            print("Import failed: \(error)")
         }
     }
 }

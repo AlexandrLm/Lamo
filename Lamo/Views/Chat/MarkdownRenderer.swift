@@ -70,30 +70,61 @@ struct MarkdownRenderer: View {
     }
 }
 
+// MARK: - Code Block
+
 struct CodeBlock: View {
     let code: String
     let language: String
+    @State private var isCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
-            if !language.isEmpty {
-                Text(language.uppercased())
-                    .font(.system(.caption2, design: .monospaced))
-                    .bold()
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            // Language label + copy button
+            HStack {
+                if !language.isEmpty {
+                    Text(language.uppercased())
+                        .font(.system(.caption2, design: .monospaced))
+                        .bold()
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                }
+
+                Spacer()
+
+                Button {
+                    UIPasteboard.general.string = code
+                    withAnimation {
+                        isCopied = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            isCopied = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                        Text(isCopied ? "Copied" : "Copy")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                }
+                .buttonStyle(.plain)
             }
+
+            // Code content
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(LamoTheme.Fonts.code)
+                    .font(LamoTheme.Fonts.codeBlock)
                     .textSelection(.enabled)
                     .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
         }
         .padding(LamoTheme.Spacing.md)
         .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.md, style: .continuous)
                 .stroke(Color(uiColor: .separator), lineWidth: 0.5)
         )
     }

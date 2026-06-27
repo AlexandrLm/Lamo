@@ -10,11 +10,18 @@ struct ConversationListView: View {
         NavigationStack {
             Group {
                 if conversations.isEmpty {
-                    ContentUnavailableView(
-                        "No Conversations",
-                        systemImage: "bubble.left.and.bubble.right",
-                        description: Text("Start a new chat")
-                    )
+                    ContentUnavailableView {
+                        Label("No Conversations", systemImage: "bubble.left.and.bubble.right")
+                    } description: {
+                        Text("Start a new chat to begin")
+                    } actions: {
+                        Button {
+                            _ = viewModel?.createConversation()
+                        } label: {
+                            Label("New Chat", systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 } else {
                     List {
                         ForEach(conversations) { conversation in
@@ -23,9 +30,10 @@ struct ConversationListView: View {
                             }
                         }
                         .onDelete { indexSet in
-                                viewModel?.deleteConversations(indexSet, from: conversations)
+                            viewModel?.deleteConversations(indexSet, from: conversations)
                         }
                     }
+                    .listStyle(.insetGrouped)
                 }
             }
             .navigationTitle("Lamo")
@@ -35,7 +43,9 @@ struct ConversationListView: View {
                         _ = viewModel?.createConversation()
                     } label: {
                         Image(systemName: "square.and.pencil")
+                            .font(.body.weight(.medium))
                     }
+                    .sensoryFeedback(.impact(weight: .light), trigger: conversations.count)
                 }
             }
             .navigationDestination(for: Conversation.self) { conversation in
@@ -50,11 +60,13 @@ struct ConversationListView: View {
     }
 }
 
+// MARK: - Conversation Row
+
 struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(conversation.title)
                     .font(LamoTheme.Fonts.headline)
@@ -63,16 +75,34 @@ struct ConversationRow: View {
 
                 Spacer()
 
-                Text(conversation.updatedAt, style: .time)
+                Text(conversation.updatedAt, style: .relative)
                     .font(LamoTheme.Fonts.caption)
-                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .foregroundStyle(LamoTheme.Colors.textTertiary)
             }
 
-            Text(lastMessageSnippet)
-                .font(LamoTheme.Fonts.subheadline)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            HStack(spacing: LamoTheme.Spacing.sm) {
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.2), .purple.opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                }
+
+                Text(lastMessageSnippet)
+                    .font(LamoTheme.Fonts.subheadline)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
         }
         .padding(.vertical, 4)
     }

@@ -29,12 +29,12 @@ struct ModelCardView: View {
                             .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
 
                         Text(model.displayName)
-                            .font(.headline)
+                            .font(LamoTheme.Fonts.headline)
                     }
 
                     Text(model.description)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(LamoTheme.Fonts.subheadline)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
                         .lineLimit(isExpanded ? nil : 2)
                 }
 
@@ -43,100 +43,101 @@ struct ModelCardView: View {
                 // Status badge
                 if isDownloaded {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(LamoTheme.Colors.success)
                         .font(.title3)
+                        .symbolEffect(.bounce, value: isDownloaded)
                 } else if isDownloading {
                     ProgressView()
                         .scaleEffect(0.8)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.top, LamoTheme.Spacing.lg)
+            .padding(.bottom, LamoTheme.Spacing.md)
 
             // Quick stats row
-            HStack(spacing: 12) {
+            HStack(spacing: LamoTheme.Spacing.md) {
                 StatBadge(label: "Size", value: model.fileSizeString, icon: "internaldrive")
                 StatBadge(label: "Params", value: model.parameterCount, icon: "cpu")
                 StatBadge(label: "RAM", value: model.minRAM, icon: "memorychip")
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.bottom, LamoTheme.Spacing.md)
 
             // Expandable details
             if isExpanded {
-                Divider().padding(.horizontal, 16)
+                Divider().padding(.horizontal, LamoTheme.Spacing.lg)
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
                     Text("Highlights")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(LamoTheme.Fonts.caption)
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
                         .textCase(.uppercase)
-                        .padding(.top, 10)
+                        .padding(.top, LamoTheme.Spacing.md)
 
                     ForEach(model.highlights, id: \.self) { highlight in
-                        HStack(spacing: 8) {
+                        HStack(spacing: LamoTheme.Spacing.sm) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.caption)
                                 .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
                             Text(highlight)
-                                .font(.subheadline)
+                                .font(LamoTheme.Fonts.subheadline)
                         }
                     }
 
-                    HStack(spacing: 16) {
+                    HStack(spacing: LamoTheme.Spacing.lg) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Speed")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(LamoTheme.Fonts.caption)
+                                .foregroundStyle(LamoTheme.Colors.textSecondary)
                             Text(model.speedTier)
-                                .font(.subheadline)
+                                .font(LamoTheme.Fonts.subheadline)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Quality")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(LamoTheme.Fonts.caption)
+                                .foregroundStyle(LamoTheme.Colors.textSecondary)
                             Text(model.qualityTier)
-                                .font(.subheadline)
+                                .font(LamoTheme.Fonts.subheadline)
                         }
                     }
-                    .padding(.top, 4)
+                    .padding(.top, LamoTheme.Spacing.xs)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.md)
             }
 
             // Progress bar (during download)
             if isDownloading, let state = downloadState, state.totalBytes > 0 {
-                VStack(spacing: 4) {
+                VStack(spacing: LamoTheme.Spacing.xs) {
                     ProgressView(value: state.progress)
                         .tint(model.accentColor == "blue" ? .blue : .green)
 
                     HStack {
                         Text("\(state.downloadedSizeString) / \(state.totalSizeString)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(LamoTheme.Fonts.caption2)
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
                         Spacer()
                         Text("\(state.progressPercentage)%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .font(LamoTheme.Fonts.caption2.monospacedDigit())
+                            .foregroundStyle(LamoTheme.Colors.textSecondary)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.md)
             }
 
             // Error message
             if let error = downloadState?.error {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(LamoTheme.Colors.error)
                     Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                        .font(LamoTheme.Fonts.caption)
+                        .foregroundStyle(LamoTheme.Colors.error)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.md)
             }
 
             Divider()
@@ -149,8 +150,9 @@ struct ModelCardView: View {
                     }
                 } label: {
                     Label(isExpanded ? "Less" : "Details", systemImage: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.subheadline)
+                        .font(LamoTheme.Fonts.subheadline)
                 }
+                .buttonStyle(.plain)
 
                 Spacer()
 
@@ -159,31 +161,31 @@ struct ModelCardView: View {
                         downloadManager.deleteModel(model)
                     } label: {
                         Label("Delete", systemImage: "trash")
-                            .font(.subheadline)
+                            .font(LamoTheme.Fonts.subheadline)
                     }
+                    .buttonStyle(.plain)
                 } else if isDownloading {
                     Button {
                         downloadManager.cancelDownload(model: model)
                     } label: {
                         Label("Cancel", systemImage: "xmark.circle")
-                            .font(.subheadline)
+                            .font(LamoTheme.Fonts.subheadline)
                     }
+                    .buttonStyle(.plain)
                 } else {
                     Button {
                         downloadManager.download(model: model)
                     } label: {
                         Label("Download", systemImage: "arrow.down.circle.fill")
-                            .font(.subheadline.weight(.semibold))
+                            .font(LamoTheme.Fonts.subheadline.weight(.semibold))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(model.accentColor == "blue" ? .blue : .green)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(LamoTheme.Spacing.lg)
         }
-        .background(Color(uiColor: .secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .glassEffect(cornerRadius: LamoTheme.CornerRadius.card)
     }
 }
 
@@ -195,20 +197,18 @@ struct StatBadge: View {
     let icon: String
 
     var body: some View {
-        VStack(spacing: 2) {
+        HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.monospacedDigit())
-                .fontWeight(.medium)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LamoTheme.Colors.textSecondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(LamoTheme.Fonts.caption2)
+                    .foregroundStyle(LamoTheme.Colors.textTertiary)
+                Text(value)
+                    .font(LamoTheme.Fonts.subheadline.weight(.medium))
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(Color(uiColor: .tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -1,10 +1,12 @@
 import SwiftUI
 import SwiftData
+
 struct ChatView: View {
     @State private var viewModel: ChatViewModel
     @State private var isUserNearBottom = true
     @Environment(\.modelContext) private var modelContext
     var onNewChat: (() -> Void)?
+
     init(
         conversation: Conversation,
         modelContext: ModelContext,
@@ -13,6 +15,7 @@ struct ChatView: View {
         _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
         self.onNewChat = onNewChat
     }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -72,26 +75,65 @@ struct ChatView: View {
                     onNewChat?()
                 } label: {
                     Image(systemName: "square.and.pencil")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(LamoTheme.Colors.accent)
                 }
+                .sensoryFeedback(.selection, trigger: viewModel.messages.count)
             }
         }
     }
 
+    // MARK: - Empty State
+
     private var emptyChatView: some View {
-        VStack(spacing: LamoTheme.Spacing.md) {
-            Spacer(minLength: 120)
-            Image(systemName: "sparkles")
-                .font(.system(size: 48))
-                .foregroundStyle(LamoTheme.Colors.accent)
-                .symbolEffect(.bounce, value: viewModel.messages.isEmpty)
-            Text("How can I help you today?")
-                .font(.title3.bold())
-                .foregroundStyle(LamoTheme.Colors.textPrimary)
-            Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
-                .font(LamoTheme.Fonts.subheadline)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, LamoTheme.Spacing.xl)
+        VStack(spacing: LamoTheme.Spacing.xl) {
+            Spacer(minLength: 100)
+
+            // Animated welcome icon
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.blue.opacity(0.15), .purple.opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 88, height: 88)
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 40))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .symbolEffect(.variableColor.iterative, isActive: true)
+            }
+
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                Text("How can I help you today?")
+                    .font(LamoTheme.Fonts.title3)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
+                    .font(LamoTheme.Fonts.subheadline)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, LamoTheme.Spacing.xl)
+            }
+
+            // Quick suggestion chips
+            VStack(spacing: LamoTheme.Spacing.sm) {
+                SuggestionChip(text: "Explain quantum computing")
+                SuggestionChip(text: "Write a Swift function")
+                SuggestionChip(text: "Help me debug my code")
+            }
+            .padding(.top, LamoTheme.Spacing.sm)
+
             Spacer()
         }
     }
@@ -104,6 +146,23 @@ struct ChatView: View {
         }
     }
 }
+
+// MARK: - Suggestion Chip
+
+struct SuggestionChip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(LamoTheme.Fonts.subheadline)
+            .foregroundStyle(LamoTheme.Colors.textSecondary)
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.vertical, LamoTheme.Spacing.sm)
+            .glassEffect(cornerRadius: LamoTheme.CornerRadius.xl)
+    }
+}
+
+// MARK: - Scroll Offset
 
 struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
