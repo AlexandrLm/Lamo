@@ -2,8 +2,6 @@ import Foundation
 import LiteRTLM
 
 /// Provider that runs a local LLM via Google's LiteRT-LM framework.
-/// Supports GPU (Metal) acceleration, streaming, and configurable model path.
-/// Provider that runs a local LLM via Google's LiteRT-LM framework.
 /// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
 ///
 /// Performance notes:
@@ -30,7 +28,7 @@ final class LiteRTLMProvider: LLMProvider {
     private var cachedConversation: LiteRTLM.Conversation?
     /// Hash of the messages last used to build `cachedConversation`.
     private var cachedMessagesHash: Int = 0
-    /// Whether the provider’s conversation still matches the incoming message list.
+    /// Whether the provider's conversation still matches the incoming message list.
     private func isCacheValid(for messages: [ChatMessage]) -> Bool {
         return cachedConversation != nil
             && messages.hashValue == cachedMessagesHash
@@ -142,7 +140,7 @@ final class LiteRTLMProvider: LLMProvider {
         let conversationConfig = LiteRTLM.ConversationConfig(
             systemMessage: LiteRTLM.Message(
                 "You are a helpful, concise assistant. Answer in the same language the user writes in.",
-壮阔可怕地面对这个挑战，联手  (role: .system)
+                role: .system
             ),
             initialMessages: initialMessages,
             tools: [],

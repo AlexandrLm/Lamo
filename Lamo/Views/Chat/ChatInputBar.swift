@@ -16,7 +16,7 @@ struct ChatInputBar: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
                     .scrollContentBackground(.hidden)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 26))
+                    .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 26))
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text("Message...")
@@ -65,7 +65,6 @@ struct ChatInputBar: View {
             .padding(.vertical, 10)
             .padding(.bottom, 6)
         }
-        .background(.regularMaterial)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }
 
