@@ -1,12 +1,10 @@
 import SwiftUI
 import SwiftData
-
 struct ChatView: View {
     @State private var viewModel: ChatViewModel
     @State private var isUserNearBottom = true
     @Environment(\.modelContext) private var modelContext
     var onNewChat: (() -> Void)?
-
     init(
         conversation: Conversation,
         modelContext: ModelContext,
@@ -15,7 +13,6 @@ struct ChatView: View {
         _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
         self.onNewChat = onNewChat
     }
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -110,7 +107,6 @@ struct ChatView: View {
 
 struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
-
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }

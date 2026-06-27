@@ -24,13 +24,15 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
-        static let background = Color.clear
-        static let secondaryBackground = Color.gray.opacity(0.1)
-        static let userBubble = Color.blue
-        static let assistantBubble = Color.gray.opacity(0.12)
+        static let background = Color(uiColor: .systemBackground)
+        static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+        static let userBubble = Color.accentColor
+        static let assistantBubble = Color(uiColor: .secondarySystemBackground)
         static let accent = Color.accentColor
         static let textPrimary = Color.primary
         static let textSecondary = Color.secondary
+        static let bubbleTextUser = Color.white
+        static let bubbleTextAssistant = Color.primary
     }
 
     enum Spacing {
@@ -42,15 +44,16 @@ enum LamoTheme {
     }
 
     enum CornerRadius {
-        static let bubble: CGFloat = 16
-        static let input: CGFloat = 20
+        static let bubble: CGFloat = 18
+        static let input: CGFloat = 22
     }
 
     enum Fonts {
         static let body = Font.body
-        static let headline = Font.headline
+        static let headline = Font.headline.weight(.semibold)
+        static let subheadline = Font.subheadline
         static let caption = Font.caption
-        static let code = Font.system(.body, design: .monospaced)
+        static let code = Font.system(.subheadline, design: .monospaced)
     }
 }
 
@@ -414,37 +417,59 @@ struct ChatInputBar: View {
     let onStop: () -> Void
 
     var body: some View {
-        HStack(spacing: LamoTheme.Spacing.sm) {
-            TextField("Message...", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...5)
-                .padding(.horizontal, LamoTheme.Spacing.md)
-                .padding(.vertical, LamoTheme.Spacing.sm)
-                .background(LamoTheme.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input))
-                .onSubmit {
-                    if canSend {
-                        onSend()
-                    }
-                }
-
-            if isStreaming {
-                Button(action: onStop) {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.title2)
+        VStack(spacing: 0) {
+            Divider()
+            HStack(alignment: .bottom, spacing: LamoTheme.Spacing.sm) {
+                Button(action: {}) {
+                    Image(systemName: "plus")
+                        .font(.title3)
+                        .bold()
                         .foregroundStyle(LamoTheme.Colors.textSecondary)
                 }
-            } else {
-                Button(action: onSend) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(canSend ? LamoTheme.Colors.accent : LamoTheme.Colors.textSecondary)
+                .padding(.bottom, 6)
+
+                HStack(alignment: .bottom, spacing: LamoTheme.Spacing.xs) {
+                    TextField("Message...", text: $text, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...6)
+                        .font(LamoTheme.Fonts.body)
+                        .padding(.horizontal, LamoTheme.Spacing.md)
+                        .padding(.vertical, 8)
                 }
-                .disabled(!canSend)
+                .background(Color(uiColor: .systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input))
+                .overlay(
+                    RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input)
+                        .stroke(Color(uiColor: .separator), lineWidth: 0.5)
+                )
+
+                if isStreaming {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(Color.red)
+                            .clipShape(Circle())
+                    }
+                    .padding(.bottom, 4)
+                } else {
+                    Button(action: onSend) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(canSend ? .white : Color(uiColor: .placeholderText))
+                            .padding(8)
+                            .background(canSend ? LamoTheme.Colors.accent : Color(uiColor: .systemGray5))
+                            .clipShape(Circle())
+                    }
+                    .disabled(!canSend)
+                    .padding(.bottom, 4)
+                }
             }
+            .padding(.horizontal, LamoTheme.Spacing.md)
+            .padding(.vertical, LamoTheme.Spacing.sm + 2)
+            .background(.ultraThinMaterial)
         }
-        .padding(.horizontal, LamoTheme.Spacing.md)
-        .padding(.vertical, LamoTheme.Spacing.sm)
     }
 
     private var canSend: Bool {
@@ -463,6 +488,7 @@ import SwiftData
 struct ChatView: View {
     @State private var viewModel: ChatViewModel
     @State private var isUserNearBottom = true
+    @Environment(\.modelContext) private var modelContext
     var onNewChat: (() -> Void)?
 
     init(
@@ -476,11 +502,9 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
-
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: LamoTheme.Spacing.sm) {
+                    LazyVStack(spacing: LamoTheme.Spacing.md) {
                         if viewModel.messages.isEmpty {
                             emptyChatView
                                 .id("empty")
@@ -496,7 +520,8 @@ struct ChatView: View {
                                 .id("typing")
                         }
                     }
-                    .padding(LamoTheme.Spacing.md)
+                    .padding(.horizontal, LamoTheme.Spacing.md)
+                    .padding(.vertical, LamoTheme.Spacing.lg)
                     .background(GeometryReader { geometry in
                         Color.clear.preference(
                             key: ScrollOffsetPreferenceKey.self,
@@ -518,8 +543,6 @@ struct ChatView: View {
                 }
             }
 
-            Divider()
-
             ChatInputBar(
                 text: $viewModel.inputText,
                 isStreaming: viewModel.isStreaming,
@@ -528,46 +551,41 @@ struct ChatView: View {
             )
         }
         .background(LamoTheme.Colors.background)
-    }
-
-    private var headerBar: some View {
-        HStack {
-            Spacer()
-
-            Text(viewModel.conversationTitle)
-                .font(LamoTheme.Fonts.headline)
-                .lineLimit(1)
-
-            Spacer()
-
-            Button {
-                onNewChat?()
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.title3)
+        .navigationTitle(viewModel.conversationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    onNewChat?()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
             }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, LamoTheme.Spacing.md)
-        .padding(.vertical, LamoTheme.Spacing.sm)
     }
 
     private var emptyChatView: some View {
-        VStack(spacing: LamoTheme.Spacing.lg) {
-            Spacer()
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
+        VStack(spacing: LamoTheme.Spacing.md) {
+            Spacer(minLength: 120)
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundStyle(LamoTheme.Colors.accent)
+                .symbolEffect(.bounce, value: viewModel.messages.isEmpty)
+            Text("How can I help you today?")
+                .font(.title3.bold())
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+            Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
+                .font(LamoTheme.Fonts.subheadline)
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
-            Text("How can I help you?")
-                .font(.title2)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, LamoTheme.Spacing.xl)
             Spacer()
         }
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         if let last = viewModel.messages.last {
-            withAnimation {
+            withAnimation(.easeOut(duration: 0.25)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
@@ -591,6 +609,7 @@ import SwiftUI
 
 struct MarkdownRenderer: View {
     let text: String
+    let textColor: Color
 
     var body: some View {
         if text.isEmpty {
@@ -604,6 +623,7 @@ struct MarkdownRenderer: View {
                     case .text(let content):
                         StyledText(content)
                             .font(LamoTheme.Fonts.body)
+                            .foregroundStyle(textColor)
                     }
                 }
             }
@@ -664,19 +684,25 @@ struct CodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
             if !language.isEmpty {
-                Text(language)
-                    .font(LamoTheme.Fonts.caption)
+                Text(language.uppercased())
+                    .font(.system(.caption2, design: .monospaced))
+                    .bold()
                     .foregroundStyle(LamoTheme.Colors.textSecondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(LamoTheme.Fonts.code)
                     .textSelection(.enabled)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
         }
         .padding(LamoTheme.Spacing.md)
-        .background(LamoTheme.Colors.assistantBubble)
-        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble))
+        .background(Color(uiColor: .tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(uiColor: .separator), lineWidth: 0.5)
+        )
     }
 }
 
@@ -692,13 +718,24 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack {
-            if message.role == .user { Spacer(minLength: 60) }
+            if message.role == .user { Spacer(minLength: 50) }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: LamoTheme.Spacing.xs) {
-                MarkdownRenderer(text: message.content)
-                    .padding(LamoTheme.Spacing.md)
-                    .background(bubbleBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble))
+                MarkdownRenderer(
+                    text: message.content,
+                    textColor: message.role == .user ? LamoTheme.Colors.bubbleTextUser : LamoTheme.Colors.bubbleTextAssistant
+                )
+                .padding(.horizontal, LamoTheme.Spacing.md)
+                .padding(.vertical, LamoTheme.Spacing.sm + 2)
+                .background(bubbleBackground)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: LamoTheme.CornerRadius.bubble,
+                        bottomLeadingRadius: message.role == .user ? LamoTheme.CornerRadius.bubble : 4,
+                        bottomTrailingRadius: message.role == .user ? 4 : LamoTheme.CornerRadius.bubble,
+                        topTrailingRadius: LamoTheme.CornerRadius.bubble
+                    )
+                )
 
                 if message.isStreaming {
                     TypingIndicator()
@@ -706,7 +743,7 @@ struct MessageBubble: View {
                 }
             }
 
-            if message.role == .assistant { Spacer(minLength: 60) }
+            if message.role == .assistant { Spacer(minLength: 50) }
         }
     }
 
@@ -728,22 +765,29 @@ struct MessageBubble: View {
 import SwiftUI
 
 struct TypingIndicator: View {
-    @State private var phase = 0.0
+    @State private var isAnimating = false
 
     var body: some View {
-        HStack(spacing: LamoTheme.Spacing.xs) {
+        HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
                     .fill(LamoTheme.Colors.textSecondary)
                     .frame(width: 6, height: 6)
-                    .offset(y: sin(phase + Double(index) * 0.8) * 3)
+                    .scaleEffect(isAnimating ? 1.0 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 0.6)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double(index) * 0.15),
+                        value: isAnimating
+                    )
             }
         }
-        .padding(LamoTheme.Spacing.sm)
+        .padding(.horizontal, LamoTheme.Spacing.md)
+        .padding(.vertical, LamoTheme.Spacing.sm)
+        .background(LamoTheme.Colors.assistantBubble)
+        .clipShape(Capsule())
         .onAppear {
-            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                phase = .pi * 2
-            }
+            isAnimating = true
         }
     }
 }
@@ -809,16 +853,34 @@ struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
-            Text(conversation.title)
-                .font(LamoTheme.Fonts.headline)
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(conversation.title)
+                    .font(LamoTheme.Fonts.headline)
+                    .lineLimit(1)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
 
-            Text(conversation.updatedAt, style: .relative)
-                .font(LamoTheme.Fonts.caption)
+                Spacer()
+
+                Text(conversation.updatedAt, style: .time)
+                    .font(LamoTheme.Fonts.caption)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            }
+
+            Text(lastMessageSnippet)
+                .font(LamoTheme.Fonts.subheadline)
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
         }
-        .padding(.vertical, LamoTheme.Spacing.xs)
+        .padding(.vertical, 4)
+    }
+
+    private var lastMessageSnippet: String {
+        if let lastMessage = conversation.messages.sorted(by: { $0.timestamp < $1.timestamp }).last {
+            return lastMessage.content.isEmpty ? "..." : lastMessage.content
+        }
+        return "No messages yet"
     }
 }
 
@@ -861,60 +923,74 @@ struct MainView: View {
     }
 
     private var sidebarView: some View {
-        VStack(spacing: 0) {
-            List(conversations, selection: $selectedConversationID) { conversation in
+        List(selection: $selectedConversationID) {
+            ForEach(conversations) { conversation in
                 ConversationRow(conversation: conversation)
                     .tag(conversation.id)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            deleteConversation(conversation)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
-            .listStyle(.sidebar)
-
-            Divider()
-
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("Chats")
+        .safeAreaInset(edge: .bottom) {
             HStack {
                 Button {
                     createNewChat()
                 } label: {
                     Label("New Chat", systemImage: "square.and.pencil")
+                        .font(.headline)
                 }
-                .buttonStyle(.plain)
-                .padding(LamoTheme.Spacing.md)
+                .buttonStyle(.borderedProminent)
+                .tint(LamoTheme.Colors.accent)
+                .clipShape(Capsule())
 
                 Spacer()
 
                 NavigationLink {
                     SettingsView()
                 } label: {
-                    Image(systemName: "gear")
+                    Image(systemName: "gearshape")
+                        .font(.title3)
                         .foregroundStyle(LamoTheme.Colors.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, LamoTheme.Spacing.md)
             }
+            .padding(LamoTheme.Spacing.md)
+            .background(.ultraThinMaterial)
         }
-        .navigationTitle("Lamo")
     }
 
     private var emptyState: some View {
         VStack(spacing: LamoTheme.Spacing.lg) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
+                .font(.system(size: 56))
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
             Text("Lamo")
                 .font(.largeTitle.bold())
-            Text("Start a new conversation")
+            Text("Select a chat or start a new conversation")
+                .font(LamoTheme.Fonts.subheadline)
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
             Button("New Chat") {
                 createNewChat()
             }
             .buttonStyle(.borderedProminent)
         }
+        .padding()
     }
 
     private func ensureConversationExists() {
-        if let first = conversations.first {
-            selectedConversationID = first.id
-        } else {
-            createNewChat()
+        if selectedConversationID == nil {
+            if let first = conversations.first {
+                selectedConversationID = first.id
+            } else {
+                createNewChat()
+            }
         }
     }
 
@@ -923,6 +999,15 @@ struct MainView: View {
         modelContext.insert(conversation)
         try? modelContext.save()
         selectedConversationID = conversation.id
+    }
+
+    private func deleteConversation(_ conversation: Conversation) {
+        let isDeletedSelected = selectedConversationID == conversation.id
+        modelContext.delete(conversation)
+        try? modelContext.save()
+        if isDeletedSelected {
+            selectedConversationID = conversations.first?.id
+        }
     }
 }
 
@@ -935,15 +1020,28 @@ import SwiftUI
 
 struct SettingsView: View {
     var body: some View {
-        NavigationStack {
-            List {
-                Section("About") {
+        List {
+            Section {
+                HStack(spacing: LamoTheme.Spacing.md) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(.blue)
+                        .font(.title3)
                     LabeledContent("Version", value: "1.0")
+                }
+                HStack(spacing: LamoTheme.Spacing.md) {
+                    Image(systemName: "cpu")
+                        .foregroundStyle(.purple)
+                        .font(.title3)
                     LabeledContent("LLM Provider", value: "Apple Intelligence (Local)")
                 }
+            } header: {
+                Text("About")
+            } footer: {
+                Text("Lamo uses local device models to process your data privately and securely.")
             }
-            .navigationTitle("Settings")
         }
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

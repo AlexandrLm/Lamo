@@ -15,10 +15,12 @@ final class ChatViewModel {
     private let conversation: Conversation
     private var streamingMessageID: UUID?
 
-    init(conversation: Conversation, modelContext: ModelContext, provider: (any LLMProvider)? = nil) {
+    init(conversation: Conversation, modelContext: ModelContext) {
         self.conversation = conversation
         self.modelContext = modelContext
-        self.chatService = ChatService(provider: provider)
+        // Provider is resolved from ProviderManager each time we send,
+        // so settings changes take effect immediately.
+        self.chatService = ChatService(provider: ProviderManager.shared.makeProvider())
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
     }
 
@@ -38,7 +40,11 @@ final class ChatViewModel {
 
         let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
 
-        chatService.sendMessage(
+        // Resolve fresh provider from settings on every send
+        let provider = ProviderManager.shared.makeProvider()
+        let service = ChatService(provider: provider)
+
+        service.sendMessage(
             messages: chatMessages,
             onToken: { [weak self] accumulated in
                 guard let self, let id = self.streamingMessageID,
