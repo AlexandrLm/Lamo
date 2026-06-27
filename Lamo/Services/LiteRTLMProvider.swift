@@ -44,51 +44,47 @@ struct LiteRTLMProvider: LLMProvider {
         let resolvedPath = try resolveModelPath()
 
         // Build engine config
-        let backend: Backend = useGPU ? .gpu : .cpu(threadCount: nil)
+        let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: nil)
 
-        let engineConfig = try EngineConfig(
+        let engineConfig = try LiteRTLM.EngineConfig(
             modelPath: resolvedPath,
             backend: backend,
             visionBackend: nil,
             audioBackend: nil,
             maxNumTokens: maxNumTokens,
-            cacheDir: NSTemporaryDirectory(),
-            loraRank: nil,
-            audioLoraRank: nil
+            cacheDir: NSTemporaryDirectory()
         )
 
-        // Initialize engine (may take several seconds)
-        let engine = Engine(engineConfig: engineConfig)
-        try await engine.initialize()
+        // Initialize engine (synchronous, may take several seconds)
+        let engine = LiteRTLM.Engine(engineConfig: engineConfig)
+        try engine.initialize()
 
         // Build conversation config from message history
         var initialMessages: [LiteRTLM.Message] = []
         for msg in messages {
-            let role: Role = msg.role == .user ? .user : .assistant
+            // Map app MessageRole → LiteRTLM Role
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
             initialMessages.append(LiteRTLM.Message(msg.content, role: role))
         }
 
-        let samplerConfig = try SamplerConfig(
+        let samplerConfig = try LiteRTLM.SamplerConfig(
             topK: 40,
             topP: 0.95,
             temperature: 0.7,
-            seed: nil
+            seed: 0
         )
 
-        let conversationConfig = ConversationConfig(
+        let conversationConfig = LiteRTLM.ConversationConfig(
             systemMessage: LiteRTLM.Message(
                 "You are a helpful, concise assistant. Answer in the same language the user writes in.",
                 role: .system
             ),
             initialMessages: initialMessages,
             tools: [],
-            samplerConfig: samplerConfig,
-            loraPath: nil,
-            audioLoraPath: nil,
-            enableToolCallStreaming: false
+            samplerConfig: samplerConfig
         )
 
-        let conversation = try await engine.createConversation(with: conversationConfig)
+        let conversation = try engine.createConversation(with: conversationConfig)
 
         // Send the last user message and stream the response
         if let lastUserMessage = messages.last(where: { $0.role == .user }) {

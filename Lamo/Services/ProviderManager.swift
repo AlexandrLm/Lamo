@@ -27,7 +27,15 @@ enum ProviderType: String, CaseIterable, Identifiable {
 final class ProviderManager {
     static let shared = ProviderManager()
 
-    @AppStorage("selectedProvider") var selectedProvider: ProviderType = .appleIntelligence
+    /// Currently selected LLM provider (persisted via UserDefaults).
+    var selectedProvider: ProviderType {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: "selectedProvider"),
+                  let type = ProviderType(rawValue: raw) else { return .appleIntelligence }
+            return type
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "selectedProvider") }
+    }
 
     /// Model path for LiteRT-LM (stored in UserDefaults).
     var litertLMModelPath: String? {

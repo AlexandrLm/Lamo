@@ -101,7 +101,7 @@
 			mainGroup = 1FE323652FEFFCAE00681741;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				1FE324952FF0080E00681741 /* XCRemoteSwiftPackageReference "LiteRT-LM" */,
+				1FE324952FF0080E00681741 /* XCLocalSwiftPackageReference "LiteRT-LM" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FE3236F2FEFFCAE00681741 /* Products */;
@@ -361,21 +361,17 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		1FE324952FF0080E00681741 /* XCRemoteSwiftPackageReference "LiteRT-LM" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/google-ai-edge/LiteRT-LM";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		1FE324952FF0080E00681741 /* XCLocalSwiftPackageReference "LiteRT-LM" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LiteRT-LM;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		1FE324962FF0080E00681741 /* LiteRTLM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 1FE324952FF0080E00681741 /* XCRemoteSwiftPackageReference "LiteRT-LM" */;
+			package = 1FE324952FF0080E00681741 /* XCLocalSwiftPackageReference "LiteRT-LM" */;
 			productName = LiteRTLM;
 		};
 /* End XCSwiftPackageProductDependency section */

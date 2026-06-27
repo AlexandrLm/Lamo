@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 
 /// Manages downloading LiteRT-LM models from HuggingFace.
