@@ -9,6 +9,7 @@ final class DeviceBenchmark: ObservableObject {
     @Published var result: BenchmarkResult?
     @Published var isRunning = false
     @Published var progress: Double = 0
+    @Published var errorMessage: String?
 
     struct BenchmarkResult {
         let deviceName: String
@@ -65,41 +66,47 @@ final class DeviceBenchmark: ObservableObject {
         isRunning = true
         progress = 0
         result = nil
+        errorMessage = nil
 
-        // Phase 1: Device info (instant)
-        progress = 0.1
-        let deviceName = await getDeviceName()
-        let chipName = getChipName()
-        let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
-        let storageFree = getFreeStorageGB()
-        let hasGPU = checkMetalGPU()
-        let gpuCores = getGPUCoreCount()
+        do {
+            // Phase 1: Device info (instant)
+            progress = 0.1
+            let deviceName = await getDeviceName()
+            let chipName = getChipName()
+            let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+            let storageFree = getFreeStorageGB()
+            let gpuInfo = getGPUInfo()
+            let hasGPU = gpuInfo.hasGPU
+            let gpuCores = gpuInfo.coreCount
 
-        progress = 0.3
+            progress = 0.3
 
-        // Phase 2: Compute benchmark
-        let computeScore = await runComputeTest()
-        progress = 0.8
+            // Phase 2: Compute benchmark
+            let computeScore = await runComputeTest()
+            progress = 0.8
 
-        // Phase 3: Rate the device
-        let tier = rateDevice(ramGB: ramGB, computeScore: computeScore, gpuCores: gpuCores, hasGPU: hasGPU)
+            // Phase 3: Rate the device
+            let tier = rateDevice(ramGB: ramGB, computeScore: computeScore, gpuCores: gpuCores, hasGPU: hasGPU)
 
-        // Phase 4: Build recommendations
-        let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
+            // Phase 4: Build recommendations
+            let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
 
-        progress = 1.0
+            progress = 1.0
 
-        result = BenchmarkResult(
-            deviceName: deviceName,
-            chipName: chipName,
-            ramGB: ramGB,
-            storageFreeGB: storageFree,
-            hasGPU: hasGPU,
-            gpuCoreCount: gpuCores,
-            computeScore: computeScore,
-            aiTier: tier,
-            recommendations: recs
-        )
+            result = BenchmarkResult(
+                deviceName: deviceName,
+                chipName: chipName,
+                ramGB: ramGB,
+                storageFreeGB: storageFree,
+                hasGPU: hasGPU,
+                gpuCoreCount: gpuCores,
+                computeScore: computeScore,
+                aiTier: tier,
+                recommendations: recs
+            )
+        } catch {
+            errorMessage = "Benchmark failed: \(error.localizedDescription)"
+        }
 
         isRunning = false
     }
@@ -133,21 +140,17 @@ final class DeviceBenchmark: ObservableObject {
         return Double(freeBytes) / 1_073_741_824
     }
 
-    private func checkMetalGPU() -> Bool {
-        MTLCreateSystemDefaultDevice() != nil
-    }
-
-    private func getGPUCoreCount() -> Int {
-        guard let device = MTLCreateSystemDefaultDevice() else { return 0 }
-        // Metal doesn't expose core count directly, but we can use maxThreadsPerThreadgroup
-        // as a proxy. A better approach: check known device families.
-        // For simplicity, estimate from device name.
-        if device.supportsFamily(.apple9) { return 6 }  // A17 Pro / M3+
-        if device.supportsFamily(.apple8) { return 5 }  // A16 / M2
-        if device.supportsFamily(.apple7) { return 5 }  // A15 / M1
-        if device.supportsFamily(.apple6) { return 4 }  // A14
-        if device.supportsFamily(.apple5) { return 4 }  // A13
-        return 3
+    private func getGPUInfo() -> (hasGPU: Bool, coreCount: Int) {
+        guard let device = MTLCreateSystemDefaultDevice() else { return (false, 0) }
+        let cores: Int = {
+            if device.supportsFamily(.apple9) { return 6 }  // A17 Pro / M3+
+            if device.supportsFamily(.apple8) { return 5 }  // A16 / M2
+            if device.supportsFamily(.apple7) { return 5 }  // A15 / M1
+            if device.supportsFamily(.apple6) { return 4 }  // A14
+            if device.supportsFamily(.apple5) { return 4 }  // A13
+            return 3
+        }()
+        return (true, cores)
     }
 
     // MARK: - Compute Benchmark

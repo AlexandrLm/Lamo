@@ -32,7 +32,7 @@ enum ProviderType: String, CaseIterable, Identifiable {
 /// - Provides a shared ChatService that reuses the same provider
 /// - Notifies observers when engine state changes
 @MainActor
-final class ProviderManager {
+final class ProviderManager: ObservableObject {
     static let shared = ProviderManager()
 
     // MARK: - Published State
@@ -74,7 +74,7 @@ final class ProviderManager {
     }
 
     // MARK: - Internal State
-
+    // MARK: - Internal State
     /// Cached engine. Nil when invalidated or not yet loaded.
     private var cachedEngine: LiteRTLM.Engine?
 
@@ -85,6 +85,9 @@ final class ProviderManager {
     private(set) lazy var chatService: ChatService = {
         ChatService(provider: currentProvider)
     }()
+
+    /// Debounce: prevents rapid re-initialization when settings change quickly.
+    private var invalidateTask: Task<Void, Never>?
 
     /// The currently active provider (Apple Intelligence or LiteRT-LM).
     var currentProvider: any LLMProvider {
@@ -142,6 +145,7 @@ final class ProviderManager {
             backend: backend,
             visionBackend: nil,
             audioBackend: nil,
+            maxNumTokens: 4096,
             cacheDir: NSTemporaryDirectory()
         ) else {
             engineError = "Failed to create engine config"
@@ -169,12 +173,17 @@ final class ProviderManager {
 
     /// Invalidates the cached engine. Next inference will reload from disk.
     /// Called automatically when model path or GPU setting changes.
+    /// Debounced: rapid changes within 300ms are coalesced.
     func invalidateEngine() {
         cachedEngine = nil
         cachedProvider = nil
         isEngineReady = false
-        // Re-initialize in background (non-blocking)
-        Task {
+        // Cancel any pending re-initialization
+        invalidateTask?.cancel()
+        // Re-initialize after 300ms debounce
+        invalidateTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
             await initializeEngineIfNeeded()
         }
     }

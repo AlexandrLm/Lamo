@@ -2,11 +2,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
-    @State private var providerManager = ProviderManager.shared
+    @ObservedObject private var providerManager = ProviderManager.shared
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var benchmark = DeviceBenchmark()
     @State private var isImportingModel = false
     @State private var availableModels: [String] = []
+    @State private var importError: String?
+    @State private var importSuccess = false
+    @State private var importedModelName = ""
+    @State private var isCopyingFile = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -43,10 +47,46 @@ struct SettingsView: View {
             }
             .fileImporter(
                 isPresented: $isImportingModel,
-                allowedContentTypes: [UTType(filenameExtension: "litertlm") ?? .data],
+                allowedContentTypes: [.data],
                 allowsMultipleSelection: false
             ) { result in
                 handleModelImport(result)
+            }
+            .overlay {
+                if isCopyingFile {
+                    ZStack {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Importing model…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(24)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+            }
+            .alert("Import Error", isPresented: .constant(importError != nil)) {
+                Button("OK") { importError = nil }
+            } message: {
+                if let error = importError {
+                    Text(error)
+                }
+            }
+            .alert("Model Imported", isPresented: $importSuccess) {
+                Button("Use Now") {
+                    providerManager.litertLMModelPath = importedModelName
+                    refreshModels()
+                }
+                Button("Later", role: .cancel) {
+                    refreshModels()
+                }
+            } message: {
+                Text("\(displayModelName(importedModelName)) is ready to use.")
             }
         }
     }
@@ -92,7 +132,7 @@ struct SettingsView: View {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.subheadline)
-            } else if providerManager.selectedProvider == .litertLM {
+            } else {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
