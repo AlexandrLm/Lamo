@@ -8,12 +8,14 @@ final class ChatViewModel {
     var inputText: String = ""
     var isStreaming: Bool = false
 
+    var conversationTitle: String { conversation.title }
+
     private let chatService: ChatService
     private let modelContext: ModelContext
     private let conversation: Conversation
     private var streamingMessageIndex: Int?
 
-    init(conversation: Conversation, modelContext: ModelContext, provider: LLMProvider = AppleIntelligenceProvider()) {
+    init(conversation: Conversation, modelContext: ModelContext, provider: (any LLMProvider)? = nil) {
         self.conversation = conversation
         self.modelContext = modelContext
         self.chatService = ChatService(provider: provider)

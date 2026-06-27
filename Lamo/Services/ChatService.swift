@@ -3,11 +3,11 @@ import SwiftData
 
 @MainActor
 final class ChatService {
-    private let provider: LLMProvider
+    private let provider: any LLMProvider
     private var currentTask: Task<Void, Never>?
 
-    init(provider: LLMProvider = AppleIntelligenceProvider()) {
-        self.provider = provider
+    init(provider: (any LLMProvider)? = nil) {
+        self.provider = provider ?? AppleIntelligenceProvider()
     }
 
     func sendMessage(

@@ -73,7 +73,7 @@ struct ChatView: View {
 
             Spacer()
 
-            Text(viewModel.conversation.title)
+            Text(viewModel.conversationTitle)
                 .font(LamoTheme.Fonts.headline)
                 .lineLimit(1)
 

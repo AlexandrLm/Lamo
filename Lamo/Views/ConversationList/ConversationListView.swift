@@ -32,7 +32,7 @@ struct ConversationListView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        let newConversation = viewModel?.createConversation()
+                        _ = viewModel?.createConversation()
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
