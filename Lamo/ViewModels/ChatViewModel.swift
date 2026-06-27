@@ -62,7 +62,55 @@ final class ChatViewModel {
             onError: { [weak self] error in
                 guard let self, let id = self.streamingMessageID,
                       let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
-                self.messages[index].content = "Ошибка: \(error.localizedDescription)"
+                self.messages[index].content = "Error: \(error.localizedDescription)"
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
+                self.isStreaming = false
+                self.save()
+            }
+        )
+    }
+
+    func sendDirect(_ text: String) async {
+        inputText = text
+        await send()
+    }
+
+    func retryLastMessage() async {
+        guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
+
+        messages.removeLast()
+        conversation.messages.removeAll(where: { $0.id == lastMsg.id })
+        modelContext.delete(lastMsg)
+        
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
+        addMessage(assistantMessage)
+        streamingMessageID = assistantMessage.id
+        isStreaming = true
+
+        let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
+
+        chatService.sendMessage(
+            messages: chatMessages,
+            onToken: { [weak self] accumulated in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = accumulated
+            },
+            onComplete: { [weak self] in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
+                self.isStreaming = false
+                self.conversation.updatedAt = .now
+                self.save()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            },
+            onError: { [weak self] error in
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = "Error: \(error.localizedDescription)"
                 self.messages[index].isStreaming = false
                 self.streamingMessageID = nil
                 self.isStreaming = false
