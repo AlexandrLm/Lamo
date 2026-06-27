@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// A card view displaying model specs with download controls.
 struct ModelCardView: View {
     let model: PresetModel
     @ObservedObject var downloadManager: DownloadManager
@@ -18,37 +17,37 @@ struct ModelCardView: View {
         downloadState?.isDownloading == true
     }
 
+    private var themeColor: Color {
+        model.accentColor == "blue" ? .blue : .green
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row
             HStack(spacing: 12) {
-                // Icon
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(model.accentColor == "blue"
-                            ? Color.blue.opacity(0.12)
-                            : Color.green.opacity(0.12))
-                        .frame(width: 40, height: 40)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(themeColor.opacity(0.1))
+                        .frame(width: 44, height: 44)
 
                     Image(systemName: model.systemImage)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(themeColor)
                 }
 
-                // Name + description
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(model.displayName)
                         .font(.headline)
+                        .foregroundStyle(.primary)
 
                     Text(model.description)
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(LamoTheme.Colors.textSecondary)
                         .lineLimit(isExpanded ? nil : 1)
                 }
 
                 Spacer()
 
-                // Status
                 if isDownloaded {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(LamoTheme.Colors.success)
@@ -56,61 +55,71 @@ struct ModelCardView: View {
                         .symbolEffect(.bounce, value: isDownloaded)
                 } else if isDownloading {
                     ProgressView()
-                        .scaleEffect(0.8)
+                        .controlSize(.small)
                 }
             }
-            .padding(16)
+            .padding([.top, .horizontal], 16)
 
             // Stats row
-            HStack(spacing: LamoTheme.Spacing.sm) {
+            HStack(spacing: 6) {
                 StatBadge(value: model.fileSizeString, icon: "internaldrive")
                 StatBadge(value: model.parameterCount + " params", icon: "cpu")
                 StatBadge(value: model.minRAM + " RAM", icon: "memorychip")
             }
             .padding(.horizontal, 16)
+            .padding(.top, 10)
             .padding(.bottom, 12)
 
             // Expandable details
             if isExpanded {
-                Divider().padding(.horizontal, 16)
+                VStack(alignment: .leading, spacing: 10) {
+                    Divider()
+                        .padding(.vertical, 4)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(model.highlights, id: \.self) { highlight in
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
-                            Text(highlight)
-                                .font(.subheadline)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(model.highlights, id: \.self) { highlight in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(themeColor)
+                                    .padding(.top, 3)
+                                Text(highlight)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
 
-                    HStack(spacing: 20) {
+                    HStack(spacing: 24) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Speed")
-                                .font(.caption)
-                                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                            Text("SPEED")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.tertiary)
                             Text(model.speedTier)
                                 .font(.subheadline)
+                                .fontWeight(.medium)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Quality")
-                                .font(.caption)
-                                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                            Text("QUALITY")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.tertiary)
                             Text(model.qualityTier)
                                 .font(.subheadline)
+                                .fontWeight(.medium)
                         }
                     }
                     .padding(.top, 4)
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             // Progress bar
             if isDownloading, let state = downloadState, state.totalBytes > 0 {
                 VStack(spacing: 6) {
                     ProgressView(value: state.progress)
-                        .tint(model.accentColor == "blue" ? .blue : .green)
+                        .tint(themeColor)
 
                     HStack {
                         Text("\(state.downloadedSizeString) / \(state.totalSizeString)")
@@ -131,6 +140,7 @@ struct ModelCardView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(LamoTheme.Colors.error)
+                        .font(.caption)
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(LamoTheme.Colors.error)
@@ -144,16 +154,18 @@ struct ModelCardView: View {
             // Action row
             HStack {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         isExpanded.toggle()
                     }
                 } label: {
                     HStack(spacing: 4) {
                         Text(isExpanded ? "Less" : "Details")
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption2)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
                     .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
 
@@ -163,42 +175,42 @@ struct ModelCardView: View {
                     Button(role: .destructive) {
                         downloadManager.deleteModel(model)
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash")
-                            Text("Delete")
-                        }
-                        .font(.subheadline)
+                        Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(.plain)
+                    .foregroundStyle(.red)
                 } else if isDownloading {
                     Button {
                         downloadManager.cancelDownload(model: model)
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "xmark.circle")
-                            Text("Cancel")
-                        }
-                        .font(.subheadline)
+                        Label("Cancel", systemImage: "xmark.circle")
                     }
-                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                 } else {
                     Button {
                         downloadManager.download(model: model)
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 6) {
                             Image(systemName: "arrow.down.circle.fill")
                             Text("Download")
                         }
-                        .font(.subheadline.weight(.semibold))
+                        .fontWeight(.semibold)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(model.accentColor == "blue" ? .blue : .green)
+                    .foregroundStyle(themeColor)
                 }
             }
-            .padding(16)
+            .font(.subheadline)
+            .buttonStyle(.plain)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.4))
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.card, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.lg, style: .continuous)
+                .stroke(Color(.separator).opacity(0.4), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -211,13 +223,13 @@ struct StatBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.caption2)
+                .font(.system(size: 10))
             Text(value)
-                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .font(.system(.caption2, design: .rounded).weight(.medium))
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color(uiColor: .tertiarySystemFill))
+        .padding(.vertical, 5)
+        .background(Color(uiColor: .quaternarySystemFill))
         .clipShape(Capsule())
         .foregroundStyle(LamoTheme.Colors.textSecondary)
     }

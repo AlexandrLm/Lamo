@@ -19,9 +19,9 @@ final class ChatViewModel {
     init(conversation: Conversation, modelContext: ModelContext) {
         self.conversation = conversation
         self.modelContext = modelContext
-        // Provider is resolved from ProviderManager each time we send,
-        // so settings changes take effect immediately.
-        self.chatService = ChatService(provider: ProviderManager.shared.makeProvider())
+        // Use the shared ChatService from ProviderManager.
+        // This reuses the cached provider/engine — no reload per message.
+        self.chatService = ProviderManager.shared.chatService
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
     }
 
@@ -41,11 +41,8 @@ final class ChatViewModel {
 
         let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
 
-        // Resolve fresh provider from settings on every send
-        let provider = ProviderManager.shared.makeProvider()
-        let service = ChatService(provider: provider)
-
-        service.sendMessage(
+        // Reuse the shared ChatService — engine is already loaded
+        chatService.sendMessage(
             messages: chatMessages,
             onToken: { [weak self] accumulated in
                 guard let self, let id = self.streamingMessageID,

@@ -15,10 +15,19 @@ struct LiteRTLMProvider: LLMProvider {
     /// Max tokens for KV-cache. nil = model default.
     private let maxNumTokens: Int?
 
-    init(modelPath: String? = nil, useGPU: Bool = true, maxNumTokens: Int? = nil) {
+    /// Cached engine — injected by ProviderManager to avoid reloading.
+    private let engine: LiteRTLM.Engine?
+
+    init(
+        modelPath: String? = nil,
+        useGPU: Bool = true,
+        maxNumTokens: Int? = 4096,
+        engine: LiteRTLM.Engine? = nil
+    ) {
         self.modelPath = modelPath
         self.useGPU = useGPU
         self.maxNumTokens = maxNumTokens
+        self.engine = engine
     }
 
     func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
@@ -40,29 +49,33 @@ struct LiteRTLMProvider: LLMProvider {
         messages: [ChatMessage],
         continuation: AsyncStream<StreamingToken>.Continuation
     ) async throws {
-        // Resolve model path
-        let resolvedPath = try resolveModelPath()
+        // Reuse cached engine, or create new one
+        let resolvedEngine: LiteRTLM.Engine
+        if let cached = engine {
+            resolvedEngine = cached
+        } else {
+            let resolvedPath = try resolveModelPath()
+            let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: nil)
 
-        // Build engine config
-        let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: nil)
+            let engineConfig = try LiteRTLM.EngineConfig(
+                modelPath: resolvedPath,
+                backend: backend,
+                visionBackend: nil,
+                audioBackend: nil,
+                maxNumTokens: maxNumTokens,
+                cacheDir: NSTemporaryDirectory()
+            )
 
-        let engineConfig = try LiteRTLM.EngineConfig(
-            modelPath: resolvedPath,
-            backend: backend,
-            visionBackend: nil,
-            audioBackend: nil,
-            maxNumTokens: maxNumTokens,
-            cacheDir: NSTemporaryDirectory()
-        )
+            let newEngine = LiteRTLM.Engine(engineConfig: engineConfig)
+            try await newEngine.initialize()
+            resolvedEngine = newEngine
+        }
 
-        // Initialize engine (synchronous, may take several seconds)
-        let engine = LiteRTLM.Engine(engineConfig: engineConfig)
-        try engine.initialize()
-
-        // Build conversation config from message history
+        // Build conversation config from message history.
+        // Drop the last user message — it will be sent via sendMessageStream below,
+        // so only prior messages go into initialMessages to avoid duplication.
         var initialMessages: [LiteRTLM.Message] = []
-        for msg in messages {
-            // Map app MessageRole → LiteRTLM Role
+        for msg in messages.dropLast() {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
             initialMessages.append(LiteRTLM.Message(msg.content, role: role))
         }
@@ -71,7 +84,7 @@ struct LiteRTLMProvider: LLMProvider {
             topK: 40,
             topP: 0.95,
             temperature: 0.7,
-            seed: 0
+            seed: Int.random(in: 0..<Int(Int32.max))
         )
 
         let conversationConfig = LiteRTLM.ConversationConfig(
@@ -84,7 +97,7 @@ struct LiteRTLMProvider: LLMProvider {
             samplerConfig: samplerConfig
         )
 
-        let conversation = try engine.createConversation(with: conversationConfig)
+        let conversation = try await resolvedEngine.createConversation(with: conversationConfig)
 
         // Send the last user message and stream the response
         if let lastUserMessage = messages.last(where: { $0.role == .user }) {
@@ -101,7 +114,6 @@ struct LiteRTLMProvider: LLMProvider {
     }
 
     private func resolveModelPath() throws -> String {
-        // 1. Explicit path
         if let custom = modelPath {
             guard FileManager.default.fileExists(atPath: custom) else {
                 throw LiteRTLMError.modelNotFound(custom)
@@ -109,7 +121,6 @@ struct LiteRTLMProvider: LLMProvider {
             return custom
         }
 
-        // 2. Default location: Documents/models/*.litertlm
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
 

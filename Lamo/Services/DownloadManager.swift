@@ -78,6 +78,9 @@ final class DownloadManager: ObservableObject {
                     self.activeDownloads[model.filename]?.isComplete = true
                     self.activeDownloads[model.filename]?.isDownloading = false
                     self.activeDownloads[model.filename]?.progress = 1.0
+
+                    // Notify ProviderManager to reload engine with the new model
+                    ProviderManager.shared.reloadEngine()
                 } catch {
                     self.activeDownloads[model.filename]?.error = error.localizedDescription
                     self.activeDownloads[model.filename]?.isDownloading = false
@@ -112,5 +115,11 @@ final class DownloadManager: ObservableObject {
         let fileURL = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
         try? FileManager.default.removeItem(at: fileURL)
         activeDownloads.removeValue(forKey: model.filename)
+
+        // If this was the active model, invalidate engine so it reloads
+        if let currentPath = ProviderManager.shared.litertLMModelPath,
+           currentPath == fileURL.path {
+            ProviderManager.shared.invalidateEngine()
+        }
     }
 }
