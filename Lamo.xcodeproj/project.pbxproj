@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1FE323A72FF006C600681741 /* LiteRTLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FE323A62FF006C600681741 /* LiteRTLM */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,7 +26,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1FE323A72FF006C600681741 /* LiteRTLM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,7 +68,6 @@
 			);
 			name = Lamo;
 			packageProductDependencies = (
-				1FE323A62FF006C600681741 /* LiteRTLM */,
 			);
 			productName = Lamo;
 			productReference = 1FE3236E2FEFFCAE00681741 /* Lamo.app */;
@@ -101,7 +98,6 @@
 			mainGroup = 1FE323652FEFFCAE00681741;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				1FE323A52FF006C600681741 /* XCRemoteSwiftPackageReference "LiteRT-LM" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FE3236F2FEFFCAE00681741 /* Products */;
@@ -361,24 +357,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		1FE323A52FF006C600681741 /* XCRemoteSwiftPackageReference "LiteRT-LM" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/google-ai-edge/LiteRT-LM";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		1FE323A62FF006C600681741 /* LiteRTLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FE323A52FF006C600681741 /* XCRemoteSwiftPackageReference "LiteRT-LM" */;
-			productName = LiteRTLM;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1FE323662FEFFCAE00681741 /* Project object */;
 }
