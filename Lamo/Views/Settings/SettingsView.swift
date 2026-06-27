@@ -3,13 +3,14 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @State private var providerManager = ProviderManager.shared
+    @StateObject private var downloadManager = DownloadManager.shared
     @State private var isImportingModel = false
     @State private var availableModels: [String] = []
 
     var body: some View {
         List {
             // MARK: - Provider Selection
-            Section("Provider") {
+            Section {
                 Picker("LLM Provider", selection: $providerManager.selectedProvider) {
                     ForEach(ProviderType.allCases) { provider in
                         Label(provider.displayName, systemImage: provider.icon)
@@ -26,6 +27,30 @@ struct SettingsView: View {
 
                 case .litertLM:
                     litertLMSettings
+                }
+            } header: {
+                Text("Provider")
+            }
+
+            // MARK: - Model Gallery (only when LiteRT-LM is selected)
+            if providerManager.selectedProvider == .litertLM {
+                Section {
+                    ForEach(PresetModel.allCases) { model in
+                        ModelCardView(model: model, downloadManager: downloadManager)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                } header: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Available Models")
+                        Text("Download a Gemma 4 model to get started. Larger models = better quality, smaller = faster.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    Text("Models run entirely on-device. No data leaves your phone.")
+                        .font(.footnote)
                 }
             }
 
@@ -54,26 +79,27 @@ struct SettingsView: View {
 
     private var litertLMSettings: some View {
         Group {
-            // Model selection
-            Picker("Model", selection: Binding(
-                get: { providerManager.litertLMModelPath ?? "" },
-                set: { providerManager.litertLMModelPath = $0.isEmpty ? nil : $0 }
-            )) {
-                Text("Auto-detect").tag("")
-                ForEach(availableModels, id: \.self) { model in
-                    Text(model)
-                        .tag(model)
+            // Active model indicator
+            if let current = providerManager.litertLMModelPath {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Active: \(current)")
+                        .font(.footnote)
+                        .lineLimit(1)
                 }
             }
 
-            if availableModels.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("No models found", systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                    Text("Place .litertlm files in:\n~/Documents/models/")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            // Local model picker (from Documents/models/)
+            if !availableModels.isEmpty {
+                Picker("Local Model", selection: Binding(
+                    get: { providerManager.litertLMModelPath ?? "" },
+                    set: { providerManager.litertLMModelPath = $0.isEmpty ? nil : $0 }
+                )) {
+                    Text("Auto-detect").tag("")
+                    ForEach(availableModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
                 }
             }
 
@@ -81,7 +107,7 @@ struct SettingsView: View {
             Button {
                 isImportingModel = true
             } label: {
-                Label("Import Model", systemImage: "square.and.arrow.down")
+                Label("Import Model Manually", systemImage: "square.and.arrow.down")
             }
 
             // GPU toggle
@@ -136,12 +162,10 @@ struct SettingsView: View {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
 
-        // Create models directory if needed
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
 
         let destination = modelsDir.appendingPathComponent(url.lastPathComponent)
 
-        // Security: start accessing the URL
         let didAccess = url.startAccessingSecurityScopedResource()
         defer {
             if didAccess { url.stopAccessingSecurityScopedResource() }

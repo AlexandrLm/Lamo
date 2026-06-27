@@ -1,0 +1,130 @@
+import Foundation
+
+/// Known Gemma 4 models available for download via LiteRT-LM.
+enum PresetModel: String, CaseIterable, Identifiable {
+    case gemma4E4B = "gemma-4-E4B-it"
+    case gemma4E2B = "gemma-4-E2B-it"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gemma4E4B: return "Gemma 4 E4B"
+        case .gemma4E2B: return "Gemma 4 E2B"
+        }
+    }
+
+    var huggingFaceRepo: String {
+        switch self {
+        case .gemma4E4B: return "litert-community/gemma-4-E4B-it-litert-lm"
+        case .gemma4E2B: return "litert-community/gemma-4-E2B-it-litert-lm"
+        }
+    }
+
+    var filename: String {
+        switch self {
+        case .gemma4E4B: return "gemma-4-E4B-it.litertlm"
+        case .gemma4E2B: return "gemma-4-E2B-it.litertlm"
+        }
+    }
+
+    var downloadURL: URL? {
+        URL(string: "https://huggingface.co/\(huggingFaceRepo)/resolve/main/\(filename)")
+    }
+
+    var fileSizeGB: Double {
+        switch self {
+        case .gemma4E4B: return 3.66
+        case .gemma4E2B: return 2.0
+        }
+    }
+
+    var fileSizeString: String {
+        let gb = fileSizeGB
+        return String(format: "%.2f GB", gb)
+    }
+
+    var parameterCount: String {
+        switch self {
+        case .gemma4E4B: return "4B"
+        case .gemma4E2B: return "2B"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gemma4E4B:
+            return "Larger model with better reasoning. Best for complex tasks, coding, and multi-step problems."
+        case .gemma4E2B:
+            return "Compact model optimized for speed. Great for simple Q&A, summaries, and fast responses."
+        }
+    }
+
+    var highlights: [String] {
+        switch self {
+        case .gemma4E4B:
+            return [
+                "Text decoder: 2.24 GB weights",
+                "Embeddings: 0.67 GB (memory-mapped)",
+                "Best quality on-device",
+                "Supports tool calling & vision"
+            ]
+        case .gemma4E2B:
+            return [
+                "Optimized mobile quantization",
+                "Fastest inference speed",
+                "Lowest memory footprint",
+                "Ideal for older devices"
+            ]
+        }
+    }
+
+    var minRAM: String {
+        switch self {
+        case .gemma4E4B: return "~6 GB"
+        case .gemma4E2B: return "~3 GB"
+        }
+    }
+
+    var speedTier: String {
+        switch self {
+        case .gemma4E4B: return "⚡⚡⚡ Moderate"
+        case .gemma4E2B: return "⚡⚡⚡⚡⚡ Fast"
+        }
+    }
+
+    var qualityTier: String {
+        switch self {
+        case .gemma4E4B: return "🏆🏆🏆🏆 High"
+        case .gemma4E2B: return "🏆🏆🏆 Good"
+        }
+    }
+
+    var accentColor: String {
+        switch self {
+        case .gemma4E4B: return "blue"
+        case .gemma4E2B: return "green"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .gemma4E4B: return "brain.head.profile"
+        case .gemma4E2B: return "bolt.fill"
+        }
+    }
+
+    /// Check if this model is already downloaded in ~/Documents/models/
+    var isDownloaded: Bool {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        let fileURL = modelsDir.appendingPathComponent(filename)
+        return FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
+    /// Local path after download
+    var localPath: String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documents.appendingPathComponent("models").appendingPathComponent(filename).path
+    }
+}
