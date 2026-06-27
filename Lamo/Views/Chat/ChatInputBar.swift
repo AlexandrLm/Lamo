@@ -9,7 +9,19 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .bottom, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                // Plus button (future: photo attach)
+                Button {
+                    // TODO: photo attach
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+
+                // Text field
                 TextField("", text: $text, axis: .vertical)
                     .lineLimit(1...8)
                     .font(.body)
@@ -17,7 +29,7 @@ struct ChatInputBar: View {
                     .padding(.vertical, 10)
                     .scrollContentBackground(.hidden)
                     .background(Color(.tertiarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text("Message")
@@ -30,6 +42,7 @@ struct ChatInputBar: View {
                     }
                     .focused($isTextFieldFocused)
 
+                // Send / Stop button
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")

@@ -17,40 +17,37 @@ struct MarkdownRenderer: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 let blocks = parseBlocks()
-                ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                    let isLast = index == blocks.count - 1
-                    Group {
-                        switch block {
-                        case .code(let code, let language):
-                            CodeBlock(code: code, language: language)
-                                .padding(.vertical, 4)
-                        case .header(let text, let level):
-                            HeaderText(text: text, level: level)
-                                .padding(.top, level == 1 ? 8 : 4)
-                                .padding(.bottom, 2)
-                        case .listItem(let text, let indent):
-                            ListItemText(text: text, indent: indent)
-                                .padding(.leading, CGFloat(indent) * 16)
-                                .padding(.vertical, 1)
-                        case .text(let content):
-                            if !content.trimmingCharacters(in: .whitespaces).isEmpty {
-                                RichText(text: content, textColor: textColor)
-                                    .padding(.vertical, 2)
-                            }
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case .code(let code, let language):
+                        CodeBlock(code: code, language: language)
+                            .padding(.vertical, 6)
+                    case .header(let text, let level):
+                        HeaderText(text: text, level: level)
+                            .padding(.top, level == 1 ? 12 : level == 2 ? 8 : 6)
+                            .padding(.bottom, 4)
+                    case .listItem(let text, let indent, let number):
+                        ListItemText(text: text, indent: indent, number: number)
+                            .padding(.leading, CGFloat(indent) * 20)
+                            .padding(.vertical, 2)
+                    case .blockquote(let text):
+                        BlockquoteText(text: text)
+                            .padding(.vertical, 4)
+                    case .hr:
+                        Divider()
+                            .padding(.vertical, 12)
+                            .overlay(Color(.separator).opacity(0.3))
+                    case .text(let content):
+                        if !content.trimmingCharacters(in: .whitespaces).isEmpty {
+                            RichText(text: content, textColor: textColor)
+                                .padding(.bottom, 6)
                         }
                     }
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .bottom)),
-                        removal: .opacity
-                    ))
-                    .animation(.easeOut(duration: 0.25), value: blocks.count)
                 }
 
-                // Streaming cursor
                 if isStreaming {
                     StreamingCursor()
-                        .padding(.top, 2)
-                        .transition(.opacity)
+                        .padding(.top, 4)
                 }
             }
             .textSelection(.enabled)
@@ -65,10 +62,12 @@ struct MarkdownRenderer: View {
         var inCodeBlock = false
         var codeBuffer: [String] = []
         var language = ""
+        var listCounter = 0
 
         for line in lines {
             let lineStr = String(line)
 
+            // Code block toggle
             if lineStr.hasPrefix("```") {
                 if inCodeBlock {
                     blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
@@ -79,6 +78,7 @@ struct MarkdownRenderer: View {
                     language = String(lineStr.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                     inCodeBlock = true
                 }
+                listCounter = 0
                 continue
             }
 
@@ -87,26 +87,60 @@ struct MarkdownRenderer: View {
                 continue
             }
 
+            // Horizontal rules
+            if lineStr.trimmingCharacters(in: .whitespaces) == "---" ||
+               lineStr.trimmingCharacters(in: .whitespaces) == "***" ||
+               lineStr.trimmingCharacters(in: .whitespaces) == "___" {
+                blocks.append(.hr)
+                listCounter = 0
+                continue
+            }
+
+            // Headers
             if lineStr.hasPrefix("### ") {
                 blocks.append(.header(String(lineStr.dropFirst(4)), level: 3))
+                listCounter = 0
             } else if lineStr.hasPrefix("## ") {
                 blocks.append(.header(String(lineStr.dropFirst(3)), level: 2))
+                listCounter = 0
             } else if lineStr.hasPrefix("# ") {
                 blocks.append(.header(String(lineStr.dropFirst(2)), level: 1))
-            } else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
-                blocks.append(.listItem(String(lineStr.dropFirst(2)), indent: 0))
+                listCounter = 0
+            }
+            // Blockquotes
+            else if lineStr.hasPrefix("> ") {
+                let content = String(lineStr.dropFirst(2))
+                blocks.append(.blockquote(content))
+                listCounter = 0
+            }
+            // Unordered list items
+            else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
+                let indent = 0
+                let content = String(lineStr.dropFirst(2))
+                blocks.append(.listItem(content, indent: indent, number: nil))
+                listCounter = 0
             } else if lineStr.hasPrefix("  - ") || lineStr.hasPrefix("  * ") {
-                blocks.append(.listItem(String(lineStr.dropFirst(4)), indent: 1))
-            } else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                let content = String(lineStr.dropFirst(4))
+                blocks.append(.listItem(content, indent: 1, number: nil))
+                listCounter = 0
+            }
+            // Ordered list items
+            else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
                 let content = lineStr.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
-                blocks.append(.listItem(content, indent: 0))
-            } else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
+                listCounter += 1
+                blocks.append(.listItem(content, indent: 0, number: listCounter))
+            }
+            // Empty lines — skip consecutive, reset list counter
+            else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
+                listCounter = 0
                 if let last = blocks.last, case .text(let t) = last, t.trimmingCharacters(in: .whitespaces).isEmpty {
                     // skip consecutive empty lines
                 } else {
                     blocks.append(.text(""))
                 }
-            } else {
+            }
+            // Regular text
+            else {
                 blocks.append(.text(lineStr))
             }
         }
@@ -122,7 +156,9 @@ struct MarkdownRenderer: View {
         case text(String)
         case code(code: String, language: String)
         case header(String, level: Int)
-        case listItem(String, indent: Int)
+        case listItem(String, indent: Int, number: Int?)
+        case blockquote(String)
+        case hr
     }
 }
 
@@ -144,7 +180,7 @@ struct StreamingCursor: View {
     }
 }
 
-// MARK: - Rich Text
+// MARK: - Rich Text (Inline Markdown)
 
 struct RichText: View {
     let text: String
@@ -155,12 +191,12 @@ struct RichText: View {
             Text(attributed)
                 .font(.body)
                 .foregroundStyle(textColor)
-                .lineSpacing(4)
+                .lineSpacing(5)
         } else {
             Text(text)
                 .font(.body)
                 .foregroundStyle(textColor)
-                .lineSpacing(4)
+                .lineSpacing(5)
         }
     }
 }
@@ -172,10 +208,15 @@ struct HeaderText: View {
     let level: Int
 
     var body: some View {
-        Text(text)
-            .font(headerFont)
-            .foregroundStyle(LamoTheme.Colors.textPrimary)
-            .lineSpacing(2)
+        if let attributed = try? AttributedString(markdown: text) {
+            Text(attributed)
+                .font(headerFont)
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+        } else {
+            Text(text)
+                .font(headerFont)
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+        }
     }
 
     private var headerFont: Font {
@@ -192,12 +233,22 @@ struct HeaderText: View {
 struct ListItemText: View {
     let text: String
     let indent: Int
+    let number: Int?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text("•")
-                .foregroundStyle(LamoTheme.Colors.textTertiary)
-                .font(.body)
+        HStack(alignment: .top, spacing: 8) {
+            if let number {
+                Text("\(number).")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, alignment: .trailing)
+            } else {
+                Text("•")
+                    .font(.body)
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                    .frame(width: 20, alignment: .center)
+            }
+
             if let attributed = try? AttributedString(markdown: text) {
                 Text(attributed)
                     .font(.body)
@@ -213,6 +264,35 @@ struct ListItemText: View {
     }
 }
 
+// MARK: - Blockquote
+
+struct BlockquoteText: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LamoTheme.Colors.accent.opacity(0.5))
+                .frame(width: 3)
+
+            if let attributed = try? AttributedString(markdown: text) {
+                Text(attributed)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .italic()
+            } else {
+                Text(text)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .italic()
+            }
+        }
+        .padding(.leading, 4)
+    }
+}
+
 // MARK: - Code Block
 
 struct CodeBlock: View {
@@ -222,11 +302,12 @@ struct CodeBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Header
             HStack {
                 if !language.isEmpty {
                     Text(language.uppercased())
-                        .font(.system(.caption2, design: .monospaced).weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                        .foregroundStyle(LamoTheme.Colors.accent)
                 }
                 Spacer()
                 Button {
@@ -241,32 +322,33 @@ struct CodeBlock: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 4) {
                         Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
                             .font(.caption2)
                         Text(isCopied ? "Copied" : "Copy")
-                            .font(.caption2)
+                            .font(.caption2.weight(.medium))
                     }
                     .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(Color(.quaternarySystemFill))
 
+            // Code content
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(LamoTheme.Colors.textPrimary)
                     .textSelection(.enabled)
-                    .padding(12)
+                    .padding(14)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.2), lineWidth: 1)
         )
     }
 }
