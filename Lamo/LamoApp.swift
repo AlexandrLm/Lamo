@@ -5,9 +5,7 @@ import SwiftData
 struct LamoApp: App {
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                MainView()
-            }
+            MainView()
         }
         .modelContainer(for: [Conversation.self, Message.self])
     }

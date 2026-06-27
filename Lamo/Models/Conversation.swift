@@ -7,6 +7,8 @@ final class Conversation {
     var title: String
     var createdAt: Date
     var updatedAt: Date
+
+    @Relationship(deleteRule: .cascade)
     var messages: [Message]
 
     init(

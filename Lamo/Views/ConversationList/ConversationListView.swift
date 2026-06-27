@@ -54,15 +54,33 @@ struct ConversationRow: View {
     let conversation: Conversation
 
     var body: some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
-            Text(conversation.title)
-                .font(LamoTheme.Fonts.headline)
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(conversation.title)
+                    .font(LamoTheme.Fonts.headline)
+                    .lineLimit(1)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
 
-            Text(conversation.updatedAt, style: .relative)
-                .font(LamoTheme.Fonts.caption)
+                Spacer()
+
+                Text(conversation.updatedAt, style: .time)
+                    .font(LamoTheme.Fonts.caption)
+                    .foregroundStyle(LamoTheme.Colors.textSecondary)
+            }
+
+            Text(lastMessageSnippet)
+                .font(LamoTheme.Fonts.subheadline)
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
         }
-        .padding(.vertical, LamoTheme.Spacing.xs)
+        .padding(.vertical, 4)
+    }
+
+    private var lastMessageSnippet: String {
+        if let lastMessage = conversation.messages.sorted(by: { $0.timestamp < $1.timestamp }).last {
+            return lastMessage.content.isEmpty ? "..." : lastMessage.content
+        }
+        return "No messages yet"
     }
 }

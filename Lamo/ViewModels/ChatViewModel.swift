@@ -13,7 +13,7 @@ final class ChatViewModel {
     private let chatService: ChatService
     private let modelContext: ModelContext
     private let conversation: Conversation
-    private var streamingMessageIndex: Int?
+    private var streamingMessageID: UUID?
 
     init(conversation: Conversation, modelContext: ModelContext, provider: (any LLMProvider)? = nil) {
         self.conversation = conversation
@@ -26,14 +26,14 @@ final class ChatViewModel {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        let userMessage = Message(content: text, role: .user)
+        let userMessage = Message(content: text, role: .user, conversation: conversation)
         addMessage(userMessage)
         inputText = ""
         updateConversationTitleIfNeeded(firstMessage: text)
 
-        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true)
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
-        streamingMessageIndex = messages.count - 1
+        streamingMessageID = assistantMessage.id
         isStreaming = true
 
         let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
@@ -41,22 +41,25 @@ final class ChatViewModel {
         chatService.sendMessage(
             messages: chatMessages,
             onToken: { [weak self] accumulated in
-                guard let self, let idx = self.streamingMessageIndex else { return }
-                self.messages[idx].content = accumulated
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = accumulated
             },
             onComplete: { [weak self] in
-                guard let self, let idx = self.streamingMessageIndex else { return }
-                self.messages[idx].isStreaming = false
-                self.streamingMessageIndex = nil
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
                 self.isStreaming = false
                 self.conversation.updatedAt = .now
                 self.save()
             },
             onError: { [weak self] error in
-                guard let self, let idx = self.streamingMessageIndex else { return }
-                self.messages[idx].content = "Ошибка: \(error.localizedDescription)"
-                self.messages[idx].isStreaming = false
-                self.streamingMessageIndex = nil
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = "Ошибка: \(error.localizedDescription)"
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
                 self.isStreaming = false
                 self.save()
             }
@@ -65,10 +68,11 @@ final class ChatViewModel {
 
     func stopGeneration() {
         chatService.stopGeneration()
-        if let idx = streamingMessageIndex {
-            messages[idx].isStreaming = false
+        if let id = streamingMessageID,
+           let index = messages.firstIndex(where: { $0.id == id }) {
+            messages[index].isStreaming = false
         }
-        streamingMessageIndex = nil
+        streamingMessageID = nil
         isStreaming = false
     }
 

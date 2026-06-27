@@ -2,13 +2,15 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
-        static let background = Color.clear
-        static let secondaryBackground = Color.gray.opacity(0.1)
-        static let userBubble = Color.blue
-        static let assistantBubble = Color.gray.opacity(0.12)
+        static let background = Color(uiColor: .systemBackground)
+        static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+        static let userBubble = Color.accentColor
+        static let assistantBubble = Color(uiColor: .secondarySystemBackground)
         static let accent = Color.accentColor
         static let textPrimary = Color.primary
         static let textSecondary = Color.secondary
+        static let bubbleTextUser = Color.white
+        static let bubbleTextAssistant = Color.primary
     }
 
     enum Spacing {
@@ -20,14 +22,15 @@ enum LamoTheme {
     }
 
     enum CornerRadius {
-        static let bubble: CGFloat = 16
-        static let input: CGFloat = 20
+        static let bubble: CGFloat = 18
+        static let input: CGFloat = 22
     }
 
     enum Fonts {
         static let body = Font.body
-        static let headline = Font.headline
+        static let headline = Font.headline.weight(.semibold)
+        static let subheadline = Font.subheadline
         static let caption = Font.caption
-        static let code = Font.system(.body, design: .monospaced)
+        static let code = Font.system(.subheadline, design: .monospaced)
     }
 }

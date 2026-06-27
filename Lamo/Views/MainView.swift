@@ -5,114 +5,101 @@ struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
     @State private var selectedConversationID: UUID?
-    @State private var showSidebar = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     private var selectedConversation: Conversation? {
         conversations.first { $0.id == selectedConversationID }
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            if showSidebar {
-                sidebarView
-                    .frame(width: 260)
-                    .transition(.move(edge: .leading))
-            }
-
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarView
+        } detail: {
             if let conversation = selectedConversation {
                 ChatView(
                     conversation: conversation,
                     modelContext: modelContext,
-                    onToggleSidebar: { withAnimation { showSidebar.toggle() } },
                     onNewChat: { createNewChat() }
                 )
             } else {
                 emptyState
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showSidebar)
+        .navigationSplitViewStyle(.balanced)
         .onAppear {
             ensureConversationExists()
         }
     }
 
     private var sidebarView: some View {
-        VStack(spacing: 0) {
+        List(selection: $selectedConversationID) {
+            ForEach(conversations) { conversation in
+                ConversationRow(conversation: conversation)
+                    .tag(conversation.id)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            deleteConversation(conversation)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("Chats")
+        .safeAreaInset(edge: .bottom) {
             HStack {
                 Button {
                     createNewChat()
                 } label: {
                     Label("New Chat", systemImage: "square.and.pencil")
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .font(.headline)
                 }
-                .buttonStyle(.plain)
-                .padding(LamoTheme.Spacing.md)
+                .buttonStyle(.borderedProminent)
+                .tint(LamoTheme.Colors.accent)
+                .clipShape(Capsule())
 
-                Button {
-                    withAnimation { showSidebar = false }
+                Spacer()
+
+                NavigationLink {
+                    SettingsView()
                 } label: {
-                    Image(systemName: "xmark")
+                    Image(systemName: "gearshape")
+                        .font(.title3)
                         .foregroundStyle(LamoTheme.Colors.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, LamoTheme.Spacing.md)
             }
-
-            Divider()
-
-            List(conversations) { conversation in
-                Button {
-                    selectedConversationID = conversation.id
-                    withAnimation { showSidebar = false }
-                } label: {
-                    ConversationRow(conversation: conversation)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(
-                    conversation.id == selectedConversationID
-                        ? LamoTheme.Colors.accent.opacity(0.15)
-                        : Color.clear
-                )
-            }
-            .listStyle(.sidebar)
-
-            Divider()
-
-            NavigationLink {
-                SettingsView()
-            } label: {
-                Label("Settings", systemImage: "gear")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(LamoTheme.Spacing.md)
-            }
-            .buttonStyle(.plain)
+            .padding(LamoTheme.Spacing.md)
+            .background(.ultraThinMaterial)
         }
-        .background(LamoTheme.Colors.secondaryBackground)
     }
 
     private var emptyState: some View {
         VStack(spacing: LamoTheme.Spacing.lg) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
+                .font(.system(size: 56))
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
             Text("Lamo")
                 .font(.largeTitle.bold())
-            Text("Start a new conversation")
+            Text("Select a chat or start a new conversation")
+                .font(LamoTheme.Fonts.subheadline)
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
             Button("New Chat") {
                 createNewChat()
             }
             .buttonStyle(.borderedProminent)
         }
+        .padding()
     }
 
     private func ensureConversationExists() {
-        if let first = conversations.first {
-            selectedConversationID = first.id
-        } else {
-            createNewChat()
+        if selectedConversationID == nil {
+            if let first = conversations.first {
+                selectedConversationID = first.id
+            } else {
+                createNewChat()
+            }
         }
     }
 
@@ -121,5 +108,14 @@ struct MainView: View {
         modelContext.insert(conversation)
         try? modelContext.save()
         selectedConversationID = conversation.id
+    }
+
+    private func deleteConversation(_ conversation: Conversation) {
+        let isDeletedSelected = selectedConversationID == conversation.id
+        modelContext.delete(conversation)
+        try? modelContext.save()
+        if isDeletedSelected {
+            selectedConversationID = conversations.first?.id
+        }
     }
 }

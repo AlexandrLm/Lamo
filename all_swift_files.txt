@@ -66,9 +66,7 @@ import SwiftData
 struct LamoApp: App {
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                MainView()
-            }
+            MainView()
         }
         .modelContainer(for: [Conversation.self, Message.self])
     }
@@ -88,6 +86,8 @@ final class Conversation {
     var title: String
     var createdAt: Date
     var updatedAt: Date
+
+    @Relationship(deleteRule: .cascade)
     var messages: [Message]
 
     init(
@@ -134,13 +134,15 @@ final class Message {
         content: String,
         role: MessageRole,
         timestamp: Date = .now,
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        conversation: Conversation? = nil
     ) {
         self.id = id
         self.content = content
         self.roleRaw = role.rawValue
         self.timestamp = timestamp
         self.isStreaming = isStreaming
+        self.conversation = conversation
     }
 }
 
@@ -279,7 +281,7 @@ final class ChatViewModel {
     private let chatService: ChatService
     private let modelContext: ModelContext
     private let conversation: Conversation
-    private var streamingMessageIndex: Int?
+    private var streamingMessageID: UUID?
 
     init(conversation: Conversation, modelContext: ModelContext, provider: (any LLMProvider)? = nil) {
         self.conversation = conversation
@@ -292,14 +294,14 @@ final class ChatViewModel {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        let userMessage = Message(content: text, role: .user)
+        let userMessage = Message(content: text, role: .user, conversation: conversation)
         addMessage(userMessage)
         inputText = ""
         updateConversationTitleIfNeeded(firstMessage: text)
 
-        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true)
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
-        streamingMessageIndex = messages.count - 1
+        streamingMessageID = assistantMessage.id
         isStreaming = true
 
         let chatMessages = messages.map { ChatMessage(role: $0.role, content: $0.content) }
@@ -307,22 +309,25 @@ final class ChatViewModel {
         chatService.sendMessage(
             messages: chatMessages,
             onToken: { [weak self] accumulated in
-                guard let self, let idx = self.streamingMessageIndex else { return }
-                self.messages[idx].content = accumulated
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = accumulated
             },
             onComplete: { [weak self] in
-                guard let self, let idx = self.streamingMessageIndex else { return }
-                self.messages[idx].isStreaming = false
-                self.streamingMessageIndex = nil
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
                 self.isStreaming = false
                 self.conversation.updatedAt = .now
                 self.save()
             },
             onError: { [weak self] error in
-                guard let self, let idx = self.streamingMessageIndex else { return }
-                self.messages[idx].content = "Ошибка: \(error.localizedDescription)"
-                self.messages[idx].isStreaming = false
-                self.streamingMessageIndex = nil
+                guard let self, let id = self.streamingMessageID,
+                      let index = self.messages.firstIndex(where: { $0.id == id }) else { return }
+                self.messages[index].content = "Ошибка: \(error.localizedDescription)"
+                self.messages[index].isStreaming = false
+                self.streamingMessageID = nil
                 self.isStreaming = false
                 self.save()
             }
@@ -331,10 +336,11 @@ final class ChatViewModel {
 
     func stopGeneration() {
         chatService.stopGeneration()
-        if let idx = streamingMessageIndex {
-            messages[idx].isStreaming = false
+        if let id = streamingMessageID,
+           let index = messages.firstIndex(where: { $0.id == id }) {
+            messages[index].isStreaming = false
         }
-        streamingMessageIndex = nil
+        streamingMessageID = nil
         isStreaming = false
     }
 
@@ -384,9 +390,6 @@ final class ConversationListViewModel {
     func deleteConversations(_ conversations: IndexSet, from allConversations: [Conversation]) {
         for index in conversations {
             let conversation = allConversations[index]
-            for message in conversation.messages {
-                modelContext.delete(message)
-            }
             modelContext.delete(conversation)
         }
         save()
@@ -420,7 +423,7 @@ struct ChatInputBar: View {
                 .background(LamoTheme.Colors.secondaryBackground)
                 .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.input))
                 .onSubmit {
-                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if canSend {
                         onSend()
                     }
                 }
@@ -459,17 +462,15 @@ import SwiftData
 
 struct ChatView: View {
     @State private var viewModel: ChatViewModel
-    var onToggleSidebar: (() -> Void)?
+    @State private var isUserNearBottom = true
     var onNewChat: (() -> Void)?
 
     init(
         conversation: Conversation,
         modelContext: ModelContext,
-        onToggleSidebar: (() -> Void)? = nil,
         onNewChat: (() -> Void)? = nil
     ) {
         _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
-        self.onToggleSidebar = onToggleSidebar
         self.onNewChat = onNewChat
     }
 
@@ -496,12 +497,24 @@ struct ChatView: View {
                         }
                     }
                     .padding(LamoTheme.Spacing.md)
+                    .background(GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geometry.frame(in: .global).maxY
+                        )
+                    })
+                }
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { maxY in
+                    let screenHeight = UIScreen.main.bounds.height
+                    isUserNearBottom = maxY < screenHeight + 100
                 }
                 .onChange(of: viewModel.messages.count) {
                     scrollToBottom(proxy: proxy)
                 }
                 .onChange(of: viewModel.messages.last?.content) {
-                    scrollToBottom(proxy: proxy)
+                    if isUserNearBottom {
+                        scrollToBottom(proxy: proxy)
+                    }
                 }
             }
 
@@ -519,14 +532,6 @@ struct ChatView: View {
 
     private var headerBar: some View {
         HStack {
-            Button {
-                onToggleSidebar?()
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .font(.title3)
-            }
-            .buttonStyle(.plain)
-
             Spacer()
 
             Text(viewModel.conversationTitle)
@@ -566,6 +571,14 @@ struct ChatView: View {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
+    }
+}
+
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
@@ -631,39 +644,11 @@ struct MarkdownRenderer: View {
     }
 
     private func StyledText(_ text: String) -> some View {
-        let attributed = parseInlineFormatting(text)
-        return Text(attributed)
-    }
-
-    private func parseInlineFormatting(_ text: String) -> AttributedString {
-        var result = AttributedString(text)
-
-        let boldPattern = /\*\*(.+?)\*\*/
-        for match in text.matches(of: boldPattern) {
-            let matchStr = String(match.output.0)
-            if let range = result.range(of: matchStr) {
-                result[range].font = .body.bold()
-            }
+        if let attributed = try? AttributedString(markdown: text) {
+            return Text(attributed)
+        } else {
+            return Text(text)
         }
-
-        let italicPattern = /\*(.+?)\*/
-        for match in text.matches(of: italicPattern) {
-            let matchStr = String(match.output.0)
-            if let range = result.range(of: matchStr) {
-                result[range].font = .body.italic()
-            }
-        }
-
-        let inlineCodePattern = /`(.+?)`/
-        for match in text.matches(of: inlineCodePattern) {
-            let matchStr = String(match.output.0)
-            if let range = result.range(of: matchStr) {
-                result[range].font = LamoTheme.Fonts.code
-                result[range].foregroundColor = .orange
-            }
-        }
-
-        return result
     }
 
     private enum Block {
@@ -849,32 +834,27 @@ struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
     @State private var selectedConversationID: UUID?
-    @State private var showSidebar = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     private var selectedConversation: Conversation? {
         conversations.first { $0.id == selectedConversationID }
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            if showSidebar {
-                sidebarView
-                    .frame(width: 260)
-                    .transition(.move(edge: .leading))
-            }
-
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarView
+        } detail: {
             if let conversation = selectedConversation {
                 ChatView(
                     conversation: conversation,
                     modelContext: modelContext,
-                    onToggleSidebar: { withAnimation { showSidebar.toggle() } },
                     onNewChat: { createNewChat() }
                 )
             } else {
                 emptyState
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showSidebar)
+        .navigationSplitViewStyle(.balanced)
         .onAppear {
             ensureConversationExists()
         }
@@ -882,58 +862,36 @@ struct MainView: View {
 
     private var sidebarView: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button {
-                    createNewChat()
-                } label: {
-                    Label("New Chat", systemImage: "square.and.pencil")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .padding(LamoTheme.Spacing.md)
-
-                Button {
-                    withAnimation { showSidebar = false }
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(LamoTheme.Colors.textSecondary)
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, LamoTheme.Spacing.md)
-            }
-
-            Divider()
-
-            List(conversations) { conversation in
-                Button {
-                    selectedConversationID = conversation.id
-                    withAnimation { showSidebar = false }
-                } label: {
-                    ConversationRow(conversation: conversation)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(
-                    conversation.id == selectedConversationID
-                        ? LamoTheme.Colors.accent.opacity(0.15)
-                        : Color.clear
-                )
+            List(conversations, selection: $selectedConversationID) { conversation in
+                ConversationRow(conversation: conversation)
+                    .tag(conversation.id)
             }
             .listStyle(.sidebar)
 
             Divider()
 
-            NavigationLink {
-                SettingsView()
-            } label: {
-                Label("Settings", systemImage: "gear")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(LamoTheme.Spacing.md)
+            HStack {
+                Button {
+                    createNewChat()
+                } label: {
+                    Label("New Chat", systemImage: "square.and.pencil")
+                }
+                .buttonStyle(.plain)
+                .padding(LamoTheme.Spacing.md)
+
+                Spacer()
+
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gear")
+                        .foregroundStyle(LamoTheme.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, LamoTheme.Spacing.md)
             }
-            .buttonStyle(.plain)
         }
-        .background(LamoTheme.Colors.secondaryBackground)
+        .navigationTitle("Lamo")
     }
 
     private var emptyState: some View {

@@ -22,13 +22,15 @@ final class Message {
         content: String,
         role: MessageRole,
         timestamp: Date = .now,
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        conversation: Conversation? = nil
     ) {
         self.id = id
         self.content = content
         self.roleRaw = role.rawValue
         self.timestamp = timestamp
         self.isStreaming = isStreaming
+        self.conversation = conversation
     }
 }
 

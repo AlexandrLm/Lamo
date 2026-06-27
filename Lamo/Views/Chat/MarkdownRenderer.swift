@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MarkdownRenderer: View {
     let text: String
+    let textColor: Color
 
     var body: some View {
         if text.isEmpty {
@@ -15,6 +16,7 @@ struct MarkdownRenderer: View {
                     case .text(let content):
                         StyledText(content)
                             .font(LamoTheme.Fonts.body)
+                            .foregroundStyle(textColor)
                     }
                 }
             }
@@ -55,39 +57,11 @@ struct MarkdownRenderer: View {
     }
 
     private func StyledText(_ text: String) -> some View {
-        let attributed = parseInlineFormatting(text)
-        return Text(attributed)
-    }
-
-    private func parseInlineFormatting(_ text: String) -> AttributedString {
-        var result = AttributedString(text)
-
-        let boldPattern = /\*\*(.+?)\*\*/
-        for match in text.matches(of: boldPattern) {
-            let matchStr = String(match.output.0)
-            if let range = result.range(of: matchStr) {
-                result[range].font = .body.bold()
-            }
+        if let attributed = try? AttributedString(markdown: text) {
+            return Text(attributed)
+        } else {
+            return Text(text)
         }
-
-        let italicPattern = /\*(.+?)\*/
-        for match in text.matches(of: italicPattern) {
-            let matchStr = String(match.output.0)
-            if let range = result.range(of: matchStr) {
-                result[range].font = .body.italic()
-            }
-        }
-
-        let inlineCodePattern = /`(.+?)`/
-        for match in text.matches(of: inlineCodePattern) {
-            let matchStr = String(match.output.0)
-            if let range = result.range(of: matchStr) {
-                result[range].font = LamoTheme.Fonts.code
-                result[range].foregroundColor = .orange
-            }
-        }
-
-        return result
     }
 
     private enum Block {
@@ -103,18 +77,24 @@ struct CodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
             if !language.isEmpty {
-                Text(language)
-                    .font(LamoTheme.Fonts.caption)
+                Text(language.uppercased())
+                    .font(.system(.caption2, design: .monospaced))
+                    .bold()
                     .foregroundStyle(LamoTheme.Colors.textSecondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(LamoTheme.Fonts.code)
                     .textSelection(.enabled)
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
         }
         .padding(LamoTheme.Spacing.md)
-        .background(LamoTheme.Colors.assistantBubble)
-        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble))
+        .background(Color(uiColor: .tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(uiColor: .separator), lineWidth: 0.5)
+        )
     }
 }

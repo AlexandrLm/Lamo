@@ -3,27 +3,24 @@ import SwiftData
 
 struct ChatView: View {
     @State private var viewModel: ChatViewModel
-    var onToggleSidebar: (() -> Void)?
+    @State private var isUserNearBottom = true
+    @Environment(\.modelContext) private var modelContext
     var onNewChat: (() -> Void)?
 
     init(
         conversation: Conversation,
         modelContext: ModelContext,
-        onToggleSidebar: (() -> Void)? = nil,
         onNewChat: (() -> Void)? = nil
     ) {
         _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
-        self.onToggleSidebar = onToggleSidebar
         self.onNewChat = onNewChat
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
-
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: LamoTheme.Spacing.sm) {
+                    LazyVStack(spacing: LamoTheme.Spacing.md) {
                         if viewModel.messages.isEmpty {
                             emptyChatView
                                 .id("empty")
@@ -39,17 +36,28 @@ struct ChatView: View {
                                 .id("typing")
                         }
                     }
-                    .padding(LamoTheme.Spacing.md)
+                    .padding(.horizontal, LamoTheme.Spacing.md)
+                    .padding(.vertical, LamoTheme.Spacing.lg)
+                    .background(GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geometry.frame(in: .global).maxY
+                        )
+                    })
+                }
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { maxY in
+                    let screenHeight = UIScreen.main.bounds.height
+                    isUserNearBottom = maxY < screenHeight + 100
                 }
                 .onChange(of: viewModel.messages.count) {
                     scrollToBottom(proxy: proxy)
                 }
                 .onChange(of: viewModel.messages.last?.content) {
-                    scrollToBottom(proxy: proxy)
+                    if isUserNearBottom {
+                        scrollToBottom(proxy: proxy)
+                    }
                 }
             }
-
-            Divider()
 
             ChatInputBar(
                 text: $viewModel.inputText,
@@ -59,56 +67,51 @@ struct ChatView: View {
             )
         }
         .background(LamoTheme.Colors.background)
-    }
-
-    private var headerBar: some View {
-        HStack {
-            Button {
-                onToggleSidebar?()
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .font(.title3)
+        .navigationTitle(viewModel.conversationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    onNewChat?()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
             }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Text(viewModel.conversationTitle)
-                .font(LamoTheme.Fonts.headline)
-                .lineLimit(1)
-
-            Spacer()
-
-            Button {
-                onNewChat?()
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.title3)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, LamoTheme.Spacing.md)
-        .padding(.vertical, LamoTheme.Spacing.sm)
     }
 
     private var emptyChatView: some View {
-        VStack(spacing: LamoTheme.Spacing.lg) {
-            Spacer()
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
+        VStack(spacing: LamoTheme.Spacing.md) {
+            Spacer(minLength: 120)
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundStyle(LamoTheme.Colors.accent)
+                .symbolEffect(.bounce, value: viewModel.messages.isEmpty)
+            Text("How can I help you today?")
+                .font(.title3.bold())
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+            Text("Ask questions, explore ideas, or brainstorm with local intelligence.")
+                .font(LamoTheme.Fonts.subheadline)
                 .foregroundStyle(LamoTheme.Colors.textSecondary)
-            Text("How can I help you?")
-                .font(.title2)
-                .foregroundStyle(LamoTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, LamoTheme.Spacing.xl)
             Spacer()
         }
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         if let last = viewModel.messages.last {
-            withAnimation {
+            withAnimation(.easeOut(duration: 0.25)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
+    }
+}
+
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

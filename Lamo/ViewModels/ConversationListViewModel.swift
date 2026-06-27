@@ -20,9 +20,6 @@ final class ConversationListViewModel {
     func deleteConversations(_ conversations: IndexSet, from allConversations: [Conversation]) {
         for index in conversations {
             let conversation = allConversations[index]
-            for message in conversation.messages {
-                modelContext.delete(message)
-            }
             modelContext.delete(conversation)
         }
         save()

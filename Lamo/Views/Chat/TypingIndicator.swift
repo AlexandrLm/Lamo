@@ -1,22 +1,29 @@
 import SwiftUI
 
 struct TypingIndicator: View {
-    @State private var phase = 0.0
+    @State private var isAnimating = false
 
     var body: some View {
-        HStack(spacing: LamoTheme.Spacing.xs) {
+        HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
                     .fill(LamoTheme.Colors.textSecondary)
                     .frame(width: 6, height: 6)
-                    .offset(y: sin(phase + Double(index) * 0.8) * 3)
+                    .scaleEffect(isAnimating ? 1.0 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 0.6)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double(index) * 0.15),
+                        value: isAnimating
+                    )
             }
         }
-        .padding(LamoTheme.Spacing.sm)
+        .padding(.horizontal, LamoTheme.Spacing.md)
+        .padding(.vertical, LamoTheme.Spacing.sm)
+        .background(LamoTheme.Colors.assistantBubble)
+        .clipShape(Capsule())
         .onAppear {
-            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                phase = .pi * 2
-            }
+            isAnimating = true
         }
     }
 }
