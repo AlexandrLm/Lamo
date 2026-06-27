@@ -2,16 +2,24 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
-        // Backgrounds — native iOS
-        static let background = Color(uiColor: .systemBackground)
+        // Backgrounds — ChatGPT-inspired
+        static let background = Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0.13, green: 0.13, blue: 0.13, alpha: 1.0)  // #212121
+                : UIColor.systemBackground
+        })
         static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
         static let tertiaryBackground = Color(uiColor: .tertiarySystemBackground)
 
-        // Accent — black & white
-        static let accent = Color.primary
+        // Accent — ChatGPT green
+        static let accent = Color(red: 0.06, green: 0.64, blue: 0.50) // #10a37f
 
         // Bubbles
-        static let userBubble = Color(uiColor: .systemGray5)
+        static let userBubble = Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0.22, green: 0.22, blue: 0.22, alpha: 1.0)  // #383838
+                : UIColor.systemGray5
+        })
         static let assistantBubble = Color.clear
         static let bubbleTextUser = Color.primary
         static let bubbleTextAssistant = Color.primary
@@ -46,7 +54,7 @@ enum LamoTheme {
         static let lg: CGFloat = 16
         static let xl: CGFloat = 20
         static let bubble: CGFloat = 18
-        static let input: CGFloat = 20
+        static let input: CGFloat = 24
         static let card: CGFloat = 12
     }
 

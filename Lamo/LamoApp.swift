@@ -5,7 +5,6 @@ import SwiftData
 struct LamoApp: App {
     init() {
         // Pre-initialize the LiteRT-LM engine in background.
-        // This avoids blocking the UI on first inference.
         Task {
             await ProviderManager.shared.initializeEngineIfNeeded()
         }
@@ -14,6 +13,7 @@ struct LamoApp: App {
     var body: some Scene {
         WindowGroup {
             MainView()
+                .preferredColorScheme(.dark)
         }
         .modelContainer(for: [Conversation.self, Message.self])
     }

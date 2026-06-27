@@ -23,17 +23,11 @@ struct MessageBubble: View {
                 } else {
                     Text(message.content)
                         .font(.body)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(LamoTheme.Colors.textPrimary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(LamoTheme.Colors.userBubble)
-                        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble, style: .continuous))
-                }
-                if !message.isStreaming {
-                    Text(message.timestamp, style: .time)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .padding(.trailing, 2)
+                        .background(Color(.systemGray5))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             }
         }
@@ -52,7 +46,7 @@ struct MessageBubble: View {
             } else {
                 MarkdownRenderer(
                     text: message.content,
-                    textColor: .primary
+                    textColor: LamoTheme.Colors.textPrimary
                 )
                 .lineSpacing(3)
             }
@@ -68,10 +62,6 @@ struct MessageBubble: View {
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
-
-                    Text(message.timestamp, style: .time)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
 
                     Spacer()
                 }

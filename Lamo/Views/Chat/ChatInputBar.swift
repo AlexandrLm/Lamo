@@ -9,8 +9,6 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CompactDivider()
-
             HStack(alignment: .bottom, spacing: 10) {
                 TextField("", text: $text, axis: .vertical)
                     .lineLimit(1...8)
@@ -19,7 +17,7 @@ struct ChatInputBar: View {
                     .padding(.vertical, 10)
                     .scrollContentBackground(.hidden)
                     .background(Color(.tertiarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text("Message")
@@ -54,7 +52,6 @@ struct ChatInputBar: View {
                             .foregroundStyle(canSend ? Color.white : Color(.tertiaryLabel))
                             .background(canSend ? Color.black : Color(.quaternarySystemFill), in: Circle())
                             .animation(.easeInOut(duration: 0.15), value: canSend)
-                            .animation(.easeInOut(duration: 0.15), value: canSend)
                     }
                     .disabled(!canSend)
                     .transition(.scale.combined(with: .opacity))
@@ -62,8 +59,8 @@ struct ChatInputBar: View {
             }
             .frame(maxWidth: LamoTheme.maxContentWidth)
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .padding(.bottom, 4)
+            .padding(.vertical, 10)
+            .padding(.bottom, 6)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }
