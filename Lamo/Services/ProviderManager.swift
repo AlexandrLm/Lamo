@@ -73,8 +73,57 @@ final class ProviderManager: ObservableObject {
         }
     }
 
+    var cpuThreadCount: Int {
+        get { UserDefaults.standard.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4 }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "litertLMCpuThreadCount")
+            invalidateEngine()
+        }
+    }
+
+    var topK: Int {
+        get { UserDefaults.standard.object(forKey: "litertLMTopK") as? Int ?? 40 }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMTopK") }
+    }
+
+    var topP: Double {
+        get { UserDefaults.standard.object(forKey: "litertLMTopP") as? Double ?? 0.95 }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMTopP") }
+    }
+
+    var temperature: Double {
+        get { UserDefaults.standard.object(forKey: "litertLMTemperature") as? Double ?? 0.7 }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMTemperature") }
+    }
+
+    var maxNumTokens: Int {
+        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096 }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "litertLMMaxNumTokens")
+            invalidateEngine()
+        }
+    }
+
+    var speculativeDecoding: Bool {
+        get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "litertLMSpeculativeDecoding")
+            invalidateEngine()
+        }
+    }
+
+    var visualTokenBudget: Int {
+        get { UserDefaults.standard.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560 }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMVisualTokenBudget") }
+    }
+
+    var systemPrompt: String {
+        get { UserDefaults.standard.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in." }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMSystemPrompt") }
+    }
+
     // MARK: - Internal State
-    // MARK: - Internal State
+
     /// Cached engine. Nil when invalidated or not yet loaded.
     private var cachedEngine: LiteRTLM.Engine?
 
@@ -139,13 +188,27 @@ final class ProviderManager: ObservableObject {
             resolvedPath = path
         }
 
-        let backend: LiteRTLM.Backend = litertLMUseGPU ? .gpu : .cpu(threadCount: nil)
+        // Enable speculative decoding experimental flag if requested
+        if speculativeDecoding {
+            LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
+            LiteRTLM.ExperimentalFlags.enableSpeculativeDecoding = true
+        }
+
+        let backend: LiteRTLM.Backend
+        if litertLMUseGPU {
+            backend = .gpu
+        } else {
+            backend = .cpu(threadCount: cpuThreadCount)
+        }
+
+        let maxTokens = maxNumTokens > 0 ? maxNumTokens : nil
+
         guard let engineConfig = try? LiteRTLM.EngineConfig(
             modelPath: resolvedPath,
             backend: backend,
             visionBackend: nil,
             audioBackend: nil,
-            maxNumTokens: 4096,
+            maxNumTokens: maxTokens,
             cacheDir: NSTemporaryDirectory()
         ) else {
             engineError = "Failed to create engine config"

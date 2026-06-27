@@ -16,6 +16,9 @@ final class LiteRTLMProvider: LLMProvider {
     /// Backend selection
     private let useGPU: Bool
 
+    /// CPU thread count (only used when useGPU is false)
+    private let cpuThreadCount: Int
+
     /// Max tokens for KV-cache. nil = model default.
     private let maxNumTokens: Int?
 
@@ -37,11 +40,13 @@ final class LiteRTLMProvider: LLMProvider {
     init(
         modelPath: String? = nil,
         useGPU: Bool = true,
-        maxNumTokens: Int? = 4096,
+        cpuThreadCount: Int = 4,
+        maxNumTokens: Int = 4096,
         engine: LiteRTLM.Engine? = nil
     ) {
         self.modelPath = modelPath
         self.useGPU = useGPU
+        self.cpuThreadCount = cpuThreadCount
         self.maxNumTokens = maxNumTokens
         self.engine = engine
     }
@@ -88,14 +93,16 @@ final class LiteRTLMProvider: LLMProvider {
             let resolvedPath = try resolveModelPath()
             let backend: LiteRTLM.Backend = useGPU
                 ? .gpu
-                : .cpu(threadCount: autoThreadCount)
+                : .cpu(threadCount: cpuThreadCount)
+
+            let maxTokens: Int? = self.maxNumTokens
 
             let engineConfig = try LiteRTLM.EngineConfig(
                 modelPath: resolvedPath,
                 backend: backend,
                 visionBackend: nil,
                 audioBackend: nil,
-                maxNumTokens: maxNumTokens,
+                maxNumTokens: maxTokens,
                 cacheDir: NSTemporaryDirectory()
             )
 
@@ -139,30 +146,29 @@ final class LiteRTLMProvider: LLMProvider {
             initialMessages.append(LiteRTLM.Message(msg.content, role: role))
         }
 
+        // Read sampler settings from ProviderManager
+        let pm = ProviderManager.shared
+
         let samplerConfig = try LiteRTLM.SamplerConfig(
-            topK: 40,
-            topP: 0.95,
-            temperature: 0.7,
+            topK: pm.topK,
+            topP: Float(pm.topP),
+            temperature: Float(pm.temperature),
             seed: Int.random(in: 0..<Int(Int32.max))
         )
 
+        let systemMessage = LiteRTLM.Message(
+            pm.systemPrompt,
+            role: .system
+        )
+
         let conversationConfig = LiteRTLM.ConversationConfig(
-            systemMessage: LiteRTLM.Message(
-                "You are a helpful, concise assistant. Answer in the same language the user writes in.",
-                role: .system
-            ),
+            systemMessage: systemMessage,
             initialMessages: initialMessages,
             tools: [],
             samplerConfig: samplerConfig
         )
 
         return try await engine.createConversation(with: conversationConfig)
-    }
-
-    /// Auto-select sensible CPU thread count.
-    private var autoThreadCount: Int? {
-        let cores = ProcessInfo.processInfo.processorCount
-        return min(cores, 8) // Cap at 8 to keep UI responsive
     }
 
     private func resolveModelPath() throws -> String {
@@ -181,8 +187,7 @@ final class LiteRTLMProvider: LLMProvider {
         }
 
         let models = try FileManager.default.contentsOfDirectory(
-            at: modelsDir,
-            includingPropertiesForKeys: nil
+            at: modelsDir, includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "litertlm" }
 
         guard let first = models.first else {

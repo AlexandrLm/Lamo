@@ -41,7 +41,7 @@ enum PresetModel: String, CaseIterable, Identifiable {
 
     var fileSizeString: String {
         let gb = fileSizeGB
-        return String(format: "%.2f GB", gb)
+        return String(format: "%.1f GB", gb)
     }
 
     var parameterCount: String {
@@ -54,9 +54,9 @@ enum PresetModel: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .gemma4E4B:
-            return "Larger model with better reasoning. Best for complex tasks, coding, and multi-step problems."
+            return "Larger multimodal model with vision and tool calling support."
         case .gemma4E2B:
-            return "Compact model optimized for speed. Great for simple Q&A, summaries, and fast responses."
+            return "Compact multimodal model. Fast inference, supports images."
         }
     }
 
@@ -66,13 +66,13 @@ enum PresetModel: String, CaseIterable, Identifiable {
             return [
                 "Text decoder: 2.24 GB weights",
                 "Embeddings: 0.67 GB (memory-mapped)",
-                "Best quality on-device",
-                "Supports tool calling & vision"
+                "Vision + tool calling support",
+                "Best quality on-device"
             ]
         case .gemma4E2B:
             return [
                 "Optimized mobile quantization",
-                "Fastest inference speed",
+                "Vision + tool calling support",
                 "Lowest memory footprint",
                 "Ideal for older devices"
             ]
@@ -111,6 +111,19 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "brain.head.profile"
         case .gemma4E2B: return "bolt.fill"
+        }
+    }
+
+    var license: String {
+        "Apache 2.0"
+    }
+
+    var capabilities: [String] {
+        switch self {
+        case .gemma4E4B:
+            return ["Text", "Images", "Tool Calling", "Thinking"]
+        case .gemma4E2B:
+            return ["Text", "Images", "Tool Calling"]
         }
     }
 

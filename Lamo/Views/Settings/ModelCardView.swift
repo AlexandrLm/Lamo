@@ -23,7 +23,7 @@ struct ModelCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header row
+            // Header
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -60,7 +60,7 @@ struct ModelCardView: View {
             }
             .padding([.top, .horizontal], 16)
 
-            // Stats row
+            // Stats
             HStack(spacing: 6) {
                 StatBadge(value: model.fileSizeString, icon: "internaldrive")
                 StatBadge(value: model.parameterCount + " params", icon: "cpu")
@@ -68,13 +68,27 @@ struct ModelCardView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
+
+            // Capabilities
+            HStack(spacing: 6) {
+                ForEach(model.capabilities, id: \.self) { cap in
+                    Text(cap)
+                        .font(.system(.caption2, design: .rounded).weight(.medium))
+                        .foregroundStyle(themeColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(themeColor.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
             .padding(.bottom, 12)
 
             // Expandable details
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
-                    Divider()
-                        .padding(.vertical, 4)
+                    Divider().padding(.vertical, 4)
 
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(model.highlights, id: \.self) { highlight in
@@ -107,6 +121,14 @@ struct ModelCardView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                         }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("LICENSE")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.tertiary)
+                            Text(model.license)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
                     }
                     .padding(.top, 4)
                 }
@@ -115,7 +137,7 @@ struct ModelCardView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // Progress bar
+            // Progress
             if isDownloading, let state = downloadState, state.totalBytes > 0 {
                 VStack(spacing: 6) {
                     ProgressView(value: state.progress)
@@ -151,7 +173,7 @@ struct ModelCardView: View {
 
             Divider()
 
-            // Action row
+            // Actions
             HStack {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
