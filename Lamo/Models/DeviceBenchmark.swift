@@ -18,7 +18,7 @@ final class DeviceBenchmark: ObservableObject {
         let storageFreeGB: Double
         let hasGPU: Bool
         let gpuCoreCount: Int
-        let computeScore: Double      // seconds for test workload (lower = better)
+        let computeScore: Double
         let aiTier: AITier
         let recommendations: [Recommendation]
 
@@ -82,7 +82,7 @@ final class DeviceBenchmark: ObservableObject {
             progress = 0.3
 
             // Phase 2: Compute benchmark
-            let computeScore = await runComputeTest()
+            let computeScore = runComputeTest()
             progress = 0.8
 
             // Phase 3: Rate the device
@@ -127,7 +127,7 @@ final class DeviceBenchmark: ObservableObject {
     private func getChipName() -> String {
         var size = 0
         sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
-        var chip = [CChar](repeating: 0, count: size)
+        var chip = [CChar](repeating: 0, count: size + 1)
         sysctlbyname("machdep.cpu.brand_string", &chip, &size, nil, 0)
         return String(cString: chip)
     }
@@ -143,11 +143,11 @@ final class DeviceBenchmark: ObservableObject {
     private func getGPUInfo() -> (hasGPU: Bool, coreCount: Int) {
         guard let device = MTLCreateSystemDefaultDevice() else { return (false, 0) }
         let cores: Int = {
-            if device.supportsFamily(.apple9) { return 6 }  // A17 Pro / M3+
-            if device.supportsFamily(.apple8) { return 5 }  // A16 / M2
-            if device.supportsFamily(.apple7) { return 5 }  // A15 / M1
-            if device.supportsFamily(.apple6) { return 4 }  // A14
-            if device.supportsFamily(.apple5) { return 4 }  // A13
+            if device.supportsFamily(.apple9) { return 6 }
+            if device.supportsFamily(.apple8) { return 5 }
+            if device.supportsFamily(.apple7) { return 5 }
+            if device.supportsFamily(.apple6) { return 4 }
+            if device.supportsFamily(.apple5) { return 4 }
             return 3
         }()
         return (true, cores)
@@ -157,14 +157,12 @@ final class DeviceBenchmark: ObservableObject {
 
     /// Runs a matrix multiplication benchmark to measure raw compute.
     /// Returns time in seconds (lower = better).
-    private nonisolated func runComputeTest() async -> Double {
+    private func runComputeTest() -> Double {
         let size = 256
-        // Allocate matrices
         var a = [Float](repeating: 0, count: size * size)
         var b = [Float](repeating: 0, count: size * size)
         var c = [Float](repeating: 0, count: size * size)
 
-        // Fill with random-ish values
         for i in 0..<(size * size) {
             a[i] = Float.random(in: -1...1)
             b[i] = Float.random(in: -1...1)
@@ -172,7 +170,6 @@ final class DeviceBenchmark: ObservableObject {
 
         let start = CFAbsoluteTimeGetCurrent()
 
-        // Naive matrix multiply — good CPU benchmark
         for i in 0..<size {
             for k in 0..<size {
                 let aik = a[i * size + k]
@@ -183,8 +180,6 @@ final class DeviceBenchmark: ObservableObject {
         }
 
         let elapsed = CFAbsoluteTimeGetCurrent() - start
-
-        // Prevent compiler from optimizing away
         _ = c[0]
 
         return elapsed
@@ -193,20 +188,16 @@ final class DeviceBenchmark: ObservableObject {
     // MARK: - Rating
 
     private func rateDevice(ramGB: Double, computeScore: Double, gpuCores: Int, hasGPU: Bool) -> AITier {
-        // Scoring heuristic
         var score = 0
 
-        // RAM: most important for LLM inference
         if ramGB >= 7 { score += 3 }
         else if ramGB >= 5 { score += 2 }
         else if ramGB >= 3 { score += 1 }
 
-        // GPU
         if hasGPU {
             score += gpuCores >= 5 ? 2 : 1
         }
 
-        // Compute speed (256x256 matmul)
         if computeScore < 0.5 { score += 3 }
         else if computeScore < 1.0 { score += 2 }
         else if computeScore < 2.0 { score += 1 }
@@ -279,42 +270,34 @@ final class DeviceBenchmark: ObservableObject {
     // MARK: - Device Mapping
 
     private func mapDeviceIdentifier(_ id: String) -> String {
-        // Map common iPhone identifiers to marketing names
         let map: [String: String] = [
-            // iPhone 17 series
             "iPhone18,1": "iPhone 17",
             "iPhone18,2": "iPhone 17 Pro",
             "iPhone18,3": "iPhone 17 Pro Max",
             "iPhone18,4": "iPhone 17 Air",
-            // iPhone 16 series
             "iPhone17,1": "iPhone 16 Pro Max",
             "iPhone17,2": "iPhone 16 Pro",
             "iPhone17,3": "iPhone 16",
             "iPhone17,4": "iPhone 16 Plus",
             "iPhone17,5": "iPhone 16e",
-            // iPhone 15 series
             "iPhone16,1": "iPhone 15 Pro Max",
             "iPhone16,2": "iPhone 15 Pro",
             "iPhone16,3": "iPhone 15",
             "iPhone16,4": "iPhone 15 Plus",
-            // iPhone 14 series
             "iPhone15,2": "iPhone 14 Pro",
             "iPhone15,3": "iPhone 14 Pro Max",
             "iPhone15,4": "iPhone 14",
             "iPhone15,5": "iPhone 14 Plus",
-            // iPhone 13 series
             "iPhone14,2": "iPhone 13 Pro",
             "iPhone14,3": "iPhone 13 Pro Max",
             "iPhone14,4": "iPhone 13 mini",
             "iPhone14,5": "iPhone 13",
-            // iPad Pro (M-series)
             "iPad16,3": "iPad Pro (M4)",
             "iPad16,4": "iPad Pro (M4)",
             "iPad14,3": "iPad Pro (M2)",
             "iPad14,4": "iPad Pro (M2)",
             "iPad13,4": "iPad Pro (M1)",
             "iPad13,5": "iPad Pro (M1)",
-            // iPad Air (M-series)
             "iPad14,8": "iPad Air (M2)",
             "iPad14,9": "iPad Air (M2)",
             "iPad13,16": "iPad Air (M1)",

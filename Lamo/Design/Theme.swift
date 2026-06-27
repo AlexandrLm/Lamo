@@ -2,14 +2,10 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
-        // Backgrounds — ChatGPT-inspired
-        static let background = Color(uiColor: UIColor { traitCollection in
-            traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 0.13, green: 0.13, blue: 0.13, alpha: 1.0)  // #212121
-                : UIColor.systemBackground
-        })
-        static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
-        static let tertiaryBackground = Color(uiColor: .tertiarySystemBackground)
+        // Backgrounds — pure black
+        static let background = Color.black
+        static let secondaryBackground = Color.black
+        static let tertiaryBackground = Color.black
 
         // Accent — ChatGPT green
         static let accent = Color(red: 0.06, green: 0.64, blue: 0.50) // #10a37f

@@ -93,83 +93,26 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Empty State (ChatGPT style)
+    // MARK: - Empty State
 
     private var emptyChatView: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 60)
 
             VStack(spacing: 20) {
-                // Logo
                 Image(systemName: "sparkles")
                     .font(.system(size: 32, weight: .light))
                     .foregroundStyle(LamoTheme.Colors.accent)
                     .frame(width: 64, height: 64)
                     .background(LamoTheme.Colors.accent.opacity(0.1), in: Circle())
 
-                // Title
-                VStack(spacing: 6) {
-                    Text("How can I help you today?")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(LamoTheme.Colors.textPrimary)
-                }
-
-                // Suggestion chips
-                VStack(spacing: 10) {
-                    suggestionRow(
-                        icon: "lightbulb",
-                        title: "Give me ideas",
-                        subtitle: "for a weekend trip"
-                    )
-                    suggestionRow(
-                        icon: "text.alignleft",
-                        title: "Help me write",
-                        subtitle: "a professional email"
-                    )
-                    suggestionRow(
-                        icon: "brain.head.profile",
-                        title: "Explain",
-                        subtitle: "how neural networks work"
-                    )
-                    suggestionRow(
-                        icon: "swift",
-                        title: "Write code",
-                        subtitle: "to sort an array in Swift"
-                    )
-                }
-                .padding(.horizontal, 20)
+                Text("How can I help you today?")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(LamoTheme.Colors.textPrimary)
             }
 
             Spacer()
         }
-    }
-
-    private func suggestionRow(icon: String, title: String, subtitle: String) -> some View {
-        Button {
-            // TODO: Could pre-fill the input with a suggestion
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(LamoTheme.Colors.accent)
-                    .frame(width: 28, height: 28)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(LamoTheme.Colors.textPrimary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(LamoTheme.Colors.textTertiary)
-                }
-
-                Spacer()
-            }
-            .padding(12)
-            .background(LamoTheme.Colors.secondaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
