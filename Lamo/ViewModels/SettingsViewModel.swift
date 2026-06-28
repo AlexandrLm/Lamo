@@ -96,7 +96,7 @@ final class SettingsViewModel: ObservableObject {
         self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 0.7
         self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096
         self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
-        self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
+        self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? true
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
         self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in."
         refreshModels()
