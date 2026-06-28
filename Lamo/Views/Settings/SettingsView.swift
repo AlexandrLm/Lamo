@@ -273,18 +273,22 @@ struct SettingsView: View {
     }
 
     // MARK: - Device Link Section
-
     private var deviceLinkSection: some View {
         Section("Device") {
             NavigationLink(value: SettingsSection.device) {
                 Label {
                     HStack {
-                        Text("Device Info")
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Device Info")
+                            if let result = benchmark.result {
+                                Text("\(result.chipName) · \(String(format: "%.0f", result.ramGB)) GB RAM")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
                         Spacer()
                         if let result = benchmark.result {
-                            Text(result.aiTierLabel)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            tierBadge(result)
                         }
                     }
                 } icon: {
@@ -576,7 +580,8 @@ struct SettingsView: View {
     private var deviceSection: some View {
         List {
             if let result = benchmark.result {
-                VStack(spacing: 12) {
+                // ── Device Identity ──
+                Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(result.deviceName)
@@ -588,46 +593,62 @@ struct SettingsView: View {
                         Spacer()
                         tierBadge(result)
                     }
+                }
 
-                    Divider()
-
+                // ── Hardware Specs ──
+                Section("Hardware") {
                     HStack(spacing: 0) {
-                        statItem("Memory", value: String(format: "%.0f GB", result.ramGB), icon: "memorychip")
+                        statItem("Memory",
+                                 value: String(format: "%.1f GB", result.ramGB),
+                                 icon: "memorychip")
                         Spacer()
-                        statItem("GPU", value: result.hasGPU ? "Metal" : "None", icon: "gpu")
+                        statItem("GPU Cores",
+                                 value: result.hasGPU ? "\(result.gpuCoreCount)" : "—",
+                                 icon: "gpu")
                         Spacer()
-                        statItem("Storage", value: String(format: "%.0f GB", result.storageFreeGB), icon: "internaldrive")
+                        statItem("Storage",
+                                 value: String(format: "%.1f GB free", result.storageFreeGB),
+                                 icon: "internaldrive")
                     }
+                }
 
+                // ── Compute Performance ──
+                Section("Performance") {
+                    // CPU row
                     HStack {
-                        Text("CPU Performance")
+                        Label("CPU", systemImage: "cpu")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Spacer()
+                            .frame(width: 60, alignment: .leading)
+                        ProgressView(value: min(result.cpuScore / 3.0, 1.0))
+                            .tint(scoreColor(result.cpuScore))
+                        Spacer(minLength: 8)
                         Text(String(format: "%.2f GFLOPS", result.cpuScore))
                             .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(.secondary)
                         Text(scoreLabel(result.cpuScore))
                             .font(.caption)
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(scoreColor(result.cpuScore).opacity(0.15))
                             .foregroundStyle(scoreColor(result.cpuScore))
                             .clipShape(Capsule())
                     }
 
+                    // GPU row
                     if result.hasGPU {
                         HStack {
-                            Text("GPU Performance")
+                            Label("GPU", systemImage: "gpu")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Spacer()
+                                .frame(width: 60, alignment: .leading)
+                            ProgressView(value: min(result.gpuScore / 5.0, 1.0))
+                                .tint(scoreColor(result.gpuScore))
+                            Spacer(minLength: 8)
                             Text(String(format: "%.2f GFLOPS", result.gpuScore))
                                 .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(.secondary)
                             Text(scoreLabel(result.gpuScore))
                                 .font(.caption)
-                                .padding(.horizontal, 8)
+                                .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(scoreColor(result.gpuScore).opacity(0.15))
                                 .foregroundStyle(scoreColor(result.gpuScore))
@@ -636,6 +657,8 @@ struct SettingsView: View {
                     }
 
                     Divider()
+
+                    // Combined AI Score
                     HStack {
                         Text("AI Score")
                             .font(.headline)
@@ -645,49 +668,76 @@ struct SettingsView: View {
                             .foregroundStyle(LamoTheme.Colors.accent)
                     }
                 }
-                .padding(.vertical, 4)
 
+                // ── Recommendations ──
                 if !result.recommendations.isEmpty {
-                    ForEach(result.recommendations) { rec in
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: rec.icon)
-                                .font(.subheadline)
-                                .foregroundStyle(LamoTheme.Colors.accent)
-                                .frame(width: 20)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(rec.title)
-                                    .font(.subheadline.weight(.medium))
-                                Text(rec.detail)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    Section("Recommendations") {
+                        ForEach(result.recommendations) { rec in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: rec.icon)
+                                    .font(.subheadline)
+                                    .foregroundStyle(LamoTheme.Colors.accent)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(rec.title)
+                                        .font(.subheadline.weight(.medium))
+                                    Text(rec.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
+                            .padding(.vertical, 2)
                         }
-                        .padding(.vertical, 2)
                     }
+                }
+            } else if benchmark.isRunning {
+                // ── Progress State ──
+                Section {
+                    VStack(spacing: 16) {
+                        ProgressView(value: benchmark.progress)
+                            .tint(LamoTheme.Colors.accent)
+                        Text(benchmarkProgressLabel(benchmark.progress))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
                 }
             }
 
-            Button {
-                Task { await benchmark.runBenchmark() }
-            } label: {
-                HStack {
-                    if benchmark.isRunning {
-                        ProgressView().controlSize(.small)
-                        Text("Testing…")
-                    } else {
-                        Image(systemName: benchmark.result != nil ? "arrow.clockwise" : "gauge.with.dots.fill")
-                        Text(benchmark.result != nil ? "Test Again" : "Check Performance")
+            // ── Action Button ──
+            Section {
+                Button {
+                    Task { await benchmark.runBenchmark() }
+                } label: {
+                    HStack {
+                        if benchmark.isRunning {
+                            ProgressView().controlSize(.small)
+                            Text("Testing…")
+                        } else {
+                            Image(systemName: benchmark.result != nil ? "arrow.clockwise" : "gauge.with.dots.fill")
+                            Text(benchmark.result != nil ? "Test Again" : "Check Performance")
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .fontWeight(.medium)
                 }
-                .frame(maxWidth: .infinity)
-                .fontWeight(.medium)
+                .disabled(benchmark.isRunning)
+                .foregroundStyle(LamoTheme.Colors.accent)
             }
-            .disabled(benchmark.isRunning)
-            .foregroundStyle(LamoTheme.Colors.accent)
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Device")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func benchmarkProgressLabel(_ progress: Double) -> String {
+        switch progress {
+        case 0..<0.15: return "Collecting device info…"
+        case 0.15..<0.55: return "Testing CPU performance…"
+        case 0.55..<0.85: return "Testing GPU performance…"
+        case 0.85..<1.0: return "Analyzing results…"
+        default: return "Done!"
+        }
     }
 
     // MARK: - Privacy Section
