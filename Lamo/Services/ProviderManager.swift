@@ -52,11 +52,8 @@ final class ProviderManager: ObservableObject {
     }
 
     /// Safe max tokens based on model size and available RAM.
-    /// E4B (3.66 GB) on 8 GB device: cap at 2048 to avoid OOM.
-    /// E2B (2 GB) on 8 GB device: 4096 is fine.
+    /// Always applies a cap to prevent OOM, even when kvCacheAuto is on.
     private func safeMaxTokens(modelPath: String) -> Int? {
-        guard !kvCacheAuto else { return nil }
-
         let modelFileSize: Double
         if let attrs = try? FileManager.default.attributesOfItem(atPath: modelPath),
            let size = attrs[.size] as? Int64 {
@@ -70,7 +67,14 @@ final class ProviderManager: ObservableObject {
         let availableForCache = physicalRAMGB - modelFileSize - 1.5
         let maxSafeTokens = max(1024, Int(availableForCache / 0.3 * 1024))
 
-        let requested = maxNumTokens > 0 ? maxNumTokens : 4096
+        let requested: Int
+        if kvCacheAuto {
+            // Auto mode: use a reasonable default, but still cap by memory
+            requested = 4096
+        } else {
+            requested = maxNumTokens > 0 ? maxNumTokens : 4096
+        }
+
         let capped = min(requested, maxSafeTokens)
 
         // Round down to nearest 256 for cleaner allocation
