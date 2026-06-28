@@ -28,20 +28,30 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                // Engine picker (compact)
+                // App header
+                appHeader
+
+                // Engine picker
                 enginePickerSection
 
-                // All sections as navigation links
+                // AI section (conditional on LiteRT-LM)
                 if vm.selectedProviderType == .litertLM {
-                    navigationSections
+                    aiSection
                 }
 
-                // Privacy (always visible)
+                // System section
+                systemSection
+
+                // Device section
+                deviceLinkSection
+
+                // Privacy
                 privacySection
 
                 // About
                 aboutSection
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -101,6 +111,33 @@ struct SettingsView: View {
             .navigationDestination(for: SettingsSection.self) { section in
                 sectionView(section)
             }
+        }
+    }
+
+    // MARK: - App Header
+
+    private var appHeader: some View {
+        Section {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(LamoTheme.Colors.accent)
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lamo")
+                        .font(.headline)
+                    Text(appVersion)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
         }
     }
 
@@ -167,22 +204,29 @@ struct SettingsView: View {
 
     private var providerManager: ProviderManager { ProviderManager.shared }
 
-    // MARK: - Navigation Sections
+    // MARK: - AI Section
 
-    private var navigationSections: some View {
-        Section {
-            ForEach(SettingsSection.allCases.filter { $0 != .privacy && $0 != .about }, id: \.self) { section in
-                NavigationLink(value: section) {
-                    Label {
-                        Text(section.rawValue)
-                    } icon: {
-                        Image(systemName: sectionIcon(section))
-                            .foregroundStyle(LamoTheme.Colors.accent)
-                    }
+    private var aiSection: some View {
+        Section("AI") {
+            // Models
+            NavigationLink(value: SettingsSection.models) {
+                Label {
+                    Text("Models")
+                } icon: {
+                    settingsIcon("internaldrive", color: .blue)
                 }
             }
 
-            // Import button
+            // Generation
+            NavigationLink(value: SettingsSection.sampler) {
+                Label {
+                    Text("Generation")
+                } icon: {
+                    settingsIcon("sparkles", color: .purple)
+                }
+            }
+
+            // Import
             Button {
                 isImportingModel = true
             } label: {
@@ -191,32 +235,76 @@ struct SettingsView: View {
                         ProgressView().controlSize(.small)
                         Text("Importing…")
                     } else {
-                        Label("Import Model", systemImage: "square.and.arrow.down")
+                        Label {
+                            Text("Import Model")
+                        } icon: {
+                            settingsIcon("square.and.arrow.down", color: .orange)
+                        }
                     }
                 }
-                .foregroundStyle(LamoTheme.Colors.accent)
             }
             .disabled(isCopyingFile)
+        }
+    }
 
-            // Reset
+    // MARK: - System Section
+
+    private var systemSection: some View {
+        Section("System") {
+            NavigationLink(value: SettingsSection.advanced) {
+                Label {
+                    Text("Advanced")
+                } icon: {
+                    settingsIcon("gearshape.2", color: .gray)
+                }
+            }
+
             Button {
                 showResetAlert = true
             } label: {
-                Label("Reset All Settings", systemImage: "arrow.counterclockwise")
+                Label {
+                    Text("Reset All Settings")
+                } icon: {
+                    settingsIcon("arrow.counterclockwise", color: .red)
+                }
             }
             .foregroundStyle(.red)
         }
     }
 
-    private func sectionIcon(_ section: SettingsSection) -> String {
-        switch section {
-        case .engine: return "cpu"
-        case .models: return "internaldrive"
-        case .sampler: return "sparkles"
-        case .advanced: return "gearshape.2"
-        case .device: return "iphone"
-        case .privacy: return "lock.shield"
-        case .about: return "info.circle"
+    // MARK: - Device Link Section
+
+    private var deviceLinkSection: some View {
+        Section("Device") {
+            NavigationLink(value: SettingsSection.device) {
+                Label {
+                    HStack {
+                        Text("Device Info")
+                        Spacer()
+                        if let result = benchmark.result {
+                            Text(result.aiTierLabel)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } icon: {
+                    settingsIcon("iphone", color: .green)
+                }
+            }
+        }
+    }
+
+    // MARK: - Settings Icon Helper
+
+    private func settingsIcon(_ name: String, color: Color) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color)
+                .frame(width: 28, height: 28)
+
+            Image(systemName: name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
         }
     }
 
@@ -242,7 +330,6 @@ struct SettingsView: View {
 
     private var modelsSection: some View {
         List {
-            // Available models
             Section("Downloaded Models") {
                 ForEach(PresetModel.allCases) { model in
                     ModelCardView(model: model, downloadManager: downloadManager)
@@ -251,7 +338,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Model picker
             if !vm.availableModels.isEmpty {
                 Section("Local Model") {
                     Picker(selection: Binding(
@@ -268,7 +354,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Model info
             if let info = vm.modelInfo {
                 Section("Model Info") {
                     LabeledContent("Name", value: info.name)
@@ -277,6 +362,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Models")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -285,7 +371,6 @@ struct SettingsView: View {
 
     private var samplerSection: some View {
         List {
-            // Temperature
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -307,7 +392,6 @@ struct SettingsView: View {
                 Text("Controls randomness in text generation. 0.7 is a good balance.")
             }
 
-            // Top-K
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -328,7 +412,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Top-P
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -346,7 +429,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Reset
             Button {
                 vm.resetSamplerDefaults()
             } label: {
@@ -354,6 +436,7 @@ struct SettingsView: View {
             }
             .foregroundStyle(.red)
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Generation")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -362,7 +445,6 @@ struct SettingsView: View {
 
     private var advancedSection: some View {
         List {
-            // Backend
             Section {
                 Toggle(isOn: $vm.useGPU) {
                     Label("GPU Acceleration", systemImage: "bolt.fill")
@@ -394,7 +476,6 @@ struct SettingsView: View {
                 Text("GPU (Metal) is faster for most models. CPU uses less battery.")
             }
 
-            // KV-Cache
             Section {
                 Toggle(isOn: $vm.kvCacheAuto) {
                     Label("Auto (Recommended)", systemImage: "wand.and.stars")
@@ -427,7 +508,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Speculative Decoding
             if vm.modelInfo?.hasSpeculativeDecoding == true {
                 Section {
                     Toggle(isOn: $vm.speculativeDecoding) {
@@ -446,7 +526,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Vision
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -474,7 +553,6 @@ struct SettingsView: View {
                 Text("Controls image processing quality for multimodal models like Gemma 4.")
             }
 
-            // System Prompt
             Section {
                 TextEditor(text: $vm.systemPrompt)
                     .font(.subheadline)
@@ -488,6 +566,7 @@ struct SettingsView: View {
                 Text("Instructions the model follows. Changes apply to new conversations only.")
             }
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -520,7 +599,6 @@ struct SettingsView: View {
                         statItem("Storage", value: String(format: "%.0f GB", result.storageFreeGB), icon: "internaldrive")
                     }
 
-                    // CPU Score
                     HStack {
                         Text("CPU Performance")
                             .font(.subheadline)
@@ -538,7 +616,6 @@ struct SettingsView: View {
                             .clipShape(Capsule())
                     }
 
-                    // GPU Score
                     if result.hasGPU {
                         HStack {
                             Text("GPU Performance")
@@ -558,7 +635,6 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Combined Score
                     Divider()
                     HStack {
                         Text("AI Score")
@@ -609,6 +685,7 @@ struct SettingsView: View {
             .disabled(benchmark.isRunning)
             .foregroundStyle(LamoTheme.Colors.accent)
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Device")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -642,13 +719,7 @@ struct SettingsView: View {
     // MARK: - About Section
 
     private var aboutSection: some View {
-        Section {
-            HStack {
-                Text("Version")
-                Spacer()
-                Text(appVersion).foregroundStyle(.secondary)
-            }
-
+        Section("About") {
             Link(destination: URL(string: "https://ai.google.dev/edge/litert-lm")!) {
                 HStack {
                     Text("LiteRT-LM by Google")
@@ -674,7 +745,7 @@ struct SettingsView: View {
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "\(version) (\(build))"
+        return "Version \(version) (\(build))"
     }
 
     private func handleModelImport(_ result: Result<[URL], Error>) {
