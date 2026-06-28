@@ -211,7 +211,16 @@ struct SettingsView: View {
             // Models
             NavigationLink(value: SettingsSection.models) {
                 Label {
-                    Text("Models")
+                    HStack {
+                        Text("Models")
+                        Spacer()
+                        if let current = vm.selectedModel {
+                            Text(vm.displayName(for: current))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                 } icon: {
                     settingsIcon("internaldrive", color: .blue)
                 }
@@ -220,30 +229,17 @@ struct SettingsView: View {
             // Generation
             NavigationLink(value: SettingsSection.sampler) {
                 Label {
-                    Text("Generation")
+                    HStack {
+                        Text("Generation")
+                        Spacer()
+                        Text("T:\(String(format: "%.1f", vm.temperature)) K:\(vm.topK)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
                 } icon: {
                     settingsIcon("sparkles", color: .purple)
                 }
             }
-
-            // Import
-            Button {
-                isImportingModel = true
-            } label: {
-                HStack {
-                    if isCopyingFile {
-                        ProgressView().controlSize(.small)
-                        Text("Importing…")
-                    } else {
-                        Label {
-                            Text("Import Model")
-                        } icon: {
-                            settingsIcon("square.and.arrow.down", color: .orange)
-                        }
-                    }
-                }
-            }
-            .disabled(isCopyingFile)
         }
     }
 
@@ -334,16 +330,9 @@ struct SettingsView: View {
 
     private var modelsSection: some View {
         List {
-            Section("Downloaded Models") {
-                ForEach(PresetModel.allCases) { model in
-                    ModelCardView(model: model, downloadManager: downloadManager)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                }
-            }
-
+            // Active model picker
             if !vm.availableModels.isEmpty {
-                Section("Local Model") {
+                Section {
                     Picker(selection: Binding(
                         get: { vm.selectedModel ?? "" },
                         set: { vm.selectedModel = $0.isEmpty ? nil : $0; vm.loadModelInfo() }
@@ -353,11 +342,70 @@ struct SettingsView: View {
                             Text(vm.displayName(for: model)).tag(model)
                         }
                     } label: {
-                        Label("Active Model", systemImage: "internaldrive")
+                        Label("Active Model", systemImage: "bolt.circle.fill")
+                    }
+                } header: {
+                    Text("Active")
+                } footer: {
+                    Text("Model used for inference. Auto-detect picks the best available.")
+                }
+            }
+
+            // Preset models (download)
+            Section("Available Models") {
+                ForEach(PresetModel.allCases) { model in
+                    ModelCardView(model: model, downloadManager: downloadManager, isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                }
+            }
+
+            // Import from Files
+            Section {
+                Button {
+                    isImportingModel = true
+                } label: {
+                    HStack {
+                        if isCopyingFile {
+                            ProgressView().controlSize(.small)
+                            Text("Importing…")
+                        } else {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Import from Files")
+                        }
+                    }
+                }
+                .disabled(isCopyingFile)
+            } footer: {
+                Text("Import .litertlm, .bin, or .tflite model files from your device.")
+            }
+
+            // Local models (imported)
+            let localModels = vm.availableModels.filter { path in
+                !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
+            }
+            if !localModels.isEmpty {
+                Section("Imported Models") {
+                    ForEach(localModels, id: \.self) { path in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(vm.displayName(for: path))
+                                    .font(.body)
+                                Text((path as NSString).lastPathComponent)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if vm.selectedModel == path {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(LamoTheme.Colors.accent)
+                            }
+                        }
                     }
                 }
             }
 
+            // Model info
             if let info = vm.modelInfo {
                 Section("Model Info") {
                     LabeledContent("Name", value: info.name)

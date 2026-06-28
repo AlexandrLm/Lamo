@@ -100,6 +100,19 @@ final class SettingsViewModel: ObservableObject {
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
         self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in."
         refreshModels()
+
+        NotificationCenter.default.addObserver(
+            forName: .selectModel,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let filename = notification.userInfo?["filename"] as? String {
+                let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let path = documents.appendingPathComponent("models").appendingPathComponent(filename).path
+                self?.selectedModel = path
+                self?.loadModelInfo()
+            }
+        }
     }
 
     // MARK: - Actions
@@ -190,4 +203,10 @@ struct ModelInfo {
         let mb = Double(fileSize) / 1_048_576
         return String(format: "%.0f MB", mb)
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let selectModel = Notification.Name("selectModel")
 }

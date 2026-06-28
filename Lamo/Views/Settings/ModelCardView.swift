@@ -3,6 +3,7 @@ import SwiftUI
 struct ModelCardView: View {
     let model: PresetModel
     @ObservedObject var downloadManager: DownloadManager
+    var isActiveModel: Bool = false
     @State private var isExpanded = false
 
     private var downloadState: DownloadManager.DownloadState? {
@@ -48,7 +49,15 @@ struct ModelCardView: View {
 
                 Spacer()
 
-                if isDownloaded {
+                if isActiveModel {
+                    Text("Active")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(themeColor)
+                        .clipShape(Capsule())
+                } else if isDownloaded {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(LamoTheme.Colors.success)
                         .font(.title3)
@@ -194,6 +203,22 @@ struct ModelCardView: View {
                 Spacer()
 
                 if isDownloaded {
+                    if !isActiveModel {
+                        Button {
+                            withAnimation {
+                                NotificationCenter.default.post(
+                                    name: .selectModel,
+                                    object: nil,
+                                    userInfo: ["filename": model.filename]
+                                )
+                            }
+                        } label: {
+                            Label("Use", systemImage: "bolt.circle")
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(themeColor)
+                    }
+
                     Button(role: .destructive) {
                         downloadManager.deleteModel(model)
                     } label: {
