@@ -8,7 +8,6 @@ final class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
 
     @Published var activeDownloads: [String: DownloadState] = [:]
-
     private var tasks: [String: URLSessionDownloadTask] = [:]
     private var observations: [String: NSKeyValueObservation] = [:]
     private var resumeData: [String: Data] = [:]
@@ -22,6 +21,8 @@ final class DownloadManager: ObservableObject {
         var isDownloading: Bool = false
         var error: String? = nil
         var isComplete: Bool = false
+        var retryCount: Int = 0
+        var lastError: String? = nil
 
         var progressPercentage: Int {
             guard totalBytes > 0 else { return Int(progress * 100) }
@@ -42,7 +43,6 @@ final class DownloadManager: ObservableObject {
         config.allowsCellularAccess = true
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
-        config.shouldUseExtendedBackgroundIdleMode = true
         session = URLSession(configuration: config, delegate: DownloadSessionDelegate.shared, delegateQueue: nil)
     }
 
@@ -120,9 +120,27 @@ final class DownloadManager: ObservableObject {
 
     func handleCompletion(filename: String, tempURL: URL?, error: Error?) {
         Task { @MainActor in
+            // Prevent double-handling (race condition between didFinishDownloadingTo and didCompleteWithError)
+            guard self.activeDownloads[filename]?.isComplete != true else { return }
+
             if let error = error {
+                self.activeDownloads[filename]?.lastError = error.localizedDescription
                 self.activeDownloads[filename]?.error = error.localizedDescription
                 self.activeDownloads[filename]?.isDownloading = false
+
+                // Auto-retry up to 3 times for network errors
+                if let urlError = error as? URLError,
+                   [.timedOut, .networkConnectionLost, .notConnectedToInternet].contains(urlError.code),
+                   let retryCount = self.activeDownloads[filename]?.retryCount, retryCount < 3 {
+                    self.activeDownloads[filename]?.retryCount = retryCount + 1
+                    self.activeDownloads[filename]?.error = "Retrying... (attempt \(retryCount + 1)/3)"
+                    self.activeDownloads[filename]?.isDownloading = true
+                    // Wait before retry
+                    try? await Task.sleep(for: .seconds(2))
+                    if let model = DownloadSessionDelegate.shared.pendingModels[filename] {
+                        self.download(model: model)
+                    }
+                }
                 return
             }
 
@@ -143,6 +161,8 @@ final class DownloadManager: ObservableObject {
                 self.activeDownloads[filename]?.isComplete = true
                 self.activeDownloads[filename]?.isDownloading = false
                 self.activeDownloads[filename]?.progress = 1.0
+                self.activeDownloads[filename]?.retryCount = 0
+                self.activeDownloads[filename]?.lastError = nil
                 self.observations.removeValue(forKey: filename)
                 self.tasks.removeValue(forKey: filename)
 
@@ -167,8 +187,13 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         didFinishDownloadingTo location: URL
     ) {
         guard let filename = downloadTask.originalRequest?.url?.lastPathComponent else { return }
+        // Copy temp file immediately — iOS deletes it after this method returns
+        let tempDir = FileManager.default.temporaryDirectory
+        let backupURL = tempDir.appendingPathComponent("lamo_dl_\(filename)")
+        try? FileManager.default.removeItem(at: backupURL)
+        try? FileManager.default.copyItem(at: location, to: backupURL)
         Task { @MainActor in
-            DownloadManager.shared.handleCompletion(filename: filename, tempURL: location, error: nil)
+            DownloadManager.shared.handleCompletion(filename: filename, tempURL: backupURL, error: nil)
         }
     }
 
@@ -179,8 +204,11 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     ) {
         guard let filename = task.originalRequest?.url?.lastPathComponent else { return }
         if let error = error as? URLError, error.code == .cancelled { return }
-        Task { @MainActor in
-            DownloadManager.shared.handleCompletion(filename: filename, tempURL: nil, error: error)
+        // Only report errors — success is handled by didFinishDownloadingTo
+        if let error = error {
+            Task { @MainActor in
+                DownloadManager.shared.handleCompletion(filename: filename, tempURL: nil, error: error)
+            }
         }
     }
 
