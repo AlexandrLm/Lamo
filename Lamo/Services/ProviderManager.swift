@@ -46,38 +46,35 @@ final class ProviderManager: ObservableObject {
     // MARK: - Memory Pressure
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
-    /// Available physical RAM in GB.
-    private var physicalRAMGB: Double {
-        Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
-    }
-
-    /// Safe max tokens based on model size and available RAM.
-    /// Always applies a cap to prevent OOM, even when kvCacheAuto is on.
+    /// Safe max tokens based on ACTUAL available memory at runtime.
+    /// Uses os_proc_available_memory() for real-time data, not heuristics.
     private func safeMaxTokens(modelPath: String) -> Int? {
-        let modelFileSize: Double
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: modelPath),
-           let size = attrs[.size] as? Int64 {
-            modelFileSize = Double(size) / 1_073_741_824
-        } else {
-            modelFileSize = 2.0 // conservative default
-        }
+        // Get real available memory from the OS (iOS 13+)
+        let availableBytes: UInt64
+        #if os(iOS)
+        availableBytes = UInt64(os_proc_available_memory())
+        #else
+        // Fallback for macOS/simulator: physical RAM minus conservative estimate
+        availableBytes = ProcessInfo.processInfo.physicalMemory / 2
+        #endif
 
-        // Rough heuristic: KV-cache ≈ 0.3 GB per 1024 tokens for E4B-class models
-        // Leave 1.5 GB headroom for iOS + app overhead
-        let availableForCache = physicalRAMGB - modelFileSize - 1.5
-        let maxSafeTokens = max(1024, Int(availableForCache / 0.3 * 1024))
+        let availableMB = Double(availableBytes) / (1024 * 1024)
+
+        // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
+        // Use 80% of available memory (leave headroom for system spikes)
+        let usableMB = availableMB * 0.8
+        let maxTokensFromMemory = max(512, Int(usableMB / 300.0 * 1024))
 
         let requested: Int
         if kvCacheAuto {
-            // Auto mode: use a reasonable default, but still cap by memory
             requested = 4096
         } else {
             requested = maxNumTokens > 0 ? maxNumTokens : 4096
         }
 
-        let capped = min(requested, maxSafeTokens)
+        let capped = min(requested, maxTokensFromMemory)
 
-        // Round down to nearest 256 for cleaner allocation
+        // Round down to nearest 256
         return (capped / 256) * 256
     }
 
@@ -243,12 +240,42 @@ final class ProviderManager: ObservableObject {
             resolvedPath = path
         }
 
-        // Pre-flight: check available disk space (model needs ~2x file size for temp files)
+        // Pre-flight: check available disk space
         if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
            let freeBytes = attrs[.systemFreeSize] as? UInt64 {
             let freeGB = Double(freeBytes) / 1_073_741_824
             if freeGB < 1.0 {
                 engineError = "Not enough storage. Free up at least 1 GB."
+                return
+            }
+        }
+
+        // Pre-flight: validate model file size (corrupted files cause C++ null crashes)
+        if let fileAttrs = try? FileManager.default.attributesOfItem(atPath: resolvedPath),
+           let fileSize = fileAttrs[.size] as? Int64 {
+            let fileSizeGB = Double(fileSize) / 1_073_741_824
+            if fileSizeGB < 0.5 {
+                engineError = "Model file too small (\(String(format: "%.2f", fileSizeGB)) GB). Re-download the model."
+                return
+            }
+            // E4B should be ~3.66 GB, E2B ~2 GB — flag if suspiciously small
+            if fileSizeGB < 1.5 {
+                engineError = "Model file appears incomplete (\(String(format: "%.2f", fileSizeGB)) GB). Re-download recommended."
+                return
+            }
+        }
+
+        // Pre-flight: check if device has enough RAM for this model
+        let filename = (resolvedPath as NSString).lastPathComponent
+        if let preset = PresetModel.allCases.first(where: { $0.filename == filename }) {
+            let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+            let requiredGB: Double
+            switch preset {
+            case .gemma4E4B: requiredGB = 6.0
+            case .gemma4E2B: requiredGB = 3.0
+            }
+            if ramGB < requiredGB {
+                engineError = "Device has \(Int(ramGB)) GB RAM but \(preset.displayName) needs ~\(Int(requiredGB)) GB. Use \(PresetModel.gemma4E2B.displayName) instead."
                 return
             }
         }

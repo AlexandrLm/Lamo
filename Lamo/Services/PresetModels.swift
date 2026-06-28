@@ -34,8 +34,8 @@ enum PresetModel: String, CaseIterable, Identifiable {
 
     var fileSizeGB: Double {
         switch self {
-        case .gemma4E4B: return 3.66
-        case .gemma4E2B: return 2.0
+        case .gemma4E4B: return 3.41
+        case .gemma4E2B: return 2.41
         }
     }
 
@@ -133,6 +133,29 @@ enum PresetModel: String, CaseIterable, Identifiable {
         let modelsDir = documents.appendingPathComponent("models")
         let fileURL = modelsDir.appendingPathComponent(filename)
         return FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
+    /// Check if the downloaded file size matches expected (within 5% tolerance).
+    /// Corrupted/incomplete downloads cause C++ null pointer crashes.
+    var isFileValid: Bool {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        let fileURL = modelsDir.appendingPathComponent(filename)
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let size = attrs[.size] as? Int64 else { return false }
+        let expectedBytes = Int64(fileSizeGB * 1_073_741_824)
+        let tolerance = expectedBytes / 20  // 5%
+        return abs(size - expectedBytes) < tolerance
+    }
+
+    /// Human-readable file size on disk
+    var actualFileSizeString: String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let modelsDir = documents.appendingPathComponent("models")
+        let fileURL = modelsDir.appendingPathComponent(filename)
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let size = attrs[.size] as? Int64 else { return "unknown" }
+        return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
     /// Local path after download
