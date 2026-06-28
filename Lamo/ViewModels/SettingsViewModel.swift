@@ -51,6 +51,17 @@ final class SettingsViewModel: ObservableObject {
         didSet { defaults.set(maxNumTokens, forKey: "litertLMMaxNumTokens") }
     }
 
+    /// Whether KV-cache is set to auto (use model default).
+    @Published var kvCacheAuto: Bool {
+        didSet {
+            defaults.set(kvCacheAuto, forKey: "litertLMKvCacheAuto")
+            if kvCacheAuto {
+                // Set a very high value to signal "unlimited"
+                defaults.set(0, forKey: "litertLMMaxNumTokens")
+            }
+        }
+    }
+
     // MARK: - Speculative Decoding
 
     @Published var speculativeDecoding: Bool {
@@ -84,6 +95,7 @@ final class SettingsViewModel: ObservableObject {
         self.topP = defaults.object(forKey: "litertLMTopP") as? Double ?? 0.95
         self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 0.7
         self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096
+        self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
         self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
         self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in."
@@ -113,6 +125,7 @@ final class SettingsViewModel: ObservableObject {
     func resetAllDefaults() {
         useGPU = true
         cpuThreadCount = 4
+        kvCacheAuto = true
         topK = 40
         topP = 0.95
         temperature = 0.7

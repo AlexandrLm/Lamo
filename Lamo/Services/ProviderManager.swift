@@ -104,6 +104,14 @@ final class ProviderManager: ObservableObject {
         }
     }
 
+    var kvCacheAuto: Bool {
+        get { UserDefaults.standard.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "litertLMKvCacheAuto")
+            invalidateEngine()
+        }
+    }
+
     var speculativeDecoding: Bool {
         get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false }
         set {
@@ -175,11 +183,20 @@ final class ProviderManager: ObservableObject {
 
         let resolvedPath: String
         if let custom = litertLMModelPath {
-            guard FileManager.default.fileExists(atPath: custom) else {
-                engineError = "Model file not found: \(custom)"
-                return
+            // If it's a full path, check directly
+            if FileManager.default.fileExists(atPath: custom) {
+                resolvedPath = custom
+            } else {
+                // If it's just a filename, look in ~/Documents/models/
+                let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let modelsDir = documents.appendingPathComponent("models")
+                let fullPath = modelsDir.appendingPathComponent(custom).path
+                guard FileManager.default.fileExists(atPath: fullPath) else {
+                    engineError = "Model file not found: \(custom)"
+                    return
+                }
+                resolvedPath = fullPath
             }
-            resolvedPath = custom
         } else {
             guard let path = Self.findFirstModel() else {
                 engineError = "No .litertlm model found in ~/Documents/models/"
@@ -201,7 +218,7 @@ final class ProviderManager: ObservableObject {
             backend = .cpu(threadCount: cpuThreadCount)
         }
 
-        let maxTokens = maxNumTokens > 0 ? maxNumTokens : nil
+        let maxTokens: Int? = kvCacheAuto ? nil : (maxNumTokens > 0 ? maxNumTokens : nil)
 
         guard let engineConfig = try? LiteRTLM.EngineConfig(
             modelPath: resolvedPath,

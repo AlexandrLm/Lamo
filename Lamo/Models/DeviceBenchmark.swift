@@ -18,7 +18,9 @@ final class DeviceBenchmark: ObservableObject {
         let storageFreeGB: Double
         let hasGPU: Bool
         let gpuCoreCount: Int
-        let computeScore: Double
+        let cpuScore: Double
+        let gpuScore: Double
+        let combinedScore: Double
         let aiTier: AITier
         let recommendations: [Recommendation]
 
@@ -69,8 +71,8 @@ final class DeviceBenchmark: ObservableObject {
         errorMessage = nil
 
         do {
-            // Phase 1: Device info (instant)
-            progress = 0.1
+            // Phase 1: Device info
+            progress = 0.05
             let deviceName = await getDeviceName()
             let chipName = getChipName()
             let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
@@ -79,16 +81,22 @@ final class DeviceBenchmark: ObservableObject {
             let hasGPU = gpuInfo.hasGPU
             let gpuCores = gpuInfo.coreCount
 
-            progress = 0.3
+            // Phase 2: CPU benchmark
+            progress = 0.15
+            let cpuScore = runCPUBenchmark()
 
-            // Phase 2: Compute benchmark
-            let computeScore = runComputeTest()
-            progress = 0.8
+            // Phase 3: GPU benchmark
+            progress = 0.55
+            let gpuScore = hasGPU ? runGPUBenchmark() : 0
 
-            // Phase 3: Rate the device
-            let tier = rateDevice(ramGB: ramGB, computeScore: computeScore, gpuCores: gpuCores, hasGPU: hasGPU)
+            // Phase 4: Combined score (weighted: 40% CPU, 60% GPU for AI workloads)
+            let combinedScore = hasGPU ? (cpuScore * 0.4 + gpuScore * 0.6) : cpuScore
 
-            // Phase 4: Build recommendations
+            // Phase 5: Rate the device
+            progress = 0.85
+            let tier = rateDevice(ramGB: ramGB, combinedScore: combinedScore, gpuCores: gpuCores, hasGPU: hasGPU)
+
+            // Phase 6: Recommendations
             let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
 
             progress = 1.0
@@ -100,7 +108,9 @@ final class DeviceBenchmark: ObservableObject {
                 storageFreeGB: storageFree,
                 hasGPU: hasGPU,
                 gpuCoreCount: gpuCores,
-                computeScore: computeScore,
+                cpuScore: cpuScore,
+                gpuScore: gpuScore,
+                combinedScore: combinedScore,
                 aiTier: tier,
                 recommendations: recs
             )
@@ -153,12 +163,12 @@ final class DeviceBenchmark: ObservableObject {
         return (true, cores)
     }
 
-    // MARK: - Compute Benchmark
+    // MARK: - CPU Benchmark
 
-    /// Runs a matrix multiplication benchmark to measure raw compute.
-    /// Returns time in seconds (lower = better).
-    private func runComputeTest() -> Double {
+    /// Matrix multiplication benchmark. Returns GFLOPS (higher = better).
+    private func runCPUBenchmark() -> Double {
         let size = 256
+        let iterations = 3
         var a = [Float](repeating: 0, count: size * size)
         var b = [Float](repeating: 0, count: size * size)
         var c = [Float](repeating: 0, count: size * size)
@@ -168,39 +178,137 @@ final class DeviceBenchmark: ObservableObject {
             b[i] = Float.random(in: -1...1)
         }
 
-        let start = CFAbsoluteTimeGetCurrent()
+        var totalTime: CFAbsoluteTime = 0
 
-        for i in 0..<size {
-            for k in 0..<size {
-                let aik = a[i * size + k]
-                for j in 0..<size {
-                    c[i * size + j] += aik * b[k * size + j]
+        for _ in 0..<iterations {
+            c = [Float](repeating: 0, count: size * size)
+            let start = CFAbsoluteTimeGetCurrent()
+
+            for i in 0..<size {
+                for k in 0..<size {
+                    let aik = a[i * size + k]
+                    for j in 0..<size {
+                        c[i * size + j] += aik * b[k * size + j]
+                    }
                 }
             }
+
+            totalTime += CFAbsoluteTimeGetCurrent() - start
+            _ = c[0]
         }
 
-        let elapsed = CFAbsoluteTimeGetCurrent() - start
-        _ = c[0]
+        let avgTime = totalTime / Double(iterations)
+        // GFLOPS = 2 * size^3 / time_in_seconds / 1e9
+        let flops = 2.0 * Double(size) * Double(size) * Double(size)
+        let gflops = flops / avgTime / 1_000_000_000
 
-        return elapsed
+        return gflops
+    }
+
+    // MARK: - GPU Benchmark
+
+    /// Metal GPU benchmark using vector add compute shader. Returns GFLOPS.
+    private func runGPUBenchmark() -> Double {
+        guard let device = MTLCreateSystemDefaultDevice() else { return 0 }
+        guard let commandQueue = device.makeCommandQueue() else { return 0 }
+
+        let count = 1_000_000
+        let iterations = 10
+
+        // Create buffers
+        guard let bufferA = device.makeBuffer(length: count * MemoryLayout<Float>.size, options: .storageModeShared),
+              let bufferB = device.makeBuffer(length: count * MemoryLayout<Float>.size, options: .storageModeShared),
+              let bufferC = device.makeBuffer(length: count * MemoryLayout<Float>.size, options: .storageModeShared) else {
+            return 0
+        }
+
+        // Fill with random values
+        let ptrA = bufferA.contents().bindMemory(to: Float.self, capacity: count)
+        let ptrB = bufferB.contents().bindMemory(to: Float.self, capacity: count)
+        for i in 0..<count {
+            ptrA[i] = Float.random(in: -1...1)
+            ptrB[i] = Float.random(in: -1...1)
+        }
+
+        // Simple compute shader for vector addition (C = A + B)
+        let shaderSource = """
+        #include <metal_stdlib>
+        using namespace metal;
+        kernel void vectorAdd(device float* A [[buffer(0)]],
+                             device float* B [[buffer(1)]],
+                             device float* C [[buffer(2)]],
+                             uint id [[thread_position_in_grid]]) {
+            C[id] = A[id] + B[id];
+        }
+        """
+
+        guard let library = try? device.makeLibrary(source: shaderSource, options: nil),
+              let function = library.makeFunction(name: "vectorAdd"),
+              let pipeline = try? device.makeComputePipelineState(function: function) else {
+            return 0
+        }
+
+        // Warm up
+        if let commandBuffer = commandQueue.makeCommandBuffer(),
+           let encoder = commandBuffer.makeComputeCommandEncoder() {
+            encoder.setComputePipelineState(pipeline)
+            encoder.setBuffer(bufferA, offset: 0, index: 0)
+            encoder.setBuffer(bufferB, offset: 0, index: 1)
+            encoder.setBuffer(bufferC, offset: 0, index: 2)
+            let gridSize = MTLSize(width: count, height: 1, depth: 1)
+            let threadGroupSize = MTLSize(width: min(pipeline.maxTotalThreadsPerThreadgroup, count), height: 1, depth: 1)
+            encoder.dispatchThreads(gridSize, threadsPerThreadgroup: threadGroupSize)
+            encoder.endEncoding()
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+        }
+
+        // Benchmark
+        var totalTime: CFAbsoluteTime = 0
+        for _ in 0..<iterations {
+            guard let commandBuffer = commandQueue.makeCommandBuffer(),
+                  let encoder = commandBuffer.makeComputeCommandEncoder() else { continue }
+            let start = CFAbsoluteTimeGetCurrent()
+            encoder.setComputePipelineState(pipeline)
+            encoder.setBuffer(bufferA, offset: 0, index: 0)
+            encoder.setBuffer(bufferB, offset: 0, index: 1)
+            encoder.setBuffer(bufferC, offset: 0, index: 2)
+            let gridSize = MTLSize(width: count, height: 1, depth: 1)
+            let threadGroupSize = MTLSize(width: min(pipeline.maxTotalThreadsPerThreadgroup, count), height: 1, depth: 1)
+            encoder.dispatchThreads(gridSize, threadsPerThreadgroup: threadGroupSize)
+            encoder.endEncoding()
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            totalTime += CFAbsoluteTimeGetCurrent() - start
+        }
+
+        let avgTime = totalTime / Double(iterations)
+        // GFLOPS = 2 * count / time / 1e9 (add is 2 FLOPS per element)
+        let flops = 2.0 * Double(count)
+        let gflops = flops / avgTime / 1_000_000_000
+
+        return gflops
     }
 
     // MARK: - Rating
 
-    private func rateDevice(ramGB: Double, computeScore: Double, gpuCores: Int, hasGPU: Bool) -> AITier {
+    private func rateDevice(ramGB: Double, combinedScore: Double, gpuCores: Int, hasGPU: Bool) -> AITier {
         var score = 0
 
+        // RAM scoring
         if ramGB >= 7 { score += 3 }
         else if ramGB >= 5 { score += 2 }
         else if ramGB >= 3 { score += 1 }
 
+        // GPU scoring
         if hasGPU {
             score += gpuCores >= 5 ? 2 : 1
         }
 
-        if computeScore < 0.5 { score += 3 }
-        else if computeScore < 1.0 { score += 2 }
-        else if computeScore < 2.0 { score += 1 }
+        // Compute scoring (GFLOPS thresholds)
+        if combinedScore >= 2.0 { score += 3 }
+        else if combinedScore >= 1.0 { score += 2 }
+        else if combinedScore >= 0.5 { score += 1 }
 
         if score >= 7 { return .excellent }
         if score >= 5 { return .good }
@@ -242,7 +350,7 @@ final class DeviceBenchmark: ObservableObject {
 
         if !hasGPU {
             recs.append(Recommendation(
-                icon: "gpu",
+                icon: "cpu",
                 title: "No GPU Detected",
                 detail: "GPU acceleration is unavailable. Inference will use CPU only."
             ))

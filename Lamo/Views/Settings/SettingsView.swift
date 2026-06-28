@@ -396,27 +396,35 @@ struct SettingsView: View {
 
             // KV-Cache
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Max Tokens")
-                        Spacer()
-                        Text("\(vm.maxNumTokens)")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                Toggle(isOn: $vm.kvCacheAuto) {
+                    Label("Auto (Recommended)", systemImage: "wand.and.stars")
+                }
+                .tint(LamoTheme.Colors.accent)
+
+                if !vm.kvCacheAuto {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Max Tokens")
+                            Spacer()
+                            Text("\(vm.maxNumTokens)")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: Binding(
+                            get: { Double(vm.maxNumTokens) },
+                            set: { vm.maxNumTokens = Int($0) }
+                        ), in: 1024...16384, step: 256)
+                            .tint(LamoTheme.Colors.accent)
                     }
-                    Slider(value: Binding(
-                        get: { Double(vm.maxNumTokens) },
-                        set: { vm.maxNumTokens = Int($0) }
-                    ), in: 1024...16384, step: 256)
-                        .tint(LamoTheme.Colors.accent)
-                    Text("Max context window. Higher = longer conversations but more memory.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             } header: {
                 Text("KV-Cache")
             } footer: {
-                Text("Controls the KV-cache size. Larger values allow longer conversations but use more RAM.")
+                if vm.kvCacheAuto {
+                    Text("Uses model's recommended context size. Best for most users.")
+                } else {
+                    Text("Larger values = longer conversations but more RAM. 4096 is a good default.")
+                }
             }
 
             // Speculative Decoding
@@ -512,21 +520,53 @@ struct SettingsView: View {
                         statItem("Storage", value: String(format: "%.0f GB", result.storageFreeGB), icon: "internaldrive")
                     }
 
+                    // CPU Score
                     HStack {
-                        Text("Compute Speed")
+                        Text("CPU Performance")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text(String(format: "%.2fs", result.computeScore))
+                        Text(String(format: "%.2f GFLOPS", result.cpuScore))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text(computeLabel(result.computeScore))
+                        Text(scoreLabel(result.cpuScore))
                             .font(.caption)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
-                            .background(computeColor(result.computeScore).opacity(0.15))
-                            .foregroundStyle(computeColor(result.computeScore))
+                            .background(scoreColor(result.cpuScore).opacity(0.15))
+                            .foregroundStyle(scoreColor(result.cpuScore))
                             .clipShape(Capsule())
+                    }
+
+                    // GPU Score
+                    if result.hasGPU {
+                        HStack {
+                            Text("GPU Performance")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(String(format: "%.2f GFLOPS", result.gpuScore))
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Text(scoreLabel(result.gpuScore))
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(scoreColor(result.gpuScore).opacity(0.15))
+                                .foregroundStyle(scoreColor(result.gpuScore))
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    // Combined Score
+                    Divider()
+                    HStack {
+                        Text("AI Score")
+                            .font(.headline)
+                        Spacer()
+                        Text(String(format: "%.2f GFLOPS", result.combinedScore))
+                            .font(.headline.monospacedDigit())
+                            .foregroundStyle(LamoTheme.Colors.accent)
                     }
                 }
                 .padding(.vertical, 4)
@@ -721,17 +761,17 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func computeLabel(_ seconds: Double) -> String {
-        if seconds < 0.5 { return "Fast" }
-        if seconds < 1.0 { return "Normal" }
-        if seconds < 2.0 { return "Slow" }
-        return "Very Slow"
+    private func scoreLabel(_ gflops: Double) -> String {
+        if gflops >= 2.0 { return "Excellent" }
+        if gflops >= 1.0 { return "Good" }
+        if gflops >= 0.5 { return "Moderate" }
+        return "Slow"
     }
 
-    private func computeColor(_ seconds: Double) -> Color {
-        if seconds < 0.5 { return .green }
-        if seconds < 1.0 { return .blue }
-        if seconds < 2.0 { return .orange }
+    private func scoreColor(_ gflops: Double) -> Color {
+        if gflops >= 2.0 { return .green }
+        if gflops >= 1.0 { return .blue }
+        if gflops >= 0.5 { return .orange }
         return .red
     }
 }
