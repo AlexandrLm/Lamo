@@ -13,6 +13,7 @@ final class DownloadManager: ObservableObject {
     private var observations: [String: NSKeyValueObservation] = [:]
     private var resumeData: [String: Data] = [:]
     private let session: URLSession
+    private let backgroundSessionID = "com.lamo.download"
 
     struct DownloadState {
         var progress: Double = 0
@@ -23,8 +24,8 @@ final class DownloadManager: ObservableObject {
         var isComplete: Bool = false
 
         var progressPercentage: Int {
-            guard totalBytes > 0 else { return 0 }
-            return Int(bytesWritten * 100 / totalBytes)
+            guard totalBytes > 0 else { return Int(progress * 100) }
+            return Int(progress * 100)
         }
 
         var downloadedSizeString: String {
@@ -37,9 +38,12 @@ final class DownloadManager: ObservableObject {
     }
 
     init() {
-        let config = URLSessionConfiguration.default
+        let config = URLSessionConfiguration.background(withIdentifier: backgroundSessionID)
         config.allowsCellularAccess = true
-        session = URLSession(configuration: config)
+        config.isDiscretionary = false
+        config.sessionSendsLaunchEvents = true
+        config.shouldUseExtendedBackgroundIdleMode = true
+        session = URLSession(configuration: config, delegate: DownloadSessionDelegate.shared, delegateQueue: nil)
     }
 
     func download(model: PresetModel) {
@@ -57,22 +61,17 @@ final class DownloadManager: ObservableObject {
         let modelsDir = documents.appendingPathComponent("models")
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
 
-        let destination = modelsDir.appendingPathComponent(model.filename)
-
         activeDownloads[model.filename] = DownloadState(isDownloading: true)
 
         let task: URLSessionDownloadTask
         if let data = resumeData.removeValue(forKey: model.filename) {
-            // Resume from saved data
-            task = session.downloadTask(withResumeData: data) { [weak self] tempURL, response, error in
-                self?.handleDownloadCompletion(model: model, tempURL: tempURL, response: response, error: error)
-            }
+            task = session.downloadTask(withResumeData: data)
         } else {
-            // Fresh download
-            task = session.downloadTask(with: url) { [weak self] tempURL, response, error in
-                self?.handleDownloadCompletion(model: model, tempURL: tempURL, response: response, error: error)
-            }
+            task = session.downloadTask(with: url)
         }
+
+        // Store metadata for delegate
+        DownloadSessionDelegate.shared.pendingModels[model.filename] = model
 
         // Track progress
         let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
@@ -89,7 +88,6 @@ final class DownloadManager: ObservableObject {
     }
 
     func cancelDownload(model: PresetModel) {
-        // Save resume data before cancelling
         if let task = tasks[model.filename] {
             let semaphore = DispatchSemaphore(value: 0)
             var savedData: Data?
@@ -114,53 +112,87 @@ final class DownloadManager: ObservableObject {
         try? FileManager.default.removeItem(at: fileURL)
         activeDownloads.removeValue(forKey: model.filename)
 
-        // If this was the active model, invalidate engine so it reloads
-        // litertLMModelPath stores just the filename, compare with model.filename
         if ProviderManager.shared.litertLMModelPath == model.filename {
             ProviderManager.shared.litertLMModelPath = nil
             ProviderManager.shared.invalidateEngine()
         }
     }
 
-    private func handleDownloadCompletion(
-        model: PresetModel,
-        tempURL: URL?,
-        response: URLResponse?,
-        error: Error?
-    ) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-
+    func handleCompletion(filename: String, tempURL: URL?, error: Error?) {
+        Task { @MainActor in
             if let error = error {
-                self.activeDownloads[model.filename]?.error = error.localizedDescription
-                self.activeDownloads[model.filename]?.isDownloading = false
+                self.activeDownloads[filename]?.error = error.localizedDescription
+                self.activeDownloads[filename]?.isDownloading = false
                 return
             }
 
             guard let tempURL = tempURL else {
-                self.activeDownloads[model.filename]?.error = "Download failed: no data"
-                self.activeDownloads[model.filename]?.isDownloading = false
+                self.activeDownloads[filename]?.error = "Download failed: no data"
+                self.activeDownloads[filename]?.isDownloading = false
                 return
             }
 
             let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let destination = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
+            let destination = documents.appendingPathComponent("models").appendingPathComponent(filename)
 
             do {
                 if FileManager.default.fileExists(atPath: destination.path) {
                     try FileManager.default.removeItem(at: destination)
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destination)
-                self.activeDownloads[model.filename]?.isComplete = true
-                self.activeDownloads[model.filename]?.isDownloading = false
-                self.activeDownloads[model.filename]?.progress = 1.0
+                self.activeDownloads[filename]?.isComplete = true
+                self.activeDownloads[filename]?.isDownloading = false
+                self.activeDownloads[filename]?.progress = 1.0
+                self.observations.removeValue(forKey: filename)
+                self.tasks.removeValue(forKey: filename)
 
-                // Notify ProviderManager to reload engine with the new model
                 ProviderManager.shared.reloadEngine()
             } catch {
-                self.activeDownloads[model.filename]?.error = error.localizedDescription
-                self.activeDownloads[model.filename]?.isDownloading = false
+                self.activeDownloads[filename]?.error = error.localizedDescription
+                self.activeDownloads[filename]?.isDownloading = false
             }
         }
     }
+}
+
+// MARK: - Background Session Delegate
+
+final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
+    static let shared = DownloadSessionDelegate()
+    var pendingModels: [String: PresetModel] = [:]
+
+    nonisolated func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let filename = downloadTask.originalRequest?.url?.lastPathComponent else { return }
+        Task { @MainActor in
+            DownloadManager.shared.handleCompletion(filename: filename, tempURL: location, error: nil)
+        }
+    }
+
+    nonisolated func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard let filename = task.originalRequest?.url?.lastPathComponent else { return }
+        if let error = error as? URLError, error.code == .cancelled { return }
+        Task { @MainActor in
+            DownloadManager.shared.handleCompletion(filename: filename, tempURL: nil, error: error)
+        }
+    }
+
+    nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        Task { @MainActor in
+            NotificationCenter.default.post(name: .backgroundDownloadComplete, object: nil)
+        }
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let backgroundDownloadComplete = Notification.Name("backgroundDownloadComplete")
 }

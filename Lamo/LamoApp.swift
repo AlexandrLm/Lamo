@@ -4,7 +4,9 @@ import SwiftData
 @main
 struct LamoApp: App {
     init() {
-        // Pre-initialize the LiteRT-LM engine in background.
+        // Pre-initialize DownloadManager to handle background sessions
+        _ = DownloadManager.shared
+
         Task {
             await ProviderManager.shared.initializeEngineIfNeeded()
         }

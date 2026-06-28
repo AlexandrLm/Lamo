@@ -36,12 +36,46 @@ final class ProviderManager: ObservableObject {
     static let shared = ProviderManager()
 
     // MARK: - Published State
-
     /// Whether the engine is currently loaded and ready.
     @Published var isEngineReady: Bool = false
-
     /// Error message if engine initialization failed.
     @Published var engineError: String?
+    /// Whether the device is under memory pressure.
+    @Published var isMemoryPressure: Bool = false
+
+    // MARK: - Memory Pressure
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
+
+    /// Available physical RAM in GB.
+    private var physicalRAMGB: Double {
+        Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+    }
+
+    /// Safe max tokens based on model size and available RAM.
+    /// E4B (3.66 GB) on 8 GB device: cap at 2048 to avoid OOM.
+    /// E2B (2 GB) on 8 GB device: 4096 is fine.
+    private func safeMaxTokens(modelPath: String) -> Int? {
+        guard !kvCacheAuto else { return nil }
+
+        let modelFileSize: Double
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: modelPath),
+           let size = attrs[.size] as? Int64 {
+            modelFileSize = Double(size) / 1_073_741_824
+        } else {
+            modelFileSize = 2.0 // conservative default
+        }
+
+        // Rough heuristic: KV-cache ≈ 0.3 GB per 1024 tokens for E4B-class models
+        // Leave 1.5 GB headroom for iOS + app overhead
+        let availableForCache = physicalRAMGB - modelFileSize - 1.5
+        let maxSafeTokens = max(1024, Int(availableForCache / 0.3 * 1024))
+
+        let requested = maxNumTokens > 0 ? maxNumTokens : 4096
+        let capped = min(requested, maxSafeTokens)
+
+        // Round down to nearest 256 for cleaner allocation
+        return (capped / 256) * 256
+    }
 
     // MARK: - Settings (persisted via UserDefaults)
 
@@ -205,6 +239,16 @@ final class ProviderManager: ObservableObject {
             resolvedPath = path
         }
 
+        // Pre-flight: check available disk space (model needs ~2x file size for temp files)
+        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+           let freeBytes = attrs[.systemFreeSize] as? UInt64 {
+            let freeGB = Double(freeBytes) / 1_073_741_824
+            if freeGB < 1.0 {
+                engineError = "Not enough storage. Free up at least 1 GB."
+                return
+            }
+        }
+
         // Enable speculative decoding experimental flag if requested
         if speculativeDecoding {
             LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
@@ -218,7 +262,8 @@ final class ProviderManager: ObservableObject {
             backend = .cpu(threadCount: cpuThreadCount)
         }
 
-        let maxTokens: Int? = kvCacheAuto ? nil : (maxNumTokens > 0 ? maxNumTokens : nil)
+        // Use safe token limit to prevent OOM on larger models
+        let maxTokens = safeMaxTokens(modelPath: resolvedPath)
 
         guard let engineConfig = try? LiteRTLM.EngineConfig(
             modelPath: resolvedPath,
@@ -249,6 +294,32 @@ final class ProviderManager: ObservableObject {
         cachedProvider = provider
         chatService = ChatService(provider: provider)
         isEngineReady = true
+
+        // Start monitoring memory pressure after engine loads
+        startMemoryPressureMonitoring()
+    }
+
+    // MARK: - Memory Pressure
+
+    private func startMemoryPressureMonitoring() {
+        memoryPressureSource?.cancel()
+
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.isMemoryPressure = true
+                // Release conversation cache to free memory
+                if let provider = self.cachedProvider as? LiteRTLMProvider {
+                    provider.invalidateConversationCache()
+                }
+            }
+        }
+        source.resume()
+        memoryPressureSource = source
     }
 
     /// Invalidates the cached engine. Next inference will reload from disk.
