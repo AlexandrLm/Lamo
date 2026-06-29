@@ -94,7 +94,7 @@ final class SettingsViewModel: ObservableObject {
         self.topK = defaults.object(forKey: "litertLMTopK") as? Int ?? 40
         self.topP = defaults.object(forKey: "litertLMTopP") as? Double ?? 0.95
         self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 0.7
-        self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096
+        self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 2048
         self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
         self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560

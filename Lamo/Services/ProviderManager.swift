@@ -62,16 +62,16 @@ final class ProviderManager: ObservableObject {
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
         // Adaptive safety factor: more RAM available → can use more for KV-cache
-        // < 3 GB: very tight (E4B on loaded 8GB iPhone) → 40%
-        // < 4.5 GB: tight (E4B with some headroom) → 55%
-        // >= 4.5 GB: comfortable (E2B or unloaded device) → 70%
+        // < 2 GB: critical (E4B on loaded 8GB iPhone) → 30%
+        // < 3 GB: tight (E4B with some headroom) → 45%
+        // >= 3 GB: comfortable (E2B or unloaded device) → 60%
         let safetyFactor: Double
-        if availableMB < 3000 {
-            safetyFactor = 0.40
-        } else if availableMB < 4500 {
-            safetyFactor = 0.55
+        if availableMB < 2000 {
+            safetyFactor = 0.30
+        } else if availableMB < 3000 {
+            safetyFactor = 0.45
         } else {
-            safetyFactor = 0.70
+            safetyFactor = 0.60
         }
 
         // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
@@ -80,9 +80,11 @@ final class ProviderManager: ObservableObject {
 
         let requested: Int
         if kvCacheAuto {
-            requested = 4096
+            // Auto mode: start conservative, let user increase if stable
+            // 2048 tokens ≈ 600 MB KV-cache — safe for E4B on 8GB iPhone
+            requested = 2048
         } else {
-            requested = maxNumTokens > 0 ? maxNumTokens : 4096
+            requested = maxNumTokens > 0 ? maxNumTokens : 2048
         }
 
         let capped = min(requested, maxTokensFromMemory)
@@ -147,7 +149,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var maxNumTokens: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096 }
+        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 2048 }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMMaxNumTokens")
             invalidateEngine()

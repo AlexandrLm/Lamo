@@ -182,31 +182,47 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         engine: LiteRTLM.Engine,
         messages: [ChatMessage]
     ) async throws -> LiteRTLM.Conversation {
+        let pm = ProviderManager.shared
+
+        // Build message history — skip last (current user message)
         var initialMessages: [LiteRTLM.Message] = []
         for msg in messages.dropLast() {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
             initialMessages.append(LiteRTLM.Message(msg.content, role: role))
         }
 
-        // Read sampler settings from ProviderManager
-        let pm = ProviderManager.shared
+        // Sampler config — clamp values to safe ranges for Gemma 4
+        // topK: 1...100 (Gemma default is 40)
+        // temperature: 0.0...2.0 (Gemma default is 0.7)
+        let safeTopK = max(1, min(pm.topK, 100))
+        let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
+        let safeTopP: Float = max(0.0, min(Float(pm.topP), 1.0))
 
         let samplerConfig = try LiteRTLM.SamplerConfig(
-            topK: pm.topK,
-            topP: Float(pm.topP),
-            temperature: Float(pm.temperature),
+            topK: safeTopK,
+            topP: safeTopP,
+            temperature: safeTemp,
             seed: Int.random(in: 0..<Int(Int32.max))
         )
 
-        let systemMessage = LiteRTLM.Message(
-            pm.systemPrompt,
-            role: .system
-        )
+        // Try minimal config first — no system message, no tools.
+        // Gemma 4 may crash on system message or empty tools array.
+        // System prompt is injected as first user message instead.
+        var allMessages: [LiteRTLM.Message] = []
+        
+        // Inject system prompt as first user message
+        if !pm.systemPrompt.isEmpty {
+            allMessages.append(LiteRTLM.Message(pm.systemPrompt, role: .user))
+        }
+        
+        // Add conversation history
+        for msg in messages.dropLast() {
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            allMessages.append(LiteRTLM.Message(msg.content, role: role))
+        }
 
         let conversationConfig = LiteRTLM.ConversationConfig(
-            systemMessage: systemMessage,
-            initialMessages: initialMessages,
-            tools: [],
+            initialMessages: allMessages,
             samplerConfig: samplerConfig
         )
 
