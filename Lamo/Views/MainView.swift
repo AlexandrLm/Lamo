@@ -35,6 +35,7 @@ struct MainView: View {
         .onAppear {
             if !hasAppeared {
                 hasAppeared = true
+                resetLeftoverStreamingState()
                 cleanupEmptyConversations()
                 startNewChat()
             }
@@ -143,6 +144,13 @@ struct MainView: View {
                 modelContext.delete(conv)
             }
         }
+        try? modelContext.save()
+    }
+
+    private func resetLeftoverStreamingState() {
+        let descriptor = FetchDescriptor<Message>(predicate: #Predicate { $0.isStreaming })
+        guard let streaming = try? modelContext.fetch(descriptor) else { return }
+        for msg in streaming { msg.isStreaming = false }
         try? modelContext.save()
     }
 }

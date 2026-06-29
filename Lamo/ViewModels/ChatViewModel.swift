@@ -15,14 +15,13 @@ final class ChatViewModel {
     private let conversation: Conversation
     private var streamingMessageID: UUID?
 
+    private let chatService: ChatService
+
     init(conversation: Conversation, modelContext: ModelContext) {
         self.conversation = conversation
         self.modelContext = modelContext
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
-    }
-
-    private var chatService: ChatService {
-        ChatService(provider: ProviderManager.shared.currentProvider)
+        self.chatService = ChatService(provider: ProviderManager.shared.currentProvider)
     }
 
     func send() async {
@@ -152,6 +151,10 @@ final class ChatViewModel {
     }
 
     private func save() {
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("[Lamo] SwiftData save error: \\(error)")
+        }
     }
 }

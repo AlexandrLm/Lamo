@@ -219,27 +219,14 @@ final class ProviderManager: ObservableObject {
         isEngineReady = false
 
         let resolvedPath: String
-        if let custom = litertLMModelPath {
-            // If it's a full path, check directly
-            if FileManager.default.fileExists(atPath: custom) {
-                resolvedPath = custom
-            } else {
-                // If it's just a filename, look in ~/Documents/models/
-                let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                let modelsDir = documents.appendingPathComponent("models")
-                let fullPath = modelsDir.appendingPathComponent(custom).path
-                guard FileManager.default.fileExists(atPath: fullPath) else {
-                    engineError = "Model file not found: \(custom)"
-                    return
-                }
-                resolvedPath = fullPath
-            }
-        } else {
-            guard let path = Self.findFirstModel() else {
-                engineError = "No .litertlm model found in ~/Documents/models/"
-                return
-            }
+        if let path = Self.resolveModelPath(custom: litertLMModelPath) {
             resolvedPath = path
+        } else if litertLMModelPath != nil {
+            engineError = "Model file not found: \(litertLMModelPath!)"
+            return
+        } else {
+            engineError = "No .litertlm model found in ~/Documents/models/"
+            return
         }
 
         // Pre-flight: check available disk space
@@ -394,23 +381,38 @@ final class ProviderManager: ObservableObject {
 
     // MARK: - Model Discovery
 
+    /// The models directory: ~/Documents/models/
+    static var modelsDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("models")
+    }
+
+    /// Resolves a model path: checks the custom path directly, then in modelsDirectory, or falls back to first available model.
+    static func resolveModelPath(custom: String? = nil) -> String? {
+        if let custom = custom {
+            // If it's a full path, check directly
+            if FileManager.default.fileExists(atPath: custom) { return custom }
+            // If it's just a filename, look in ~/Documents/models/
+            let fullPath = modelsDirectory.appendingPathComponent(custom).path
+            if FileManager.default.fileExists(atPath: fullPath) { return fullPath }
+            return nil
+        }
+        return findFirstModel()
+    }
+
     /// Finds the first .litertlm file in ~/Documents/models/.
     static func findFirstModel() -> String? {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
-        guard FileManager.default.fileExists(atPath: modelsDir.path) else { return nil }
+        guard FileManager.default.fileExists(atPath: modelsDirectory.path) else { return nil }
         guard let first = try? FileManager.default.contentsOfDirectory(
-            at: modelsDir, includingPropertiesForKeys: nil
+            at: modelsDirectory, includingPropertiesForKeys: nil
         ).first(where: { $0.pathExtension == "litertlm" }) else { return nil }
         return first.path
     }
 
     /// Lists all .litertlm files in ~/Documents/models/.
     static func listModels() -> [String] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: modelsDir, includingPropertiesForKeys: nil
+            at: modelsDirectory, includingPropertiesForKeys: nil
         ) else { return [] }
         return files
             .filter { $0.pathExtension == "litertlm" }

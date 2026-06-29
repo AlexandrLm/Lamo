@@ -172,37 +172,16 @@ final class LiteRTLMProvider: LLMProvider {
     }
 
     private func resolveModelPath() throws -> String {
-        if let custom = modelPath {
-            // If it's a full path, check directly
-            if FileManager.default.fileExists(atPath: custom) {
-                return custom
-            }
-            // If it's just a filename, look in ~/Documents/models/
-            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let modelsDir = documents.appendingPathComponent("models")
-            let fullPath = modelsDir.appendingPathComponent(custom).path
-            if FileManager.default.fileExists(atPath: fullPath) {
-                return fullPath
-            }
-            throw LiteRTLMError.modelNotFound(custom)
+        if let path = ProviderManager.resolveModelPath(custom: modelPath) {
+            return path
         }
-
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
-
-        guard FileManager.default.fileExists(atPath: modelsDir.path) else {
+        if modelPath != nil {
+            throw LiteRTLMError.modelNotFound(modelPath!)
+        } else if !FileManager.default.fileExists(atPath: ProviderManager.modelsDirectory.path) {
             throw LiteRTLMError.modelsDirectoryMissing
-        }
-
-        let models = try FileManager.default.contentsOfDirectory(
-            at: modelsDir, includingPropertiesForKeys: nil
-        ).filter { $0.pathExtension == "litertlm" }
-
-        guard let first = models.first else {
+        } else {
             throw LiteRTLMError.noModelFound
         }
-
-        return first.path
     }
 }
 

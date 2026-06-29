@@ -88,22 +88,11 @@ final class DownloadManager: ObservableObject {
     }
 
     func cancelDownload(model: PresetModel) {
-        if let task = tasks[model.filename] {
-            let semaphore = DispatchSemaphore(value: 0)
-            var savedData: Data?
-            task.cancel { data in
-                savedData = data
-                semaphore.signal()
-            }
-            semaphore.wait()
-            if let data = savedData {
-                resumeData[model.filename] = data
-            }
-        }
-        tasks[model.filename]?.cancel()
-        activeDownloads[model.filename]?.isDownloading = false
-        observations.removeValue(forKey: model.filename)
+        guard let task = tasks[model.filename] else { return }
+        task.cancel()
         tasks.removeValue(forKey: model.filename)
+        observations.removeValue(forKey: model.filename)
+        activeDownloads[model.filename]?.isDownloading = false
     }
 
     func deleteModel(_ model: PresetModel) {
@@ -179,7 +168,12 @@ final class DownloadManager: ObservableObject {
 
 final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     static let shared = DownloadSessionDelegate()
-    var pendingModels: [String: PresetModel] = [:]
+    private let lock = NSLock()
+    private var _pendingModels: [String: PresetModel] = [:]
+    var pendingModels: [String: PresetModel] {
+        get { lock.lock(); defer { lock.unlock() }; return _pendingModels }
+        set { lock.lock(); defer { lock.unlock() }; _pendingModels = newValue }
+    }
 
     nonisolated func urlSession(
         _ session: URLSession,
