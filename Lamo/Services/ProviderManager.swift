@@ -61,9 +61,9 @@ final class ProviderManager: ObservableObject {
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
         // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
-        // Use 80% of available memory (leave headroom for system spikes)
-        let usableMB = availableMB * 0.8
-        let maxTokensFromMemory = max(512, Int(usableMB / 300.0 * 1024))
+        // Use 70% of available memory (conservative — leave room for system + engine)
+        let usableMB = availableMB * 0.7
+        let maxTokensFromMemory = max(256, Int(usableMB / 300.0 * 1024))
 
         let requested: Int
         if kvCacheAuto {
@@ -75,7 +75,9 @@ final class ProviderManager: ObservableObject {
         let capped = min(requested, maxTokensFromMemory)
 
         // Round down to nearest 256
-        return (capped / 256) * 256
+        let result = (capped / 256) * 256
+        print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), result=\(result)")
+        return result
     }
 
     // MARK: - Settings (persisted via UserDefaults)
@@ -265,25 +267,37 @@ final class ProviderManager: ObservableObject {
             }
         }
 
-        // Pre-flight: check if device has enough RAM for this model
+        // Pre-flight: check if device has enough AVAILABLE RAM for this model
+        // Use os_proc_available_memory() instead of physicalMemory — accounts for other apps
         let filename = (resolvedPath as NSString).lastPathComponent
         if let preset = PresetModel.allCases.first(where: { $0.filename == filename }) {
-            let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
-            let requiredGB: Double
+            #if os(iOS)
+            let availableMB = Double(os_proc_available_memory()) / 1_048_576
+            #else
+            let availableMB = Double(ProcessInfo.processInfo.physicalMemory) / 2.0 / 1_048_576
+            #endif
+            let requiredMB: Double
             switch preset {
-            case .gemma4E4B: requiredGB = 6.0
-            case .gemma4E2B: requiredGB = 3.0
+            case .gemma4E4B: requiredMB = 5500  // 5.5 GB available needed
+            case .gemma4E2B: requiredMB = 2500  // 2.5 GB available needed
             }
-            if ramGB < requiredGB {
-                engineError = "Device has \(Int(ramGB)) GB RAM but \(preset.displayName) needs ~\(Int(requiredGB)) GB. Use \(PresetModel.gemma4E2B.displayName) instead."
+            if availableMB < requiredMB {
+                let availGB = String(format: "%.1f", availableMB / 1024)
+                let reqGB = String(format: "%.1f", requiredMB / 1024)
+                engineError = "Only \(availGB) GB RAM available but \(preset.displayName) needs ~\(reqGB) GB. Close other apps or use \(PresetModel.gemma4E2B.displayName)."
                 return
             }
         }
 
         // Enable speculative decoding experimental flag if requested
         if speculativeDecoding {
-            LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
-            LiteRTLM.ExperimentalFlags.enableSpeculativeDecoding = true
+            do {
+                LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
+                LiteRTLM.ExperimentalFlags.enableSpeculativeDecoding = true
+            } catch {
+                // Non-fatal: continue without speculative decoding
+                print("[Lamo] Failed to enable speculative decoding: \(error)")
+            }
         }
 
         let backend: LiteRTLM.Backend
@@ -310,8 +324,11 @@ final class ProviderManager: ObservableObject {
 
         let engine = LiteRTLM.Engine(engineConfig: engineConfig)
         do {
+            print("[Lamo] Initializing engine for: \(filename), backend=\(litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1)")
             try await engine.initialize()
+            print("[Lamo] Engine initialized successfully")
         } catch {
+            print("[Lamo] Engine init FAILED: \(error)")
             engineError = "Engine init failed: \(error.localizedDescription)"
             return
         }
