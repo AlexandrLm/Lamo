@@ -130,7 +130,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             let engineConfig = try LiteRTLM.EngineConfig(
                 modelPath: resolvedPath,
                 backend: backend,
-                visionBackend: nil,
+                visionBackend: .cpu(),
                 audioBackend: nil,
                 maxNumTokens: maxTokens,
                 cacheDir: NSTemporaryDirectory()

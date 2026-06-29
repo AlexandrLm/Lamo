@@ -48,6 +48,7 @@ final class ProviderManager: ObservableObject {
 
     /// Safe max tokens based on ACTUAL available memory at runtime.
     /// Uses os_proc_available_memory() for real-time data, not heuristics.
+    /// Adaptive safety: more conservative when memory is tight (E4B on 8GB iPhone).
     private func safeMaxTokens(modelPath: String) -> Int? {
         // Get real available memory from the OS (iOS 13+)
         let availableBytes: UInt64
@@ -60,9 +61,21 @@ final class ProviderManager: ObservableObject {
 
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
+        // Adaptive safety factor: more RAM available → can use more for KV-cache
+        // < 3 GB: very tight (E4B on loaded 8GB iPhone) → 40%
+        // < 4.5 GB: tight (E4B with some headroom) → 55%
+        // >= 4.5 GB: comfortable (E2B or unloaded device) → 70%
+        let safetyFactor: Double
+        if availableMB < 3000 {
+            safetyFactor = 0.40
+        } else if availableMB < 4500 {
+            safetyFactor = 0.55
+        } else {
+            safetyFactor = 0.70
+        }
+
         // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
-        // Use 70% of available memory (conservative — leave room for system + engine)
-        let usableMB = availableMB * 0.7
+        let usableMB = availableMB * safetyFactor
         let maxTokensFromMemory = max(256, Int(usableMB / 300.0 * 1024))
 
         let requested: Int
@@ -76,7 +89,7 @@ final class ProviderManager: ObservableObject {
 
         // Round down to nearest 256
         let result = (capped / 256) * 256
-        print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), result=\(result)")
+        print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), result=\(result)")
         return result
     }
 
@@ -300,7 +313,7 @@ final class ProviderManager: ObservableObject {
         guard let engineConfig = try? LiteRTLM.EngineConfig(
             modelPath: resolvedPath,
             backend: backend,
-            visionBackend: nil,
+            visionBackend: .cpu(),
             audioBackend: nil,
             maxNumTokens: maxTokens,
             cacheDir: NSTemporaryDirectory()

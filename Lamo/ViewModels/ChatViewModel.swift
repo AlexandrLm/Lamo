@@ -92,7 +92,9 @@ final class ChatViewModel {
         streamingTask?.cancel()
         streamingTask = nil
 
-        let provider = self.provider
+        // Always resolve fresh provider from ProviderManager — if the user
+        // switched models in Settings, the old provider wraps a stale engine.
+        let provider = ProviderManager.shared.currentProvider
         streamingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             for await token in provider.streamResponse(messages: chatMessages) {

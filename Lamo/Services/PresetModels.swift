@@ -34,8 +34,8 @@ enum PresetModel: String, CaseIterable, Identifiable {
 
     var fileSizeGB: Double {
         switch self {
-        case .gemma4E4B: return 3.41
-        case .gemma4E2B: return 2.41
+        case .gemma4E4B: return 3.65
+        case .gemma4E2B: return 2.58
         }
     }
 
