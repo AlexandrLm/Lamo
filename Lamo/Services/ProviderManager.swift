@@ -47,8 +47,8 @@ final class ProviderManager: ObservableObject {
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     /// Safe max tokens based on ACTUAL available memory at runtime.
-    /// Uses os_proc_available_memory() for real-time data, not heuristics.
-    /// Adaptive safety: more conservative when memory is tight (E4B on 8GB iPhone).
+    /// Uses os_proc_available_memory() for real-time data.
+    /// Adaptive: scales KV-cache to fit available RAM with safety margin.
     private func safeMaxTokens(modelPath: String) -> Int? {
         // Get real available memory from the OS (iOS 13+)
         let availableBytes: UInt64
@@ -61,17 +61,20 @@ final class ProviderManager: ObservableObject {
 
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
-        // Adaptive safety factor: more RAM available → can use more for KV-cache
-        // < 2 GB: critical (E4B on loaded 8GB iPhone) → 30%
-        // < 3 GB: tight (E4B with some headroom) → 45%
-        // >= 3 GB: comfortable (E2B or unloaded device) → 60%
+        // Safety factor: leave headroom for engine internals + system pressure
+        // < 1.5 GB: critical → 25%
+        // < 3 GB:   tight   → 35%
+        // < 5 GB:   normal  → 45%
+        // >= 5 GB:  comfort → 55%
         let safetyFactor: Double
-        if availableMB < 2000 {
-            safetyFactor = 0.30
+        if availableMB < 1500 {
+            safetyFactor = 0.25
         } else if availableMB < 3000 {
+            safetyFactor = 0.35
+        } else if availableMB < 5000 {
             safetyFactor = 0.45
         } else {
-            safetyFactor = 0.60
+            safetyFactor = 0.55
         }
 
         // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
@@ -80,20 +83,17 @@ final class ProviderManager: ObservableObject {
 
         let requested: Int
         if kvCacheAuto {
-            // Conservative: 1024 tokens ≈ 300 MB KV-cache
-            // Safe for E4B on 8GB iPhone with limited free RAM
-            requested = 1024
+            // Auto: use as much as memory allows (no fixed cap)
+            requested = maxTokensFromMemory
         } else {
             requested = maxNumTokens > 0 ? maxNumTokens : 1024
         }
 
         let capped = min(requested, maxTokensFromMemory)
 
-        // Hard cap: 1024 tokens max for E4B on 8GB iPhone
-        // KV-cache at 1024 tokens ≈ 300 MB — safe even with fragmentation
-        // Higher values cause SIGABRT in litert_lm_conversation_create
-        let result = min((capped / 256) * 256, 1024)
-        print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), result=\(result)")
+        // Round down to nearest 256 (clean KV-cache blocks)
+        let result = (capped / 256) * 256
+        print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
         return result
     }
 
@@ -151,7 +151,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var maxNumTokens: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 1024 }
+        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096 }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMMaxNumTokens")
             invalidateEngine()
