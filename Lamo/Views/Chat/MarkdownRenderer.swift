@@ -30,6 +30,10 @@ struct MarkdownRenderer: View {
                         ListItemText(text: text, indent: indent, number: number)
                             .padding(.leading, CGFloat(indent) * 20)
                             .padding(.vertical, 2)
+                    case .taskItem(let text, let checked):
+                        TaskListItemText(text: text, checked: checked)
+                            .padding(.leading, 4)
+                            .padding(.vertical, 2)
                     case .blockquote(let text):
                         BlockquoteText(text: text)
                             .padding(.vertical, 4)
@@ -66,6 +70,17 @@ struct MarkdownRenderer: View {
         var codeBuffer: [String] = []
         var language = ""
         var listCounter = 0
+        var textBuffer: [String] = []
+
+        func flushText() {
+            if !textBuffer.isEmpty {
+                let merged = textBuffer.joined(separator: "\n")
+                if !merged.trimmingCharacters(in: .whitespaces).isEmpty {
+                    blocks.append(.text(merged))
+                }
+                textBuffer.removeAll()
+            }
+        }
 
         var i = 0
         while i < lines.count {
@@ -73,6 +88,7 @@ struct MarkdownRenderer: View {
 
             // Code block toggle
             if lineStr.hasPrefix("```") {
+                flushText()
                 if inCodeBlock {
                     blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
                     codeBuffer = []
@@ -97,6 +113,7 @@ struct MarkdownRenderer: View {
             if lineStr.trimmingCharacters(in: .whitespaces) == "---" ||
                lineStr.trimmingCharacters(in: .whitespaces) == "***" ||
                lineStr.trimmingCharacters(in: .whitespaces) == "___" {
+                flushText()
                 blocks.append(.hr)
                 listCounter = 0
                 i += 1
@@ -109,6 +126,7 @@ struct MarkdownRenderer: View {
                let headerRow = parseTableRow(lineStr) {
                 let nextLine = String(lines[i + 1])
                 if isTableSeparatorRow(nextLine) {
+                    flushText()
                     let headers = headerRow
                     var rows: [[String]] = []
                     var j = i + 2
@@ -130,59 +148,73 @@ struct MarkdownRenderer: View {
 
             // Headers — match longest prefix first (###### before ###)
             if lineStr.hasPrefix("###### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(7)), level: 6))
                 listCounter = 0
             } else if lineStr.hasPrefix("##### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(6)), level: 5))
                 listCounter = 0
             } else if lineStr.hasPrefix("#### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(5)), level: 4))
                 listCounter = 0
             } else if lineStr.hasPrefix("### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(4)), level: 3))
                 listCounter = 0
             } else if lineStr.hasPrefix("## ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(3)), level: 2))
                 listCounter = 0
             } else if lineStr.hasPrefix("# ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(2)), level: 1))
                 listCounter = 0
             }
             // Blockquotes
             else if lineStr.hasPrefix("> ") {
+                flushText()
                 let content = String(lineStr.dropFirst(2))
                 blocks.append(.blockquote(content))
                 listCounter = 0
             }
+            // Task list items: - [ ] or - [x]
+            else if lineStr.hasPrefix("- [ ] ") || lineStr.hasPrefix("- [x] ") {
+                flushText()
+                let checked = lineStr.hasPrefix("- [x] ")
+                let content = String(lineStr.dropFirst(6))
+                blocks.append(.taskItem(content, checked: checked))
+                listCounter = 0
+            }
             // Unordered list items
             else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
+                flushText()
                 let indent = 0
                 let content = String(lineStr.dropFirst(2))
                 blocks.append(.listItem(content, indent: indent, number: nil))
                 listCounter = 0
             } else if lineStr.hasPrefix("  - ") || lineStr.hasPrefix("  * ") {
+                flushText()
                 let content = String(lineStr.dropFirst(4))
                 blocks.append(.listItem(content, indent: 1, number: nil))
                 listCounter = 0
             }
             // Ordered list items
             else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                flushText()
                 let content = lineStr.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
                 listCounter += 1
                 blocks.append(.listItem(content, indent: 0, number: listCounter))
             }
-            // Empty lines — skip consecutive, reset list counter
+            // Empty lines — flush accumulated text, reset list counter
             else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
+                flushText()
                 listCounter = 0
-                if let last = blocks.last, case .text(let t) = last, t.trimmingCharacters(in: .whitespaces).isEmpty {
-                    // skip consecutive empty lines
-                } else {
-                    blocks.append(.text(""))
-                }
             }
-            // Regular text
+            // Regular text — accumulate into paragraph
             else {
-                blocks.append(.text(lineStr))
+                textBuffer.append(lineStr)
             }
 
             i += 1
@@ -191,6 +223,8 @@ struct MarkdownRenderer: View {
         if inCodeBlock {
             blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
         }
+
+        flushText()
 
         return blocks
     }
@@ -222,6 +256,7 @@ struct MarkdownRenderer: View {
         case code(code: String, language: String)
         case header(String, level: Int)
         case listItem(String, indent: Int, number: Int?)
+        case taskItem(String, checked: Bool)
         case blockquote(String)
         case hr
         case table(headers: [String], rows: [[String]])
@@ -318,18 +353,107 @@ struct ListItemText: View {
                     .frame(width: 20, alignment: .center)
             }
 
+            InlineRichText(text: text)
+                .foregroundStyle(LamoTheme.Colors.textPrimary)
+        }
+    }
+}
+
+// MARK: - Task List Item
+
+struct TaskListItemText: View {
+    let text: String
+    let checked: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                .font(.body)
+                .foregroundStyle(checked ? LamoTheme.Colors.accent : .secondary)
+                .frame(width: 20, alignment: .center)
+
+            InlineRichText(text: text)
+                .foregroundStyle(checked ? .secondary : LamoTheme.Colors.textPrimary)
+                .strikethrough(checked)
+        }
+    }
+}
+
+// MARK: - Inline Rich Text (code spans with background)
+
+struct InlineRichText: View {
+    let text: String
+
+    var body: some View {
+        if text.contains("`") {
+            let parts = splitCodeSpans(text)
+            HStack(spacing: 0) {
+                ForEach(parts.indices, id: \.self) { idx in
+                    let part = parts[idx]
+                    if part.isCode {
+                        Text(part.text)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(LamoTheme.Colors.accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color(.quaternarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    } else {
+                        if let attributed = try? AttributedString(markdown: part.text) {
+                            Text(attributed)
+                                .font(.body)
+                        } else {
+                            Text(part.text)
+                                .font(.body)
+                        }
+                    }
+                }
+            }
+            .lineSpacing(3)
+        } else {
             if let attributed = try? AttributedString(markdown: text) {
                 Text(attributed)
                     .font(.body)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
                     .lineSpacing(3)
             } else {
                 Text(text)
                     .font(.body)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
                     .lineSpacing(3)
             }
         }
+    }
+
+    private struct CodePart {
+        let text: String
+        let isCode: Bool
+    }
+
+    private func splitCodeSpans(_ input: String) -> [CodePart] {
+        var parts: [CodePart] = []
+        var remaining = input[...]
+
+        while let codeStart = remaining.range(of: "`") {
+            let before = String(remaining[remaining.startIndex..<codeStart.lowerBound])
+            if !before.isEmpty {
+                parts.append(CodePart(text: before, isCode: false))
+            }
+            remaining = remaining[codeStart.upperBound...]
+
+            if let codeEnd = remaining.range(of: "`") {
+                let code = String(remaining[remaining.startIndex..<codeEnd.lowerBound])
+                parts.append(CodePart(text: code, isCode: true))
+                remaining = remaining[codeEnd.upperBound...]
+            } else {
+                parts.append(CodePart(text: "`" + remaining, isCode: false))
+                remaining = remaining[remaining.endIndex...]
+            }
+        }
+
+        if !remaining.isEmpty {
+            parts.append(CodePart(text: String(remaining), isCode: false))
+        }
+
+        return parts
     }
 }
 

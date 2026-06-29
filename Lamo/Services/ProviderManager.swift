@@ -180,7 +180,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var systemPrompt: String {
-        get { UserDefaults.standard.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in." }
+        get { UserDefaults.standard.string(forKey: "litertLMSystemPrompt") ?? defaultSystemPrompt }
         set { UserDefaults.standard.set(newValue, forKey: "litertLMSystemPrompt") }
     }
 
