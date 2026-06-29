@@ -37,6 +37,9 @@ struct MarkdownRenderer: View {
                         Divider()
                             .padding(.vertical, 12)
                             .overlay(Color(.separator).opacity(0.3))
+                    case .table(let headers, let rows):
+                        MarkdownTable(headers: headers, rows: rows)
+                            .padding(.vertical, 6)
                     case .text(let content):
                         if !content.trimmingCharacters(in: .whitespaces).isEmpty {
                             RichText(text: content, textColor: textColor)
@@ -64,8 +67,9 @@ struct MarkdownRenderer: View {
         var language = ""
         var listCounter = 0
 
-        for line in lines {
-            let lineStr = String(line)
+        var i = 0
+        while i < lines.count {
+            let lineStr = String(lines[i])
 
             // Code block toggle
             if lineStr.hasPrefix("```") {
@@ -79,11 +83,13 @@ struct MarkdownRenderer: View {
                     inCodeBlock = true
                 }
                 listCounter = 0
+                i += 1
                 continue
             }
 
             if inCodeBlock {
                 codeBuffer.append(lineStr)
+                i += 1
                 continue
             }
 
@@ -93,11 +99,46 @@ struct MarkdownRenderer: View {
                lineStr.trimmingCharacters(in: .whitespaces) == "___" {
                 blocks.append(.hr)
                 listCounter = 0
+                i += 1
                 continue
             }
 
-            // Headers
-            if lineStr.hasPrefix("### ") {
+            // Table detection: header row with pipes, followed by separator row
+            if i + 1 < lines.count,
+               lineStr.contains("|"),
+               let headerRow = parseTableRow(lineStr) {
+                let nextLine = String(lines[i + 1])
+                if isTableSeparatorRow(nextLine) {
+                    let headers = headerRow
+                    var rows: [[String]] = []
+                    var j = i + 2
+                    while j < lines.count {
+                        let rowLine = String(lines[j])
+                        if let parsed = parseTableRow(rowLine) {
+                            rows.append(parsed)
+                            j += 1
+                        } else {
+                            break
+                        }
+                    }
+                    blocks.append(.table(headers: headers, rows: rows))
+                    listCounter = 0
+                    i = j
+                    continue
+                }
+            }
+
+            // Headers — match longest prefix first (###### before ###)
+            if lineStr.hasPrefix("###### ") {
+                blocks.append(.header(String(lineStr.dropFirst(7)), level: 6))
+                listCounter = 0
+            } else if lineStr.hasPrefix("##### ") {
+                blocks.append(.header(String(lineStr.dropFirst(6)), level: 5))
+                listCounter = 0
+            } else if lineStr.hasPrefix("#### ") {
+                blocks.append(.header(String(lineStr.dropFirst(5)), level: 4))
+                listCounter = 0
+            } else if lineStr.hasPrefix("### ") {
                 blocks.append(.header(String(lineStr.dropFirst(4)), level: 3))
                 listCounter = 0
             } else if lineStr.hasPrefix("## ") {
@@ -143,6 +184,8 @@ struct MarkdownRenderer: View {
             else {
                 blocks.append(.text(lineStr))
             }
+
+            i += 1
         }
 
         if inCodeBlock {
@@ -152,6 +195,28 @@ struct MarkdownRenderer: View {
         return blocks
     }
 
+    // MARK: - Table Helpers
+
+    private func parseTableRow(_ line: String) -> [String]? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|") else { return nil }
+        let inner = String(trimmed.dropFirst().dropLast())
+        return inner.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    private func isTableSeparatorRow(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|") else { return false }
+        let inner = String(trimmed.dropFirst().dropLast())
+        let parts = inner.split(separator: "|")
+        guard !parts.isEmpty else { return false }
+        return parts.allSatisfy { part in
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            return trimmed.allSatisfy { $0 == "-" || $0 == ":" }
+                && trimmed.filter({ $0 == "-" }).count > 0
+        }
+    }
+
     private enum Block {
         case text(String)
         case code(code: String, language: String)
@@ -159,6 +224,7 @@ struct MarkdownRenderer: View {
         case listItem(String, indent: Int, number: Int?)
         case blockquote(String)
         case hr
+        case table(headers: [String], rows: [[String]])
     }
 }
 
@@ -223,7 +289,10 @@ struct HeaderText: View {
         switch level {
         case 1: return .title2.bold()
         case 2: return .title3.bold()
-        default: return .headline.bold()
+        case 3: return .headline.bold()
+        case 4: return .subheadline.bold()
+        case 5: return .caption.bold()
+        default: return .caption.bold()
         }
     }
 }
@@ -350,5 +419,72 @@ struct CodeBlock: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color(.separator).opacity(0.2), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Markdown Table
+
+struct MarkdownTable: View {
+    let headers: [String]
+    let rows: [[String]]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row
+                HStack(spacing: 0) {
+                    ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
+                        cellText(header, isHeader: true)
+                            .frame(minWidth: 60, alignment: .leading)
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+
+                // Separator line
+                Rectangle()
+                    .fill(Color(.separator).opacity(0.5))
+                    .frame(height: 1)
+
+                // Data rows
+                ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                    HStack(spacing: 0) {
+                        ForEach(0..<max(headers.count, row.count), id: \.self) { colIndex in
+                            let cell = colIndex < row.count ? row[colIndex] : ""
+                            cellText(cell, isHeader: false)
+                                .frame(minWidth: 60, alignment: .leading)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+
+                    if rowIndex < rows.count - 1 {
+                        Rectangle()
+                            .fill(Color(.separator).opacity(0.2))
+                            .frame(height: 0.5)
+                    }
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func cellText(_ text: String, isHeader: Bool) -> some View {
+        Group {
+            if let attributed = try? AttributedString(markdown: text) {
+                Text(attributed)
+            } else {
+                Text(text)
+            }
+        }
+        .font(isHeader ? .subheadline.weight(.semibold) : .subheadline)
+        .foregroundStyle(isHeader ? LamoTheme.Colors.textPrimary : LamoTheme.Colors.textPrimary.opacity(0.85))
+        .lineLimit(nil)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.trailing, 12)
     }
 }
