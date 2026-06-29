@@ -184,6 +184,8 @@ final class ProviderManager: ObservableObject {
     private var invalidateTask: Task<Void, Never>?
 
     /// The currently active provider (Apple Intelligence or LiteRT-LM).
+    /// Always returns a **cached** provider — never creates a new one on the fly.
+    /// Returns AppleIntelligenceProvider as fallback when LiteRT-LM engine isn't ready yet.
     var currentProvider: any LLMProvider {
         switch selectedProvider {
         case .appleIntelligence:
@@ -192,12 +194,10 @@ final class ProviderManager: ObservableObject {
             if let cached = cachedProvider {
                 return cached
             }
-            // Fallback: create provider without engine (will create engine on first inference)
-            return LiteRTLMProvider(
-                modelPath: litertLMModelPath,
-                useGPU: litertLMUseGPU,
-                engine: nil
-            )
+            // Engine not ready yet — return Apple Intelligence as placeholder.
+            // This prevents creating an engine-less LiteRTLMProvider that would
+            // try to load the model synchronously on the first message send.
+            return AppleIntelligenceProvider()
         }
     }
 

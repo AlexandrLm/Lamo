@@ -12,7 +12,17 @@ struct ChatView: View {
         modelContext: ModelContext,
         onNewChat: (() -> Void)? = nil
     ) {
-        _viewModel = State(wrappedValue: ChatViewModel(conversation: conversation, modelContext: modelContext))
+        // Provider must be resolved on MainActor, but this init runs
+        // in a non-isolated context. We capture the provider object
+        // directly (ProviderManager is @MainActor singleton, but
+        // currentProvider returns a value type conforming to LLMProvider
+        // which is itself Sendable — safe to capture here).
+        let provider = ProviderManager.shared.currentProvider
+        _viewModel = State(wrappedValue: ChatViewModel(
+            conversation: conversation,
+            modelContext: modelContext,
+            provider: provider
+        ))
         self.onNewChat = onNewChat
     }
 
@@ -29,9 +39,7 @@ struct ChatView: View {
 
                             ForEach(viewModel.messages) { message in
                                 MessageBubble(message: message, onRetry: {
-                                    Task {
-                                        await viewModel.retryLastMessage()
-                                    }
+                                    viewModel.retryLastMessage()
                                 })
                                 .id(message.id)
                             }
@@ -84,7 +92,7 @@ struct ChatView: View {
             ChatInputBar(
                 text: $viewModel.inputText,
                 isStreaming: viewModel.isStreaming,
-                onSend: { Task { await viewModel.send() } },
+                onSend: { viewModel.send() },
                 onStop: { viewModel.stopGeneration() }
             )
         }

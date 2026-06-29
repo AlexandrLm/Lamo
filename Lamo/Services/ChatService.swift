@@ -9,7 +9,7 @@ import SwiftData
 ///   per-token string copying and reduces GC / retain churn.
 @MainActor
 final class ChatService {
-    private let provider: any LLMProvider
+    let provider: any LLMProvider
     private var currentTask: Task<Void, Never>?
 
     init(provider: (any LLMProvider)? = nil) {

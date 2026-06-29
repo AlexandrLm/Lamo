@@ -7,7 +7,7 @@ import LiteRTLM
 /// Performance notes:
 /// - Conversation is reused across utterances as long as message history remains compatible.
 /// - Only new messages trigger inference; prefill is incremental.
-final class LiteRTLMProvider: LLMProvider {
+final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     let name = "LiteRT-LM"
 
     /// Path to the .litertlm model file.
@@ -37,6 +37,9 @@ final class LiteRTLMProvider: LLMProvider {
             && messageHash(messages) == cachedMessagesHash
     }
 
+    /// Lock for thread-safe access to cached conversation
+    private let cacheLock = NSLock()
+
     init(
         modelPath: String? = nil,
         useGPU: Bool = true,
@@ -53,21 +56,48 @@ final class LiteRTLMProvider: LLMProvider {
 
     func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
         AsyncStream { continuation in
-            Task {
+            let provider = self
+            let task = Task {
                 do {
-                    try await runInference(messages: messages, continuation: continuation)
+                    try await provider.runInference(messages: messages, continuation: continuation)
                 } catch {
+                    guard !Task.isCancelled else { return }
                     continuation.yield(.error(error))
+                }
+                // finish() is called inside runInference on success path
+                // or here on error path — but only if not cancelled
+                if !Task.isCancelled {
                     continuation.finish()
                 }
+            }
+            // When the AsyncStream consumer is deallocated or cancelled,
+            // cancel the inference task so the native C stream stops too.
+            continuation.onTermination = { _ in
+                task.cancel()
+                // Attempt to cancel the native conversation stream
+                provider.cancelNativeStream()
             }
         }
     }
 
     /// Invalidate cached conversation (e.g. when model or GPU setting changes).
     func invalidateConversationCache() {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
         cachedConversation = nil
         cachedMessagesHash = 0
+    }
+
+    /// Attempt to cancel the native C++ streaming process.
+    private func cancelNativeStream() {
+        // The C API provides litert_lm_conversation_cancel_process
+        // which safely interrupts the streaming callback loop.
+        cacheLock.lock()
+        let conversation = cachedConversation
+        cacheLock.unlock()
+        if let conversation {
+            try? conversation.cancel()
+        }
     }
 
     private func messageHash(_ messages: [ChatMessage]) -> Int {
@@ -111,26 +141,38 @@ final class LiteRTLMProvider: LLMProvider {
             resolvedEngine = newEngine
         }
 
-        // Reuse or rebuild conversation
+        // Reuse or rebuild conversation (thread-safe)
         let conversation: LiteRTLM.Conversation
+        cacheLock.lock()
         if isCacheValid(for: messages) {
             conversation = cachedConversation!
+            cacheLock.unlock()
         } else {
+            cacheLock.unlock()
             conversation = try await buildConversation(engine: resolvedEngine, messages: messages)
+            cacheLock.lock()
             cachedConversation = conversation
             cachedMessagesHash = messageHash(messages)
+            cacheLock.unlock()
         }
 
         // Send the last user message and stream the response
+        guard !Task.isCancelled else { return }
+
         if let lastUserMessage = messages.last(where: { $0.role == .user }) {
             let message = LiteRTLM.Message(lastUserMessage.content)
 
             for try await chunk in conversation.sendMessageStream(message) {
-                if Task.isCancelled { break }
+                guard !Task.isCancelled else {
+                    // Cancel native stream to stop C++ callback loop
+                    try? conversation.cancel()
+                    return
+                }
                 continuation.yield(.delta(chunk.toString))
             }
         }
 
+        guard !Task.isCancelled else { return }
         continuation.yield(.done)
         continuation.finish()
     }
