@@ -201,6 +201,7 @@ final class ProviderManager: ObservableObject {
 
         Keep responses clear and well-structured. Prefer tables for comparing multiple items side by side.
         """
+    }
 
     // MARK: - Internal State
 

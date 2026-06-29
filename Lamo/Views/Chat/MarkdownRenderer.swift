@@ -4,6 +4,7 @@ struct MarkdownRenderer: View {
     let text: String
     let textColor: Color
     let isStreaming: Bool
+
     init(text: String, textColor: Color, isStreaming: Bool = false) {
         self.text = text
         self.textColor = textColor
@@ -23,18 +24,22 @@ struct MarkdownRenderer: View {
                             .padding(.vertical, 6)
                     case .header(let text, let level):
                         HeaderText(text: text, level: level)
-                            .padding(.top, level == 1 ? 12 : level == 2 ? 8 : 6)
-                            .padding(.bottom, 4)
+                            .padding(.top, level <= 2 ? 10 : 6)
+                            .padding(.bottom, 3)
                     case .listItem(let text, let indent, let number):
                         ListItemText(text: text, indent: indent, number: number)
-                            .padding(.leading, CGFloat(indent) * 20)
-                            .padding(.vertical, 2)
+                            .padding(.leading, CGFloat(indent) * 18)
+                            .padding(.vertical, 1)
+                    case .taskItem(let text, let checked):
+                        TaskListItemText(text: text, checked: checked)
+                            .padding(.leading, 4)
+                            .padding(.vertical, 1)
                     case .blockquote(let text):
                         BlockquoteText(text: text)
-                            .padding(.vertical, 4)
+                            .padding(.vertical, 3)
                     case .hr:
                         Divider()
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 10)
                             .overlay(Color(.separator).opacity(0.3))
                     case .table(let headers, let rows):
                         MarkdownTable(headers: headers, rows: rows)
@@ -42,7 +47,7 @@ struct MarkdownRenderer: View {
                     case .text(let content):
                         if !content.trimmingCharacters(in: .whitespaces).isEmpty {
                             RichText(text: content, textColor: textColor)
-                                .padding(.bottom, 6)
+                                .padding(.bottom, 4)
                         }
                     }
                 }
@@ -65,13 +70,24 @@ struct MarkdownRenderer: View {
         var codeBuffer: [String] = []
         var language = ""
         var listCounter = 0
+        var textBuffer: [String] = []
+
+        func flushText() {
+            if !textBuffer.isEmpty {
+                let merged = textBuffer.joined(separator: "\n")
+                if !merged.trimmingCharacters(in: .whitespaces).isEmpty {
+                    blocks.append(.text(merged))
+                }
+                textBuffer.removeAll()
+            }
+        }
 
         var i = 0
         while i < lines.count {
             let lineStr = String(lines[i])
 
-            // Code block toggle
             if lineStr.hasPrefix("```") {
+                flushText()
                 if inCodeBlock {
                     blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
                     codeBuffer = []
@@ -92,99 +108,112 @@ struct MarkdownRenderer: View {
                 continue
             }
 
-            // Horizontal rules
-            if lineStr.trimmingCharacters(in: .whitespaces) == "---" ||
-               lineStr.trimmingCharacters(in: .whitespaces) == "***" ||
-               lineStr.trimmingCharacters(in: .whitespaces) == "___" {
+            let trimmed = lineStr.trimmingCharacters(in: .whitespaces)
+
+            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                flushText()
                 blocks.append(.hr)
                 listCounter = 0
                 i += 1
                 continue
             }
 
-            // Table detection: header row with pipes, followed by separator row
+            // Table
             if i + 1 < lines.count,
                lineStr.contains("|"),
                let headerRow = parseTableRow(lineStr) {
                 let nextLine = String(lines[i + 1])
                 if isTableSeparatorRow(nextLine) {
-                    let headers = headerRow
+                    flushText()
                     var rows: [[String]] = []
                     var j = i + 2
                     while j < lines.count {
-                        let rowLine = String(lines[j])
-                        if let parsed = parseTableRow(rowLine) {
+                        if let parsed = parseTableRow(String(lines[j])) {
                             rows.append(parsed)
                             j += 1
-                        } else {
-                            break
-                        }
+                        } else { break }
                     }
-                    blocks.append(.table(headers: headers, rows: rows))
+                    blocks.append(.table(headers: headerRow, rows: rows))
                     listCounter = 0
                     i = j
                     continue
                 }
             }
 
-            // Headers — match longest prefix first (###### before ###)
+            // Headers (###### before ###)
             if lineStr.hasPrefix("###### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(7)), level: 6))
                 listCounter = 0
             } else if lineStr.hasPrefix("##### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(6)), level: 5))
                 listCounter = 0
             } else if lineStr.hasPrefix("#### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(5)), level: 4))
                 listCounter = 0
             } else if lineStr.hasPrefix("### ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(4)), level: 3))
                 listCounter = 0
             } else if lineStr.hasPrefix("## ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(3)), level: 2))
                 listCounter = 0
             } else if lineStr.hasPrefix("# ") {
+                flushText()
                 blocks.append(.header(String(lineStr.dropFirst(2)), level: 1))
                 listCounter = 0
             }
             // Blockquotes
             else if lineStr.hasPrefix("> ") {
-                let content = String(lineStr.dropFirst(2))
-                blocks.append(.blockquote(content))
+                flushText()
+                blocks.append(.blockquote(String(lineStr.dropFirst(2))))
                 listCounter = 0
             }
-            // Unordered list items — support 3 indent levels
-            else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
-                let content = String(lineStr.dropFirst(2))
-                blocks.append(.listItem(content, indent: 0, number: nil))
+            // Task lists
+            else if lineStr.hasPrefix("- [ ] ") || lineStr.hasPrefix("- [x] ") {
+                flushText()
+                blocks.append(.taskItem(String(lineStr.dropFirst(6)), checked: lineStr.hasPrefix("- [x] ")))
+                listCounter = 0
+            }
+            // Nested ordered list: 1.1, 1.1.1, etc.
+            else if lineStr.range(of: #"^\d+\.\d"#, options: .regularExpression) != nil {
+                flushText()
+                let (indent, content) = parseNestedOrderedItem(lineStr)
+                listCounter = 0
+                blocks.append(.listItem(content, indent: indent, number: nil))
+            }
+            // Unordered list (3 indent levels)
+            else if lineStr.hasPrefix("    - ") || lineStr.hasPrefix("    * ") {
+                flushText()
+                blocks.append(.listItem(String(lineStr.dropFirst(6)), indent: 2, number: nil))
                 listCounter = 0
             } else if lineStr.hasPrefix("  - ") || lineStr.hasPrefix("  * ") {
-                let content = String(lineStr.dropFirst(4))
-                blocks.append(.listItem(content, indent: 1, number: nil))
+                flushText()
+                blocks.append(.listItem(String(lineStr.dropFirst(4)), indent: 1, number: nil))
                 listCounter = 0
-            } else if lineStr.hasPrefix("    - ") || lineStr.hasPrefix("    * ") {
-                let content = String(lineStr.dropFirst(6))
-                blocks.append(.listItem(content, indent: 2, number: nil))
+            } else if lineStr.hasPrefix("- ") || lineStr.hasPrefix("* ") {
+                flushText()
+                blocks.append(.listItem(String(lineStr.dropFirst(2)), indent: 0, number: nil))
                 listCounter = 0
             }
-            // Ordered list items
+            // Ordered list
             else if lineStr.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                flushText()
                 let content = lineStr.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
                 listCounter += 1
                 blocks.append(.listItem(content, indent: 0, number: listCounter))
             }
-            // Empty lines — skip consecutive, reset list counter
-            else if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Empty line
+            else if trimmed.isEmpty {
+                flushText()
                 listCounter = 0
-                if let last = blocks.last, case .text(let t) = last, t.trimmingCharacters(in: .whitespaces).isEmpty {
-                    // skip consecutive empty lines
-                } else {
-                    blocks.append(.text(""))
-                }
             }
-            // Regular text
+            // Text
             else {
-                blocks.append(.text(lineStr))
+                textBuffer.append(lineStr)
             }
 
             i += 1
@@ -193,8 +222,22 @@ struct MarkdownRenderer: View {
         if inCodeBlock {
             blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
         }
-
+        flushText()
         return blocks
+    }
+
+    // MARK: - Nested Ordered List Helper
+
+    private func parseNestedOrderedItem(_ line: String) -> (indent: Int, content: String) {
+        let match = line.range(of: #"^(\d+\.)+\s"#, options: .regularExpression)
+        guard let range = match else { return (0, line) }
+        let prefix = String(line[range])
+        let content = String(line[range.upperBound...])
+        // Count dots to determine indent: "1." = 0, "1.1." = 1, "1.1.1." = 2
+        let dots = prefix.filter({ $0 == "." }).count
+        let indent = max(0, dots - 1)
+        let numberStr = prefix.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        return (indent, "\(numberStr) \(content)")
     }
 
     // MARK: - Table Helpers
@@ -215,7 +258,7 @@ struct MarkdownRenderer: View {
         return parts.allSatisfy { part in
             let trimmed = part.trimmingCharacters(in: .whitespaces)
             return trimmed.allSatisfy { $0 == "-" || $0 == ":" }
-                && trimmed.filter({ $0 == "-" }).count > 0
+                && trimmed.contains("-")
         }
     }
 
@@ -224,6 +267,7 @@ struct MarkdownRenderer: View {
         case code(code: String, language: String)
         case header(String, level: Int)
         case listItem(String, indent: Int, number: Int?)
+        case taskItem(String, checked: Bool)
         case blockquote(String)
         case hr
         case table(headers: [String], rows: [[String]])
@@ -234,10 +278,11 @@ struct MarkdownRenderer: View {
 
 struct StreamingCursor: View {
     @State private var visible = true
+
     var body: some View {
         RoundedRectangle(cornerRadius: 1)
             .fill(LamoTheme.Colors.accent)
-            .frame(width: 8, height: 16)
+            .frame(width: 8, height: 14)
             .opacity(visible ? 1 : 0)
             .onAppear {
                 withAnimation(.easeInOut(duration: 0.5).repeatForever()) {
@@ -256,14 +301,14 @@ struct RichText: View {
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
-                .font(.body)
+                .font(.footnote)
                 .foregroundStyle(textColor)
-                .lineSpacing(5)
+                .lineSpacing(4)
         } else {
             Text(text)
-                .font(.body)
+                .font(.footnote)
                 .foregroundStyle(textColor)
-                .lineSpacing(5)
+                .lineSpacing(4)
         }
     }
 }
@@ -273,6 +318,7 @@ struct RichText: View {
 struct HeaderText: View {
     let text: String
     let level: Int
+
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
@@ -287,12 +333,12 @@ struct HeaderText: View {
 
     private var headerFont: Font {
         switch level {
-        case 1: return .title2.bold()
-        case 2: return .title3.bold()
-        case 3: return .headline.bold()
-        case 4: return .subheadline.bold()
+        case 1: return .title3.bold()
+        case 2: return .headline.bold()
+        case 3: return .subheadline.bold()
+        case 4: return .footnote.bold()
         case 5: return .caption.bold()
-        default: return .caption.bold()
+        default: return .caption2.bold()
         }
     }
 }
@@ -303,31 +349,130 @@ struct ListItemText: View {
     let text: String
     let indent: Int
     let number: Int?
+
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 6) {
             if let number {
                 Text("\(number).")
-                    .font(.body)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .frame(width: 20, alignment: .trailing)
+                    .frame(width: 18, alignment: .trailing)
             } else {
-                Text(indent == 0 ? "•" : "◦")
-                    .font(.body)
-                    .foregroundStyle(indent == 0 ? LamoTheme.Colors.accent : LamoTheme.Colors.accent.opacity(0.6))
-                    .frame(width: 20, alignment: .center)
+                Text(bulletForIndent(indent))
+                    .font(.footnote)
+                    .foregroundStyle(indent == 0 ? LamoTheme.Colors.accent : LamoTheme.Colors.accent.opacity(0.5))
+                    .frame(width: 18, alignment: .center)
             }
 
-            if let attributed = try? AttributedString(markdown: text) {
-                Text(attributed)
-                    .font(.body)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
-                    .lineSpacing(3)
-            } else {
-                Text(text)
-                    .font(.body)
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
-                    .lineSpacing(3)
+            FormattedText(text: text)
+        }
+    }
+
+    private func bulletForIndent(_ indent: Int) -> String {
+        switch indent {
+        case 0: return "•"
+        case 1: return "◦"
+        default: return "▪"
+        }
+    }
+}
+
+// MARK: - Task List Item
+
+struct TaskListItemText: View {
+    let text: String
+    let checked: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                .font(.footnote)
+                .foregroundStyle(checked ? LamoTheme.Colors.accent : .secondary)
+                .frame(width: 18, alignment: .center)
+
+            FormattedText(text: text)
+                .foregroundStyle(checked ? .secondary : LamoTheme.Colors.textPrimary)
+                .strikethrough(checked)
+        }
+    }
+}
+
+// MARK: - Formatted Text (inline markdown with code span styling)
+
+struct FormattedText: View {
+    let text: String
+
+    var body: some View {
+        if text.contains("`") {
+            let parts = splitCodeSpans(text)
+            HStack(spacing: 0) {
+                ForEach(parts.indices, id: \.self) { idx in
+                    let part = parts[idx]
+                    if part.isCode {
+                        Text(part.text)
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(LamoTheme.Colors.accent)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color(.quaternarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                    } else {
+                        FormattedTextBody(text: part.text)
+                    }
+                }
             }
+        } else {
+            FormattedTextBody(text: text)
+        }
+    }
+
+    private struct CodePart {
+        let text: String
+        let isCode: Bool
+    }
+
+    private func splitCodeSpans(_ input: String) -> [CodePart] {
+        var parts: [CodePart] = []
+        var remaining = input[...]
+
+        while let codeStart = remaining.range(of: "`") {
+            let before = String(remaining[remaining.startIndex..<codeStart.lowerBound])
+            if !before.isEmpty {
+                parts.append(CodePart(text: before, isCode: false))
+            }
+            remaining = remaining[codeStart.upperBound...]
+
+            if let codeEnd = remaining.range(of: "`") {
+                let code = String(remaining[remaining.startIndex..<codeEnd.lowerBound])
+                parts.append(CodePart(text: code, isCode: true))
+                remaining = remaining[codeEnd.upperBound...]
+            } else {
+                parts.append(CodePart(text: "`" + remaining, isCode: false))
+                remaining = remaining[remaining.endIndex...]
+            }
+        }
+
+        if !remaining.isEmpty {
+            parts.append(CodePart(text: String(remaining), isCode: false))
+        }
+        return parts
+    }
+}
+
+// MARK: - Formatted Text Body (bold, italic, strikethrough, links via AttributedString)
+
+struct FormattedTextBody: View {
+    let text: String
+
+    var body: some View {
+        if let attributed = try? AttributedString(markdown: text) {
+            Text(attributed)
+                .font(.footnote)
+                .lineSpacing(3)
+        } else {
+            Text(text)
+                .font(.footnote)
+                .lineSpacing(3)
         }
     }
 }
@@ -336,25 +481,16 @@ struct ListItemText: View {
 
 struct BlockquoteText: View {
     let text: String
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(LamoTheme.Colors.accent.opacity(0.5))
+                .fill(LamoTheme.Colors.accent.opacity(0.4))
                 .frame(width: 3)
 
-            if let attributed = try? AttributedString(markdown: text) {
-                Text(attributed)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(3)
-                    .italic()
-            } else {
-                Text(text)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(3)
-                    .italic()
-            }
+            FormattedTextBody(text: text)
+                .foregroundStyle(.secondary)
+                .italic()
         }
         .padding(.leading, 4)
     }
@@ -366,9 +502,9 @@ struct CodeBlock: View {
     let code: String
     let language: String
     @State private var isCopied = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack {
                 if !language.isEmpty {
                     Text(language.uppercased())
@@ -379,13 +515,9 @@ struct CodeBlock: View {
                 Button {
                     UIPasteboard.general.string = code
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation {
-                        isCopied = true
-                    }
+                    withAnimation { isCopied = true }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation {
-                            isCopied = false
-                        }
+                        withAnimation { isCopied = false }
                     }
                 } label: {
                     HStack(spacing: 4) {
@@ -398,22 +530,21 @@ struct CodeBlock: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(Color(.quaternarySystemFill))
 
-            // Code content
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(.system(.callout, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(LamoTheme.Colors.textPrimary)
                     .textSelection(.enabled)
-                    .padding(14)
+                    .padding(12)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Color(.separator).opacity(0.2), lineWidth: 1)
         )
     }
@@ -428,41 +559,61 @@ struct MarkdownTable: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                // Header row
+                // Header
                 HStack(spacing: 0) {
                     ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
-                        cellText(header, isHeader: true)
-                            .frame(minWidth: 60, alignment: .leading)
+                        FormattedTextBody(text: header)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(LamoTheme.Colors.textPrimary)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(minWidth: 50, alignment: .leading)
+                            .padding(.trailing, 14)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 7)
                 .padding(.horizontal, 10)
-                .background(LamoTheme.Colors.accent.opacity(0.12))
+                .background(
+                    LinearGradient(
+                        colors: [
+                            LamoTheme.Colors.accent.opacity(0.1),
+                            LamoTheme.Colors.accent.opacity(0.05)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
 
-                // Separator line
+                // Accent separator
                 Rectangle()
                     .fill(LamoTheme.Colors.accent.opacity(0.3))
-                    .frame(height: 1)
+                    .frame(height: 1.5)
 
-                // Data rows with alternating background
+                // Rows
                 ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
                     HStack(spacing: 0) {
                         ForEach(0..<max(headers.count, row.count), id: \.self) { colIndex in
                             let cell = colIndex < row.count ? row[colIndex] : ""
-                            cellText(cell, isHeader: false)
-                                .frame(minWidth: 60, alignment: .leading)
+                            FormattedTextBody(text: cell)
+                                .font(.footnote)
+                                .foregroundStyle(LamoTheme.Colors.textPrimary.opacity(0.8))
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(minWidth: 50, alignment: .leading)
+                                .padding(.trailing, 14)
                         }
                     }
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 5)
                     .padding(.horizontal, 10)
-                    .background(rowIndex % 2 == 0
-                        ? Color.clear
-                        : Color(.tertiarySystemFill).opacity(0.3))
+                    .background(rowIndex % 2 == 1
+                        ? Color(.tertiarySystemFill).opacity(0.2)
+                        : Color.clear)
 
                     if rowIndex < rows.count - 1 {
                         Rectangle()
-                            .fill(Color(.separator).opacity(0.2))
+                            .fill(Color(.separator).opacity(0.15))
                             .frame(height: 0.5)
+                            .padding(.horizontal, 6)
                     }
                 }
             }
@@ -470,22 +621,17 @@ struct MarkdownTable: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 1)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            LamoTheme.Colors.accent.opacity(0.2),
+                            Color(.separator).opacity(0.3)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
-    }
-
-    private func cellText(_ text: String, isHeader: Bool) -> some View {
-        Group {
-            if let attributed = try? AttributedString(markdown: text) {
-                Text(attributed)
-            } else {
-                Text(text)
-            }
-        }
-        .font(isHeader ? .subheadline.weight(.semibold) : .subheadline)
-        .foregroundStyle(isHeader ? LamoTheme.Colors.textPrimary : LamoTheme.Colors.textPrimary.opacity(0.85))
-        .lineLimit(nil)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.trailing, 12)
     }
 }
