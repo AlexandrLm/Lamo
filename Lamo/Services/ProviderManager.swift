@@ -80,17 +80,19 @@ final class ProviderManager: ObservableObject {
 
         let requested: Int
         if kvCacheAuto {
-            // Auto mode: start conservative, let user increase if stable
-            // 2048 tokens ≈ 600 MB KV-cache — safe for E4B on 8GB iPhone
-            requested = 2048
+            // Conservative: 1024 tokens ≈ 300 MB KV-cache
+            // Safe for E4B on 8GB iPhone with limited free RAM
+            requested = 1024
         } else {
-            requested = maxNumTokens > 0 ? maxNumTokens : 2048
+            requested = maxNumTokens > 0 ? maxNumTokens : 1024
         }
 
         let capped = min(requested, maxTokensFromMemory)
 
-        // Round down to nearest 256
-        let result = (capped / 256) * 256
+        // Hard cap: 1024 tokens max for E4B on 8GB iPhone
+        // KV-cache at 1024 tokens ≈ 300 MB — safe even with fragmentation
+        // Higher values cause SIGABRT in litert_lm_conversation_create
+        let result = min((capped / 256) * 256, 1024)
         print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), result=\(result)")
         return result
     }
@@ -149,7 +151,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var maxNumTokens: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 2048 }
+        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 1024 }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMMaxNumTokens")
             invalidateEngine()

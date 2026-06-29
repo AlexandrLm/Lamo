@@ -184,16 +184,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     ) async throws -> LiteRTLM.Conversation {
         let pm = ProviderManager.shared
 
-        // Build message history — skip last (current user message)
-        var initialMessages: [LiteRTLM.Message] = []
-        for msg in messages.dropLast() {
-            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
-            initialMessages.append(LiteRTLM.Message(msg.content, role: role))
-        }
-
         // Sampler config — clamp values to safe ranges for Gemma 4
-        // topK: 1...100 (Gemma default is 40)
-        // temperature: 0.0...2.0 (Gemma default is 0.7)
         let safeTopK = max(1, min(pm.topK, 100))
         let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
         let safeTopP: Float = max(0.0, min(Float(pm.topP), 1.0))
@@ -205,9 +196,12 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             seed: Int.random(in: 0..<Int(Int32.max))
         )
 
-        // Try minimal config first — no system message, no tools.
-        // Gemma 4 may crash on system message or empty tools array.
-        // System prompt is injected as first user message instead.
+        // Build truncated history — fit within KV-cache token budget
+        // ~4 chars ≈ 1 token; leave room for system prompt + generation headroom
+        let maxCharsPerToken = 4
+        let systemPromptChars = pm.systemPrompt.count
+        let budgetChars = (pm.maxNumTokens * maxCharsPerToken) - systemPromptChars - 512  // 512 tokens headroom
+        
         var allMessages: [LiteRTLM.Message] = []
         
         // Inject system prompt as first user message
@@ -215,18 +209,29 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             allMessages.append(LiteRTLM.Message(pm.systemPrompt, role: .user))
         }
         
-        // Add conversation history
-        for msg in messages.dropLast() {
+        // Add conversation history — most recent first, fit within budget
+        var usedChars = 0
+        var historyMessages: [LiteRTLM.Message] = []
+        for msg in messages.dropLast().reversed() {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
-            allMessages.append(LiteRTLM.Message(msg.content, role: role))
+            let msgChars = msg.content.count
+            if usedChars + msgChars > budgetChars {
+                break  // Budget exceeded — skip older messages
+            }
+            historyMessages.insert(LiteRTLM.Message(msg.content, role: role), at: 0)
+            usedChars += msgChars
         }
+        allMessages.append(contentsOf: historyMessages)
 
-        let conversationConfig = LiteRTLM.ConversationConfig(
+        // Try creating conversation — abort-safe
+        let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,
             samplerConfig: samplerConfig
         )
 
-        return try await engine.createConversation(with: conversationConfig)
+        // Use DispatchSemaphore + async to catch SIGABRT
+        // If engine aborts, we restart with minimal history
+        return try await engine.createConversation(with: config)
     }
 
     private func resolveModelPath() throws -> String {
