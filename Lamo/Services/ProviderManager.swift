@@ -285,8 +285,8 @@ final class ProviderManager: ObservableObject {
             #endif
             let requiredMB: Double
             switch preset {
-            case .gemma4E4B: requiredMB = 3500  // 3.5 GB — mmap'd, not fully loaded
-            case .gemma4E2B: requiredMB = 2000  // 2.0 GB — mmap'd, not fully loaded
+            case .gemma4E4B: requiredMB = 2000  // 2 GB — mmap'd model, only KV-cache + buffers loaded
+            case .gemma4E2B: requiredMB = 1200  // 1.2 GB — smaller model, less KV-cache
             }
             if availableMB < requiredMB {
                 // Try to free memory before giving up
@@ -425,8 +425,7 @@ final class ProviderManager: ObservableObject {
         cachedEngine = nil
         cachedProvider = nil
 
-        // 4. Force garbage collection of any lingering objects
-        //    (Swift doesn't have explicit GC, but we can drain autorelease pools)
+        // 4. Drain autorelease pools
         autoreleasepool { }
 
         // 5. Clear any temporary files that might hold memory
@@ -439,7 +438,51 @@ final class ProviderManager: ObservableObject {
             }
         }
 
-        print("[Lamo] Preload cleanup done. Available: \(String(format: "%.0f", Double(os_proc_available_memory()) / 1_048_576))MB")
+        // 6. Memory pressure trick: allocate a large block to force iOS
+        //    to evict cached pages from other apps, then release it.
+        //    The freed physical RAM is now available for our model.
+        #if os(iOS)
+        let availableBefore = os_proc_available_memory() / 1_048_576
+        let targetMB = max(500, Int(availableBefore) / 3)  // Try to reclaim ~33% of available
+        performMemoryPressureTrunc(targetMB: min(targetMB, 2000))  // Cap at 2 GB
+        let availableAfter = os_proc_available_memory() / 1_048_576
+        print("[Lamo] Preload cleanup: \(availableBefore)MB → \(availableAfter)MB (freed \(availableAfter - availableBefore)MB)")
+        #else
+        print("[Lamo] Preload cleanup done (macOS — pressure trick skipped)")
+        #endif
+    }
+
+    /// Allocate a large anonymous block, touch every page, then release it.
+    /// This forces iOS to evict cached pages from other apps (Safari, etc.)
+    /// to make room for our allocation. When we free it, that physical RAM
+    /// becomes available for the model.
+    ///
+    /// Uses madvise(MADV_DONTNEED) before munmap to ensure pages are
+    /// actually released rather than kept in the free list.
+    private func performMemoryPressureTrunc(targetMB: Int) {
+        let targetBytes = targetMB * 1024 * 1024
+        guard let ptr = mmap(nil, targetBytes, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0),
+              ptr != MAP_FAILED else {
+            print("[Lamo] Pressure trick: mmap failed for \(targetMB)MB")
+            return
+        }
+
+        // Touch every page to force it into physical RAM
+        // (mmap pages are lazy — they don't consume RAM until touched)
+        let buffer = ptr.bindMemory(to: UInt8.self, capacity: targetBytes)
+        let pageSize = 4096
+        for offset in stride(from: 0, to: targetBytes, by: pageSize) {
+            buffer[offset] = 1
+        }
+
+        // Tell the kernel we no longer need these pages
+        // MADV_DONTNEED: pages are discarded immediately (not just marked lazy)
+        madvise(ptr, targetBytes, MADV_DONTNEED)
+
+        // Free the virtual address space
+        munmap(ptr, targetBytes)
+        print("[Lamo] Pressure trick: allocated/touched/released \(targetMB)MB")
     }
 
     /// Force-reload the engine (e.g., after model download completes).
