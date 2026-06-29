@@ -57,7 +57,6 @@ struct MarkdownRenderer: View {
                         .padding(.top, 4)
                 }
             }
-            .textSelection(.enabled)
         }
     }
 
@@ -301,14 +300,16 @@ struct RichText: View {
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
-                .font(.footnote)
+                .font(.subheadline)
                 .foregroundStyle(textColor)
                 .lineSpacing(4)
+                .textSelection(.enabled)
         } else {
             Text(text)
-                .font(.footnote)
+                .font(.subheadline)
                 .foregroundStyle(textColor)
                 .lineSpacing(4)
+                .textSelection(.enabled)
         }
     }
 }
@@ -324,21 +325,23 @@ struct HeaderText: View {
             Text(attributed)
                 .font(headerFont)
                 .foregroundStyle(LamoTheme.Colors.textPrimary)
+                .textSelection(.enabled)
         } else {
             Text(text)
                 .font(headerFont)
                 .foregroundStyle(LamoTheme.Colors.textPrimary)
+                .textSelection(.enabled)
         }
     }
 
     private var headerFont: Font {
         switch level {
-        case 1: return .title3.bold()
-        case 2: return .headline.bold()
-        case 3: return .subheadline.bold()
-        case 4: return .footnote.bold()
-        case 5: return .caption.bold()
-        default: return .caption2.bold()
+        case 1: return .title2.bold()
+        case 2: return .title3.bold()
+        case 3: return .headline.bold()
+        case 4: return .subheadline.bold()
+        case 5: return .footnote.bold()
+        default: return .caption.bold()
         }
     }
 }
@@ -354,12 +357,12 @@ struct ListItemText: View {
         HStack(alignment: .top, spacing: 6) {
             if let number {
                 Text("\(number).")
-                    .font(.footnote)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(width: 18, alignment: .trailing)
             } else {
                 Text(bulletForIndent(indent))
-                    .font(.footnote)
+                    .font(.subheadline)
                     .foregroundStyle(indent == 0 ? LamoTheme.Colors.accent : LamoTheme.Colors.accent.opacity(0.5))
                     .frame(width: 18, alignment: .center)
             }
@@ -386,7 +389,7 @@ struct TaskListItemText: View {
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: checked ? "checkmark.circle.fill" : "circle")
-                .font(.footnote)
+                .font(.subheadline)
                 .foregroundStyle(checked ? LamoTheme.Colors.accent : .secondary)
                 .frame(width: 18, alignment: .center)
 
@@ -405,22 +408,22 @@ struct FormattedText: View {
     var body: some View {
         if text.contains("`") {
             let parts = splitCodeSpans(text)
-            HStack(spacing: 0) {
-                ForEach(parts.indices, id: \.self) { idx in
-                    let part = parts[idx]
-                    if part.isCode {
-                        Text(part.text)
-                            .font(.system(.footnote, design: .monospaced))
-                            .foregroundStyle(LamoTheme.Colors.accent)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color(.quaternarySystemFill))
-                            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+            parts.reduce(Text("")) { result, part in
+                if part.isCode {
+                    return result + Text(part.text)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                } else {
+                    if let attributed = try? AttributedString(markdown: part.text) {
+                        return result + Text(attributed)
                     } else {
-                        FormattedTextBody(text: part.text)
+                        return result + Text(part.text)
                     }
                 }
             }
+            .font(.subheadline)
+            .lineSpacing(3)
+            .textSelection(.enabled)
         } else {
             FormattedTextBody(text: text)
         }
@@ -459,7 +462,7 @@ struct FormattedText: View {
     }
 }
 
-// MARK: - Formatted Text Body (bold, italic, strikethrough, links via AttributedString)
+// MARK: - Formatted Text Body
 
 struct FormattedTextBody: View {
     let text: String
@@ -467,12 +470,14 @@ struct FormattedTextBody: View {
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
-                .font(.footnote)
+                .font(.subheadline)
                 .lineSpacing(3)
+                .textSelection(.enabled)
         } else {
             Text(text)
-                .font(.footnote)
+                .font(.subheadline)
                 .lineSpacing(3)
+                .textSelection(.enabled)
         }
     }
 }
@@ -534,13 +539,13 @@ struct CodeBlock: View {
             .padding(.vertical, 8)
             .background(Color(.quaternarySystemFill))
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(code)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
-                    .textSelection(.enabled)
-                    .padding(12)
-            }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(code)
+                        .font(.system(.footnote, design: .monospaced))
+                        .foregroundStyle(LamoTheme.Colors.textPrimary)
+                        .textSelection(.enabled)
+                        .padding(12)
+                }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
@@ -563,7 +568,7 @@ struct MarkdownTable: View {
                 HStack(spacing: 0) {
                     ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
                         FormattedTextBody(text: header)
-                            .font(.footnote.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(LamoTheme.Colors.textPrimary)
                             .lineLimit(nil)
                             .fixedSize(horizontal: false, vertical: true)
@@ -595,7 +600,7 @@ struct MarkdownTable: View {
                         ForEach(0..<max(headers.count, row.count), id: \.self) { colIndex in
                             let cell = colIndex < row.count ? row[colIndex] : ""
                             FormattedTextBody(text: cell)
-                                .font(.footnote)
+                                .font(.subheadline)
                                 .foregroundStyle(LamoTheme.Colors.textPrimary.opacity(0.8))
                                 .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
