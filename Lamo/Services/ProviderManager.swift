@@ -184,6 +184,24 @@ final class ProviderManager: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "litertLMSystemPrompt") }
     }
 
+    /// Default system prompt that teaches the model to use markdown formatting.
+    var defaultSystemPrompt: String {
+        """
+        You are a helpful, concise assistant. Answer in the same language the user writes in.
+
+        Format your responses using markdown:
+        - Use **bold** for emphasis and *italic* for subtle emphasis
+        - Use # ## ### for section headers to organize longer answers
+        - Use ```language code blocks for code with proper syntax
+        - Use | tables | for structured data comparisons
+        - Use > blockquotes for important notes or citations
+        - Use - bullet lists and 1. numbered lists for steps or items
+        - Use `inline code` for technical terms, commands, filenames, and values
+        - Use --- for section separators when needed
+
+        Keep responses clear and well-structured. Prefer tables for comparing multiple items side by side.
+        """
+
     // MARK: - Internal State
 
     /// Cached engine. Nil when invalidated or not yet loaded.
