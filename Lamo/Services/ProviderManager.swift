@@ -231,6 +231,10 @@ final class ProviderManager: ObservableObject {
         engineError = nil
         isEngineReady = false
 
+        // Free up memory before loading — model is mmap'd but engine still
+        // needs working RAM for KV-cache, tokenizer, and execution buffers.
+        performPreloadCleanup()
+
         let resolvedPath: String
         if let path = Self.resolveModelPath(custom: litertLMModelPath) {
             resolvedPath = path
@@ -268,7 +272,10 @@ final class ProviderManager: ObservableObject {
         }
 
         // Pre-flight: check if device has enough AVAILABLE RAM for this model
-        // Use os_proc_available_memory() instead of physicalMemory — accounts for other apps
+        // Use os_proc_available_memory() instead of physicalMemory — accounts for other apps.
+        // Thresholds are conservative but realistic for mmap'd models:
+        // the engine maps the file into virtual address space, only loading
+        // pages on demand — so we don't need the full model size in RAM.
         let filename = (resolvedPath as NSString).lastPathComponent
         if let preset = PresetModel.allCases.first(where: { $0.filename == filename }) {
             #if os(iOS)
@@ -278,14 +285,22 @@ final class ProviderManager: ObservableObject {
             #endif
             let requiredMB: Double
             switch preset {
-            case .gemma4E4B: requiredMB = 5500  // 5.5 GB available needed
-            case .gemma4E2B: requiredMB = 2500  // 2.5 GB available needed
+            case .gemma4E4B: requiredMB = 3500  // 3.5 GB — mmap'd, not fully loaded
+            case .gemma4E2B: requiredMB = 2000  // 2.0 GB — mmap'd, not fully loaded
             }
             if availableMB < requiredMB {
-                let availGB = String(format: "%.1f", availableMB / 1024)
-                let reqGB = String(format: "%.1f", requiredMB / 1024)
-                engineError = "Only \(availGB) GB RAM available but \(preset.displayName) needs ~\(reqGB) GB. Close other apps or use \(PresetModel.gemma4E2B.displayName)."
-                return
+                // Try to free memory before giving up
+                print("[Lamo] Low memory (\(String(format: "%.0f", availableMB))MB), attempting cleanup...")
+                performPreloadCleanup()
+                // Re-check after cleanup
+                let newAvailableMB = Double(os_proc_available_memory()) / 1_048_576
+                if newAvailableMB < requiredMB {
+                    let availGB = String(format: "%.1f", newAvailableMB / 1024)
+                    let reqGB = String(format: "%.1f", requiredMB / 1024)
+                    engineError = "Only \(availGB) GB RAM available but \(preset.displayName) needs ~\(reqGB) GB.\n\nTry:\n• Close other apps (especially Safari, Instagram, games)\n• Restart Lamo after closing apps\n• Use \(PresetModel.gemma4E2B.displayName) instead"
+                    return
+                }
+                print("[Lamo] Cleanup freed memory: \(String(format: "%.0f", newAvailableMB))MB now available")
             }
         }
 
@@ -374,6 +389,10 @@ final class ProviderManager: ObservableObject {
     /// Called automatically when model path or GPU setting changes.
     /// Debounced: rapid changes within 300ms are coalesced.
     func invalidateEngine() {
+        // Release existing engine memory before invalidating
+        if let provider = cachedProvider as? LiteRTLMProvider {
+            provider.invalidateConversationCache()
+        }
         cachedEngine = nil
         cachedProvider = nil
         isEngineReady = false
@@ -385,6 +404,42 @@ final class ProviderManager: ObservableObject {
             guard !Task.isCancelled else { return }
             await initializeEngineIfNeeded()
         }
+    }
+
+    // MARK: - Memory Cleanup
+
+    /// Aggressive cleanup before engine load — frees everything we can
+    /// so the OS has maximum contiguous memory for the mmap'd model.
+    private func performPreloadCleanup() {
+        // 1. Release URL cache (Safari, image downloads, etc.)
+        URLCache.shared.removeAllCachedResponses()
+        URLCache.shared.memoryCapacity = 0
+        URLCache.shared.diskCapacity = 0
+
+        // 2. Release any cached conversation data
+        if let provider = cachedProvider as? LiteRTLMProvider {
+            provider.invalidateConversationCache()
+        }
+
+        // 3. Release the old engine (if switching models)
+        cachedEngine = nil
+        cachedProvider = nil
+
+        // 4. Force garbage collection of any lingering objects
+        //    (Swift doesn't have explicit GC, but we can drain autorelease pools)
+        autoreleasepool { }
+
+        // 5. Clear any temporary files that might hold memory
+        let tmp = FileManager.default.temporaryDirectory
+        if let contents = try? FileManager.default.contentsOfDirectory(
+            at: tmp, includingPropertiesForKeys: nil
+        ) {
+            for file in contents where file.lastPathComponent.hasPrefix("litert") {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+
+        print("[Lamo] Preload cleanup done. Available: \(String(format: "%.0f", Double(os_proc_available_memory()) / 1_048_576))MB")
     }
 
     /// Force-reload the engine (e.g., after model download completes).

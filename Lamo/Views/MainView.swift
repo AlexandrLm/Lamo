@@ -8,6 +8,8 @@ struct MainView: View {
     @State private var showSettings = false
     @State private var searchText = ""
     @State private var hasAppeared = false
+    @State private var renamingID: UUID?
+    @State private var renameText = ""
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -22,6 +24,37 @@ struct MainView: View {
         conversations.first { $0.id == selectedID }
     }
 
+    // MARK: - Grouped Conversations
+
+    private var groupedConversations: [(title: String, items: [Conversation])] {
+        let cal = Calendar.current
+        let now = Date()
+        var today: [Conversation] = []
+        var yesterday: [Conversation] = []
+        var lastWeek: [Conversation] = []
+        var older: [Conversation] = []
+
+        for conv in filteredConversations {
+            let updated = conv.updatedAt
+            if cal.isDateInToday(updated) {
+                today.append(conv)
+            } else if cal.isDateInYesterday(updated) {
+                yesterday.append(conv)
+            } else if updated > cal.date(byAdding: .day, value: -7, to: now)! {
+                lastWeek.append(conv)
+            } else {
+                older.append(conv)
+            }
+        }
+
+        var groups: [(String, [Conversation])] = []
+        if !today.isEmpty { groups.append(("Today", today)) }
+        if !yesterday.isEmpty { groups.append(("Yesterday", yesterday)) }
+        if !lastWeek.isEmpty { groups.append(("Previous 7 Days", lastWeek)) }
+        if !older.isEmpty { groups.append(("Older", older)) }
+        return groups
+    }
+
     var body: some View {
         NavigationSplitView {
             sidebarContent
@@ -31,6 +64,21 @@ struct MainView: View {
         .tint(LamoTheme.Colors.accent)
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .alert("Rename Chat", isPresented: .init(
+            get: { renamingID != nil },
+            set: { if !$0 { renamingID = nil } }
+        )) {
+            TextField("Chat name", text: $renameText)
+            Button("Rename") {
+                guard let id = renamingID,
+                      let conv = conversations.first(where: { $0.id == id }) else { return }
+                let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                conv.title = trimmed.isEmpty ? "New Chat" : trimmed
+                try? modelContext.save()
+                renamingID = nil
+            }
+            Button("Cancel", role: .cancel) { renamingID = nil }
         }
         .onAppear {
             if !hasAppeared {
@@ -46,36 +94,82 @@ struct MainView: View {
 
     private var sidebarContent: some View {
         List(selection: $selectedID) {
+            // New Chat Button
             Button {
                 startNewChat()
             } label: {
-                Label {
+                HStack(spacing: 10) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .frame(width: 32, height: 32)
+                        .background(LamoTheme.Colors.accent.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
                     Text("New Chat")
-                        .font(.body)
-                } icon: {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(LamoTheme.Colors.textPrimary)
                 }
             }
             .listRowBackground(Color(.tertiarySystemFill))
+            .listRowSeparator(.hidden)
 
-            Section {
-                ForEach(filteredConversations) { conversation in
-                    ConversationRow(conversation: conversation)
-                        .tag(conversation.id)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                deleteConversation(conversation)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                }
-            } header: {
-                if !filteredConversations.isEmpty {
-                    Text("Recent")
-                        .font(.caption)
+            if filteredConversations.isEmpty && !searchText.isEmpty {
+                // Search empty state
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title3)
                         .foregroundStyle(.tertiary)
+                    Text("No chats found")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .listRowSeparator(.hidden)
+            } else if filteredConversations.isEmpty {
+                // Empty state
+                VStack(spacing: 12) {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 32, weight: .ultraLight))
+                        .foregroundStyle(.tertiary)
+                    Text("Start a conversation")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+                .listRowSeparator(.hidden)
+            } else {
+                // Grouped conversations
+                ForEach(groupedConversations, id: \.title) { group in
+                    Section {
+                        ForEach(group.items) { conversation in
+                            ConversationRow(conversation: conversation)
+                                .tag(conversation.id)
+                                .contextMenu {
+                                    Button {
+                                        renamingID = conversation.id
+                                        renameText = conversation.title
+                                    } label: {
+                                        Label("Rename", systemImage: "pencil")
+                                    }
+
+                                    Divider()
+
+                                    Button(role: .destructive) {
+                                        deleteConversation(conversation)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    } header: {
+                        Text(group.title)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .textCase(.uppercase)
+                    }
                 }
             }
         }
@@ -160,21 +254,52 @@ struct MainView: View {
 struct ConversationRow: View {
     let conversation: Conversation
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(conversation.title)
-                .font(.body)
-                .lineLimit(1)
+    private var relativeTime: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
+    }
 
-            if let lastMessage = conversation.messages
-                .sorted(by: { $0.timestamp < $1.timestamp })
-                .last {
-                Text(lastMessage.content)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+    var body: some View {
+        HStack(spacing: 12) {
+            // Chat icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(.quaternarySystemFill))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                // Title + timestamp row
+                HStack(alignment: .top) {
+                    Text(conversation.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .foregroundStyle(LamoTheme.Colors.textPrimary)
+
+                    Spacer(minLength: 4)
+
+                    Text(relativeTime)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+
+                // Last message preview
+                if let lastMessage = conversation.messages
+                    .sorted(by: { $0.timestamp < $1.timestamp })
+                    .last {
+                    Text(lastMessage.content)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 }
