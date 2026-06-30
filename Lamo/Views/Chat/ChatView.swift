@@ -23,37 +23,37 @@ struct ChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    if viewModel.messages.isEmpty {
-                        emptyChatView
-                            .id("empty")
-                    }
-
-                    ForEach(viewModel.messages) { message in
-                        MessageBubble(message: message, onRetry: {
-                            viewModel.retryLastMessage()
-                        })
-                        .id(message.id)
-                    }
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                if viewModel.messages.isEmpty {
+                    emptyChatView
+                        .id("empty")
                 }
-                .padding(.vertical, 20)
+
+                ForEach(viewModel.messages) { message in
+                    MessageBubble(message: message, onRetry: {
+                        viewModel.retryLastMessage()
+                    })
+                    .id(message.id)
+                }
             }
-            .scrollPosition($scrollPosition)
-            .scrollDismissesKeyboard(.interactively)
-            .onTapGesture {
-                hideKeyboard()
-            }
-            .onChange(of: viewModel.messages.count) {
+            .padding(.vertical, 20)
+            .padding(.bottom, 8)
+        }
+        .scrollPosition($scrollPosition)
+        .scrollDismissesKeyboard(.interactively)
+        .onTapGesture {
+            hideKeyboard()
+        }
+        .onChange(of: viewModel.messages.count) {
+            scrollToBottom()
+        }
+        .onChange(of: viewModel.messages.last?.content) {
+            if isUserNearBottom {
                 scrollToBottom()
             }
-            .onChange(of: viewModel.messages.last?.content) {
-                if isUserNearBottom {
-                    scrollToBottom()
-                }
-            }
-
+        }
+        .safeAreaInset(edge: .bottom) {
             ChatInputBar(
                 text: $viewModel.inputText,
                 isStreaming: viewModel.isStreaming,

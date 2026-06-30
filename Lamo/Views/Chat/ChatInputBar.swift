@@ -16,7 +16,7 @@ struct ChatInputBar: View {
                     .font(.body)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .scrollContentBackground(.hidden)
+                    .textFieldStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
                     .overlay(alignment: .topTrailing) {
                         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -69,6 +69,7 @@ struct ChatInputBar: View {
             .padding(.vertical, 10)
             .padding(.bottom, 6)
         }
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
     }
 
