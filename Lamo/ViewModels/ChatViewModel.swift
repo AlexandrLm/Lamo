@@ -69,6 +69,7 @@ final class ChatViewModel {
             .map { ChatMessage(role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
 
         // 6) Stream response
+        MemoryService.shared.currentConversationID = conversation.id
         startStreaming(chatMessages: chatMessages)
     }
 

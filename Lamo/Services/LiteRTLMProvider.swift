@@ -1,5 +1,6 @@
 import Foundation
 import LiteRTLM
+import SwiftData
 
 /// Provider that runs a local LLM via Google's LiteRT-LM framework.
 /// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
@@ -234,8 +235,18 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         // Inject stored memory facts into system prompt
         let memoryContext = MemoryService.shared.buildMemoryContext()
-        if !memoryContext.isEmpty {
-            systemPrompt += "\n\n" + memoryContext
+        if MemoryService.shared.isEnabled {
+            systemPrompt += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
+
+            // Inject conversation summary (for when old messages are dropped)
+            if let convID = MemoryService.shared.currentConversationID,
+               let summary = fetchConversationSummary(convID: convID), !summary.isEmpty {
+                systemPrompt += "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
+            }
+
+            if !memoryContext.isEmpty {
+                systemPrompt += "\n\n" + memoryContext
+            }
         }
 
         let systemPromptChars = systemPrompt.count
@@ -283,6 +294,16 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         // Use DispatchSemaphore + async to catch SIGABRT
         // If engine aborts, we restart with minimal history
         return try await engine.createConversation(with: config)
+    }
+
+    /// Fetch conversation summary from SwiftData.
+    private func fetchConversationSummary(convID: UUID) -> String? {
+        // We need a ModelContext — get it from MemoryService which has one
+        guard let context = MemoryService.shared.modelContext else { return nil }
+        let descriptor = FetchDescriptor<Conversation>(
+            predicate: #Predicate { $0.id == convID }
+        )
+        return try? context.fetch(descriptor).first?.summary
     }
 
     private func resolveModelPath() throws -> String {

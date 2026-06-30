@@ -23,9 +23,13 @@ final class MemoryService: ObservableObject {
 
     @Published var totalEntries: Int = 0
 
-    private var modelContext: ModelContext?
+    private(set) var modelContext: ModelContext?
     private var factsCache: [MemoryEntry] = []
     private var cacheLoaded = false
+
+    /// Current conversation ID — set by ChatViewModel before each message.
+    /// Used by UpdateMemoryTool to update conversation summary.
+    var currentConversationID: UUID?
 
     /// Max facts to inject into system prompt.
     /// 50 facts × ~60 chars = ~3000 chars ≈ 750 tokens. Fits easily.
@@ -72,6 +76,17 @@ final class MemoryService: ObservableObject {
         } catch {
             print("[Memory] Save error: \(error)")
         }
+    }
+
+    /// Update the summary of the current conversation (called by UpdateMemoryTool).
+    func updateConversationSummary(_ summary: String) async {
+        guard let context = modelContext, let convID = currentConversationID else { return }
+        let descriptor = FetchDescriptor<Conversation>(
+            predicate: #Predicate { $0.id == convID }
+        )
+        guard let conversation = try? context.fetch(descriptor).first else { return }
+        conversation.summary = summary
+        try? context.save()
     }
 
     /// Remove facts that match the given strings (called by UpdateMemoryTool).
