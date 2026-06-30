@@ -44,7 +44,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         modelPath: String? = nil,
         useGPU: Bool = true,
         cpuThreadCount: Int = 4,
-        maxNumTokens: Int = 4096,
+        maxNumTokens: Int? = nil,
         engine: LiteRTLM.Engine? = nil
     ) {
         self.modelPath = modelPath
@@ -226,11 +226,13 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         )
 
         // Build truncated history — fit within KV-cache token budget
-        // ~4 chars ≈ 1 token; leave room for system prompt + generation headroom
+        // Use the actual token limit passed to the engine, not pm.maxNumTokens
+        // (which is 0 in auto mode and would zero out the budget)
         let maxCharsPerToken = 4
         let systemPrompt = pm.systemPrompt
         let systemPromptChars = systemPrompt.count
-        let budgetChars = (pm.maxNumTokens * maxCharsPerToken) - systemPromptChars - 512  // 512 tokens headroom
+        let effectiveMaxTokens = self.maxNumTokens ?? max(pm.maxNumTokens, 2048)
+        let budgetChars = (effectiveMaxTokens * maxCharsPerToken) - systemPromptChars - 512
         
         var allMessages: [LiteRTLM.Message] = []
         

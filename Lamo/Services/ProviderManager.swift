@@ -366,6 +366,7 @@ final class ProviderManager: ObservableObject {
         let provider = LiteRTLMProvider(
             modelPath: litertLMModelPath,
             useGPU: litertLMUseGPU,
+            maxNumTokens: maxTokens,
             engine: engine
         )
         cachedProvider = provider
