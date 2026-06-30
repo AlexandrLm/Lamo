@@ -27,9 +27,16 @@ struct MarkdownRenderer: View {
                         CodeBlock(code: code, language: language)
                             .padding(.vertical, 6)
                     case .header(let text, let level):
-                        InlineMarkdown(text: text, textColor: textColor, font: headerFont(level))
-                            .padding(.top, level <= 2 ? 10 : 6)
-                            .padding(.bottom, 3)
+                        VStack(alignment: .leading, spacing: 3) {
+                            InlineMarkdown(text: text, textColor: textColor, font: headerFont(level))
+                            if level <= 2 {
+                                Rectangle()
+                                    .fill(LamoTheme.Colors.accent.opacity(0.15))
+                                    .frame(height: 1)
+                            }
+                        }
+                        .padding(.top, level <= 2 ? 12 : 8)
+                        .padding(.bottom, level <= 2 ? 6 : 3)
                     case .listItem(let text, let indent, let number):
                         HStack(alignment: .top, spacing: 6) {
                             if let number {
@@ -76,7 +83,7 @@ struct MarkdownRenderer: View {
                             .overlay(Color(.separator).opacity(0.3))
                     case .table(let headers, let rows):
                         MarkdownTable(headers: headers, rows: rows)
-                            .padding(.vertical, 6)
+                            .padding(.vertical, 8)
                     case .text(let content):
                         if !content.trimmingCharacters(in: .whitespaces).isEmpty {
                             InlineMarkdown(text: content, textColor: textColor)
@@ -318,19 +325,34 @@ private struct InlineMarkdown: View {
     var font: Font = .subheadline
 
     var body: some View {
-        if let attributed = try? AttributedString(markdown: text) {
+        if let attributed = try? formatInlineMarkdown(text) {
             Text(attributed)
                 .font(font)
                 .foregroundStyle(textColor)
-                .lineSpacing(4)
+                .lineSpacing(5)
                 .textSelection(.enabled)
         } else {
             Text(text)
                 .font(font)
                 .foregroundStyle(textColor)
-                .lineSpacing(4)
+                .lineSpacing(5)
                 .textSelection(.enabled)
         }
+    }
+
+    private func formatInlineMarkdown(_ text: String) -> AttributedString? {
+        // First try native markdown parsing
+        guard var attributed = try? AttributedString(markdown: text) else { return nil }
+
+        // Style inline code spans with background
+        for run in attributed.runs {
+            if let intent = run.inlinePresentationIntent, intent.contains(.code) {
+                attributed[run.range].backgroundColor = Color(.tertiarySystemFill).opacity(0.5)
+                attributed[run.range].font = .system(.footnote, design: .monospaced)
+                attributed[run.range].foregroundColor = LamoTheme.Colors.accent
+            }
+        }
+        return attributed
     }
 }
 
@@ -412,96 +434,80 @@ struct MarkdownTable: View {
     let headers: [String]
     let rows: [[String]]
 
+    private var columnCount: Int {
+        max(headers.count, rows.map(\.count).max() ?? 0)
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                HStack(spacing: 0) {
-                    ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
-                        TableCellText(text: header)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(LamoTheme.Colors.textPrimary)
-                            .padding(.trailing, 14)
+            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                // Header row
+                GridRow {
+                    ForEach(0..<columnCount, id: \.self) { col in
+                        let text = col < headers.count ? headers[col] : ""
+                        MarkdownTableCell(text: text, isHeader: true)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .gridColumnAlignment(col == 0 ? .leading : .leading)
                     }
                 }
-                .padding(.vertical, 7)
-                .padding(.horizontal, 10)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            LamoTheme.Colors.accent.opacity(0.1),
-                            LamoTheme.Colors.accent.opacity(0.05)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .background(LamoTheme.Colors.accent.opacity(0.1))
 
-                // Accent separator
-                Rectangle()
-                    .fill(LamoTheme.Colors.accent.opacity(0.3))
-                    .frame(height: 1.5)
+                // Header separator
+                Divider()
+                    .overlay(LamoTheme.Colors.accent.opacity(0.3))
 
-                // Rows
+                // Data rows
                 ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                    HStack(spacing: 0) {
-                        ForEach(0..<max(headers.count, row.count), id: \.self) { colIndex in
-                            let cell = colIndex < row.count ? row[colIndex] : ""
-                            TableCellText(text: cell)
-                                .font(.subheadline)
-                                .foregroundStyle(LamoTheme.Colors.textPrimary.opacity(0.8))
-                                .padding(.trailing, 14)
+                    GridRow {
+                        ForEach(0..<columnCount, id: \.self) { col in
+                            let cell = col < row.count ? row[col] : ""
+                            MarkdownTableCell(text: cell, isHeader: false)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
                         }
                     }
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
-                    .background(rowIndex % 2 == 1
-                        ? Color(.tertiarySystemFill).opacity(0.2)
-                        : Color.clear)
+                    .background(
+                        rowIndex % 2 == 0
+                            ? Color.clear
+                            : Color(.tertiarySystemFill).opacity(0.08)
+                    )
 
                     if rowIndex < rows.count - 1 {
-                        Rectangle()
-                            .fill(Color(.separator).opacity(0.15))
-                            .frame(height: 0.5)
-                            .padding(.horizontal, 6)
+                        Divider()
+                            .overlay(Color(.separator).opacity(0.1))
+                            .padding(.horizontal, 10)
                     }
                 }
             }
+            .frame(minWidth: 280)
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            LamoTheme.Colors.accent.opacity(0.2),
-                            Color(.separator).opacity(0.3)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
+                .strokeBorder(Color(.separator).opacity(0.18), lineWidth: 0.5)
         )
     }
 }
 
 // MARK: - Table Cell
 
-private struct TableCellText: View {
+private struct MarkdownTableCell: View {
     let text: String
+    let isHeader: Bool
 
     var body: some View {
-        if let attributed = try? AttributedString(markdown: text) {
-            Text(attributed)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(minWidth: 50, alignment: .leading)
-        } else {
-            Text(text)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(minWidth: 50, alignment: .leading)
+        Group {
+            if let attributed = try? AttributedString(markdown: text) {
+                Text(attributed)
+            } else {
+                Text(text)
+            }
         }
+        .font(isHeader ? .footnote.weight(.semibold) : .footnote)
+        .foregroundStyle(isHeader ? LamoTheme.Colors.accent : LamoTheme.Colors.textPrimary.opacity(0.85))
+        .lineLimit(nil)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minWidth: 44, alignment: .leading)
     }
 }
