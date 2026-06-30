@@ -94,17 +94,6 @@ struct MainView: View {
 
     private var sidebarContent: some View {
         List(selection: $selectedID) {
-            // New Chat Button
-            Button {
-                startNewChat()
-            } label: {
-                Label("New Chat", systemImage: "square.and.pencil")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(LamoTheme.Colors.accent)
-            }
-            .listRowBackground(Color(.tertiarySystemFill))
-            .listRowSeparator(.hidden)
-
             if filteredConversations.isEmpty && !searchText.isEmpty {
                 ContentUnavailableView("No Chats Found", systemImage: "magnifyingglass")
                     .listRowSeparator(.hidden)
@@ -112,12 +101,18 @@ struct MainView: View {
                 ContentUnavailableView("Start a Conversation", systemImage: "bubble.left", description: Text("Your chats will appear here"))
                     .listRowSeparator(.hidden)
             } else {
-                // Grouped conversations
                 ForEach(groupedConversations, id: \.title) { group in
                     Section {
                         ForEach(group.items) { conversation in
                             ConversationRow(conversation: conversation)
                                 .tag(conversation.id)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteConversation(conversation)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                                 .contextMenu {
                                     Button {
                                         renamingID = conversation.id
@@ -155,6 +150,14 @@ struct MainView: View {
                     Image(systemName: "gearshape")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    startNewChat()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.body.weight(.medium))
                 }
             }
         }
@@ -236,13 +239,13 @@ struct ConversationRow: View {
                 .font(.subheadline)
                 .lineLimit(1)
 
-            Spacer(minLength: 6)
+            Spacer(minLength: 8)
 
             Text(relativeTime)
                 .font(.caption2)
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(.tertiary)
                 .lineLimit(1)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 }

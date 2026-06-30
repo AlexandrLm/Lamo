@@ -781,15 +781,7 @@ struct SettingsView: View {
 
     private var privacySection: some View {
         Section {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.1))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.green)
-                }
+            Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Fully Private")
                         .font(.body)
@@ -798,6 +790,11 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            } icon: {
+                Image(systemName: "lock.shield.fill")
+                    .foregroundStyle(.green)
+                    .frame(width: 28, height: 28)
+                    .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
             }
             .padding(.vertical, 4)
         }

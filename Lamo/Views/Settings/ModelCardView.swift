@@ -26,15 +26,11 @@ struct ModelCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(themeColor.opacity(0.1))
-                        .frame(width: 44, height: 44)
-
-                    Image(systemName: model.systemImage)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(themeColor)
-                }
+                Image(systemName: model.systemImage)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(themeColor)
+                    .frame(width: 44, height: 44)
+                    .background(themeColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(model.displayName)
@@ -249,15 +245,9 @@ struct ModelCardView: View {
             .buttonStyle(.plain)
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
-            .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.4))
+            .background(Color.clear)
         }
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.lg, style: .continuous)
-                .stroke(Color(.separator).opacity(0.4), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 3)
+        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 }
 

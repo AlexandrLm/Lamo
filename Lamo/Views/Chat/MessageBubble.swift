@@ -194,8 +194,9 @@ struct ThinkingView: View {
                         .foregroundStyle(LamoTheme.Colors.accent)
 
                     if isStreaming && !isExpanded {
-                        // Show thinking animation when streaming and collapsed
-                        ThinkingDots()
+                        ProgressView()
+                            .tint(LamoTheme.Colors.accent)
+                            .controlSize(.small)
                     } else {
                         Text("Thinking")
                             .font(.caption.weight(.medium))
@@ -236,37 +237,8 @@ struct ThinkingView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(.tertiarySystemFill).opacity(0.3))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(LamoTheme.Colors.accent.opacity(0.15), lineWidth: 0.5)
-        )
+        .glassEffect(.regular.tint(LamoTheme.Colors.accent.opacity(0.08)), in: .rect(cornerRadius: 10))
     }
 }
 
-// MARK: - Thinking Dots Animation
 
-struct ThinkingDots: View {
-    @State private var animating = false
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(LamoTheme.Colors.accent)
-                    .frame(width: 5, height: 5)
-                    .opacity(animating ? 1.0 : 0.3)
-                    .animation(
-                        .easeInOut(duration: 0.5)
-                        .repeatForever(autoreverses: true)
-                        .delay(Double(i) * 0.2),
-                        value: animating
-                    )
-            }
-        }
-        .onAppear { animating = true }
-    }
-}

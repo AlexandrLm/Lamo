@@ -410,7 +410,6 @@ struct CodeBlock: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(.quaternarySystemFill))
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
@@ -420,11 +419,7 @@ struct CodeBlock: View {
                     .padding(12)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color(.separator).opacity(0.2), lineWidth: 1)
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 }
 

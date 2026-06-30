@@ -12,6 +12,7 @@ struct ChatInputBar: View {
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
     @State private var showPhotoPicker = false
+    @State private var sendTrigger = false
     @ObservedObject private var provider = ProviderManager.shared
 
     var body: some View {
@@ -135,7 +136,7 @@ struct ChatInputBar: View {
                     .transition(.scale.combined(with: .opacity))
                 } else if canSend {
                     Button(action: {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        sendTrigger.toggle()
                         isTextFieldFocused = false
                         onSend()
                     }) {
@@ -146,6 +147,7 @@ struct ChatInputBar: View {
                             .background(Color.white, in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
                     .transition(.scale.combined(with: .opacity))
                 } else {
                     // Dimmed send when empty
