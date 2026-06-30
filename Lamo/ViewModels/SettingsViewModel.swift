@@ -80,6 +80,14 @@ final class SettingsViewModel: ObservableObject {
         didSet { defaults.set(systemPrompt, forKey: "litertLMSystemPrompt") }
     }
 
+    // MARK: - Memory
+
+    @Published var memoryEnabled: Bool {
+        didSet {
+            MemoryService.shared.isEnabled = memoryEnabled
+        }
+    }
+
     // MARK: - Model Info
 
     @Published var modelInfo: ModelInfo?
@@ -99,6 +107,7 @@ final class SettingsViewModel: ObservableObject {
         self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
         self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
+        self.memoryEnabled = defaults.object(forKey: "memoryEnabled") as? Bool ?? true
         refreshModels()
 
         NotificationCenter.default.addObserver(
@@ -145,6 +154,7 @@ final class SettingsViewModel: ObservableObject {
         maxNumTokens = 4096
         speculativeDecoding = false
         visualTokenBudget = 560
+        memoryEnabled = true
         systemPrompt = "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
     }
 

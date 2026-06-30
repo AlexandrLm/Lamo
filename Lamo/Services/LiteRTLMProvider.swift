@@ -229,9 +229,16 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         // Use the actual token limit passed to the engine, not pm.maxNumTokens
         // (which is 0 in auto mode and would zero out the budget)
         let maxCharsPerToken = 4
-        let systemPrompt = pm.systemPrompt
-        let systemPromptChars = systemPrompt.count
+        var systemPrompt = pm.systemPrompt
         let effectiveMaxTokens = self.maxNumTokens ?? max(pm.maxNumTokens, 2048)
+
+        // Inject stored memory facts into system prompt
+        let memoryContext = MemoryService.shared.buildMemoryContext()
+        if !memoryContext.isEmpty {
+            systemPrompt += "\n\n" + memoryContext
+        }
+
+        let systemPromptChars = systemPrompt.count
         let budgetChars = (effectiveMaxTokens * maxCharsPerToken) - systemPromptChars - 512
         
         var allMessages: [LiteRTLM.Message] = []

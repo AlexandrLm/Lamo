@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct LamoApp: App {
+    @State private var hasSetupMemory = false
+
     init() {
         // Pre-initialize DownloadManager to handle background sessions
         _ = DownloadManager.shared
@@ -16,7 +18,14 @@ struct LamoApp: App {
         WindowGroup {
             MainView()
                 .preferredColorScheme(.dark)
+                .onAppear {
+                    // Prune old memory entries on first launch
+                    if !hasSetupMemory {
+                        hasSetupMemory = true
+                        MemoryService.shared.pruneOldEntries(olderThan: 90)
+                    }
+                }
         }
-        .modelContainer(for: [Conversation.self, Message.self])
+        .modelContainer(for: [Conversation.self, Message.self, MemoryEntry.self])
     }
 }

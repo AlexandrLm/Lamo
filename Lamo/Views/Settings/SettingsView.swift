@@ -606,6 +606,40 @@ struct SettingsView: View {
             } footer: {
                 Text("Instructions the model follows. Changes apply to new conversations only.")
             }
+
+            Section {
+                Toggle(isOn: $vm.memoryEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Memory", systemImage: "brain")
+                        Text("Remember facts across conversations")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .tint(LamoTheme.Colors.accent)
+
+                if vm.memoryEnabled {
+                    HStack {
+                        Label("Stored facts", systemImage: "circle.fill")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(MemoryService.shared.totalEntries)")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .font(.subheadline)
+
+                    Button(role: .destructive) {
+                        MemoryService.shared.clearAll()
+                    } label: {
+                        Label("Clear All Memories", systemImage: "trash")
+                    }
+                }
+            } header: {
+                Text("Memory")
+            } footer: {
+                Text("The AI extracts and remembers key facts from your conversations. All data stays on-device.")
+            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Advanced")
