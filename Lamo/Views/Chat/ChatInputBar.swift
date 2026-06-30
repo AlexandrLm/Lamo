@@ -17,13 +17,13 @@ struct ChatInputBar: View {
                     .focused($isTextFieldFocused)
                     .animation(.easeOut(duration: 0.15), value: text.isEmpty)
 
-                // Send / Stop — embedded trailing icon
+                // Send / Stop — embedded trailing icon (same height as text)
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 22, height: 22)
                             .background(.red, in: Circle())
                     }
                     .buttonStyle(.plain)
@@ -35,9 +35,9 @@ struct ChatInputBar: View {
                         onSend()
                     }) {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 22, height: 22)
                             .background(LamoTheme.Colors.accent, in: Circle())
                     }
                     .buttonStyle(.plain)
