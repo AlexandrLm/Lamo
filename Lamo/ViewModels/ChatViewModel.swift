@@ -104,6 +104,10 @@ final class ChatViewModel {
                     guard let id = self.streamingMessageID,
                           let index = self.messages.firstIndex(where: { $0.id == id }) else { continue }
                     self.messages[index].content += delta
+                case .thinkingDelta(let thought):
+                    guard let id = self.streamingMessageID,
+                          let index = self.messages.firstIndex(where: { $0.id == id }) else { continue }
+                    self.messages[index].thinkingContent += thought
                 case .done:
                     self.finalizeStreaming(success: true)
                     return

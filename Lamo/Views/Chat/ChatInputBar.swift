@@ -39,6 +39,23 @@ struct ChatInputBar: View {
                 }
                 .buttonStyle(.plain)
 
+                // Thinking mode toggle
+                Button {
+                    provider.thinkingMode.toggle()
+                } label: {
+                    Image(systemName: "brain")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(provider.thinkingMode ? LamoTheme.Colors.accent : .white.opacity(0.4))
+                        .frame(width: 32, height: 32)
+                        .background(
+                            provider.thinkingMode
+                                ? LamoTheme.Colors.accent.opacity(0.15)
+                                : Color.white.opacity(0.1),
+                            in: Circle()
+                        )
+                }
+                .buttonStyle(.plain)
+
                 // Model selector pill
                 Button {
                     showModelPicker = true

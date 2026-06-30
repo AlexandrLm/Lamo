@@ -184,6 +184,11 @@ final class ProviderManager: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "litertLMSystemPrompt") }
     }
 
+    var thinkingMode: Bool {
+        get { UserDefaults.standard.object(forKey: "litertLMThinkingMode") as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: "litertLMThinkingMode") }
+    }
+
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
         """

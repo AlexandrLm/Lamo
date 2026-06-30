@@ -2,6 +2,7 @@ import Foundation
 
 enum StreamingToken: Sendable {
     case delta(String)
+    case thinkingDelta(String)
     case done
     case error(Error)
 }

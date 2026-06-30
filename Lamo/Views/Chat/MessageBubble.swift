@@ -57,11 +57,19 @@ struct MessageBubble: View {
     // MARK: - Assistant Content
 
     private var assistantContent: some View {
-        MarkdownRenderer(text: message.content, textColor: LamoTheme.Colors.textPrimary)
-            .textSelection(.enabled)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 8) {
+            // Thinking content (collapsible)
+            if !message.thinkingContent.isEmpty {
+                ThinkingView(content: message.thinkingContent, isStreaming: message.isStreaming)
+            }
+
+            // Main content
+            MarkdownRenderer(text: message.content, textColor: LamoTheme.Colors.textPrimary, isStreaming: message.isStreaming && message.content.isEmpty)
+        }
+        .textSelection(.enabled)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Actions
@@ -119,5 +127,103 @@ struct MessageAppearModifier: ViewModifier {
 extension View {
     func messageAppear() -> some View {
         modifier(MessageAppearModifier())
+    }
+}
+
+// MARK: - Thinking View
+
+struct ThinkingView: View {
+    let content: String
+    let isStreaming: Bool
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header — tap to expand/collapse
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+
+                    if isStreaming && !isExpanded {
+                        // Show thinking animation when streaming and collapsed
+                        ThinkingDots()
+                    } else {
+                        Text("Thinking")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Expandable thinking content
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider()
+                        .overlay(Color(.separator).opacity(0.15))
+
+                    ScrollView(.vertical, showsIndicators: false) {
+                        MarkdownRenderer(
+                            text: content,
+                            textColor: .secondary,
+                            isStreaming: isStreaming
+                        )
+                        .font(.footnote)
+                    }
+                    .frame(maxHeight: 300)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(.tertiarySystemFill).opacity(0.3))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(LamoTheme.Colors.accent.opacity(0.15), lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - Thinking Dots Animation
+
+struct ThinkingDots: View {
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(LamoTheme.Colors.accent)
+                    .frame(width: 5, height: 5)
+                    .opacity(animating ? 1.0 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 0.5)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double(i) * 0.2),
+                        value: animating
+                    )
+            }
+        }
+        .onAppear { animating = true }
     }
 }

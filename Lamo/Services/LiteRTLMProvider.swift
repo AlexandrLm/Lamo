@@ -162,13 +162,26 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if let lastUserMessage = messages.last(where: { $0.role == .user }) {
             let message = LiteRTLM.Message(lastUserMessage.content)
 
-            for try await chunk in conversation.sendMessageStream(message) {
+            // Enable thinking mode via extraContext
+            let extraContext: [String: Any]? = ProviderManager.shared.thinkingMode
+                ? ["enable_thinking": "true"]
+                : nil
+
+            for try await chunk in conversation.sendMessageStream(message, extraContext: extraContext) {
                 guard !Task.isCancelled else {
                     // Cancel native stream to stop C++ callback loop
                     try? conversation.cancel()
                     return
                 }
-                continuation.yield(.delta(chunk.toString))
+                // Check for thinking content in channels
+                if let thought = chunk.channels["thought"], !thought.isEmpty {
+                    continuation.yield(.thinkingDelta(thought))
+                }
+                // Always yield the main content
+                let text = chunk.toString
+                if !text.isEmpty {
+                    continuation.yield(.delta(text))
+                }
             }
         }
 
@@ -199,14 +212,15 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         // Build truncated history — fit within KV-cache token budget
         // ~4 chars ≈ 1 token; leave room for system prompt + generation headroom
         let maxCharsPerToken = 4
-        let systemPromptChars = pm.systemPrompt.count
+        let systemPrompt = pm.systemPrompt
+        let systemPromptChars = systemPrompt.count
         let budgetChars = (pm.maxNumTokens * maxCharsPerToken) - systemPromptChars - 512  // 512 tokens headroom
         
         var allMessages: [LiteRTLM.Message] = []
         
         // Inject system prompt as first user message
-        if !pm.systemPrompt.isEmpty {
-            allMessages.append(LiteRTLM.Message(pm.systemPrompt, role: .user))
+        if !systemPrompt.isEmpty {
+            allMessages.append(LiteRTLM.Message(systemPrompt, role: .user))
         }
         
         // Add conversation history — most recent first, fit within budget

@@ -5,6 +5,7 @@ import SwiftData
 final class Message {
     var id: UUID
     var content: String
+    var thinkingContent: String
     var roleRaw: String
     var timestamp: Date
     var isStreaming: Bool
@@ -20,6 +21,7 @@ final class Message {
     init(
         id: UUID = UUID(),
         content: String,
+        thinkingContent: String = "",
         role: MessageRole,
         timestamp: Date = .now,
         isStreaming: Bool = false,
@@ -27,6 +29,7 @@ final class Message {
     ) {
         self.id = id
         self.content = content
+        self.thinkingContent = thinkingContent
         self.roleRaw = role.rawValue
         self.timestamp = timestamp
         self.isStreaming = isStreaming

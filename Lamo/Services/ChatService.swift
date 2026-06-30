@@ -36,7 +36,9 @@ final class ChatService {
 
                 switch token {
                 case .delta(let text):
-                    onDelta(text)   // <- delta, not accumulated string
+                    onDelta(text)
+                case .thinkingDelta:
+                    break  // ChatViewModel handles thinking directly
                 case .done:
                     onComplete()
                 case .error(let error):
