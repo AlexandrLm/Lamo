@@ -1,16 +1,24 @@
 import SwiftUI
+import PhotosUI
 
 struct ChatInputBar: View {
     @Binding var text: String
+    @Binding var pendingImages: [UIImage]
     let isStreaming: Bool
     let onSend: () -> Void
     let onStop: () -> Void
     @FocusState private var isTextFieldFocused: Bool
     @State private var showModelPicker = false
+    @State private var photoPickerItem: PhotosPickerItem?
     @ObservedObject private var provider = ProviderManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
+            // Pending images preview
+            if !pendingImages.isEmpty {
+                pendingImagesRow
+            }
+
             // Top: text field area
             TextField("Reply to Lamo", text: $text, axis: .vertical)
                 .lineLimit(1...8)
@@ -29,8 +37,8 @@ struct ChatInputBar: View {
 
             // Bottom: toolbar row
             HStack(spacing: 10) {
-                // Plus button
-                Button {} label: {
+                // Plus button — photo picker
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
@@ -38,6 +46,16 @@ struct ChatInputBar: View {
                         .background(Color.white.opacity(0.1), in: Circle())
                 }
                 .buttonStyle(.plain)
+                .onChange(of: photoPickerItem) {
+                    guard let item = photoPickerItem else { return }
+                    Task {
+                        if let data = try? await item.loadTransferable(type: Data.self),
+                           let image = UIImage(data: data) {
+                            pendingImages.append(image)
+                        }
+                        photoPickerItem = nil
+                    }
+                }
 
                 // Model selector pill
                 Button {
@@ -132,7 +150,36 @@ struct ChatInputBar: View {
     }
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty
+    }
+
+    // MARK: - Pending Images Preview
+
+    private var pendingImagesRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(pendingImages.indices, id: \.self) { index in
+                    ZStack(alignment: .topTrailing) {
+                        Image(uiImage: pendingImages[index])
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        Button {
+                            pendingImages.remove(at: index)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.white, Color.black.opacity(0.6))
+                        }
+                        .offset(x: 4, y: -4)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
     }
 }
 

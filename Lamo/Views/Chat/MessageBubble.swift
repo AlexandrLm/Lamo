@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MessageBubble: View {
     let message: Message
@@ -37,21 +38,50 @@ struct MessageBubble: View {
     // MARK: - User Content
 
     private var userContent: some View {
-        Text(message.content)
-            .font(.body)
-            .foregroundStyle(LamoTheme.Colors.bubbleTextUser)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(LamoTheme.Colors.accent)
-            .clipShape(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 16,
-                    bottomLeadingRadius: 16,
-                    bottomTrailingRadius: 16,
-                    topTrailingRadius: 4,
-                    style: .continuous
-                )
-            )
+        VStack(alignment: .trailing, spacing: 6) {
+            // Attached images
+            if message.hasImages {
+                userImagesView
+            }
+
+            // Text content (only if non-empty)
+            if !message.content.isEmpty {
+                Text(message.content)
+                    .font(.body)
+                    .foregroundStyle(LamoTheme.Colors.bubbleTextUser)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(LamoTheme.Colors.accent)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 16,
+                            bottomLeadingRadius: message.hasImages ? 4 : 16,
+                            bottomTrailingRadius: 16,
+                            topTrailingRadius: 4,
+                            style: .continuous
+                        )
+                    )
+            }
+        }
+    }
+
+    // MARK: - User Images
+
+    private var userImagesView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(message.imagePaths, id: \.self) { path in
+                    if let uiImage = UIImage(contentsOfFile: path) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: 200, maxHeight: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     // MARK: - Assistant Content

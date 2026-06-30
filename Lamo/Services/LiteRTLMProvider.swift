@@ -105,6 +105,9 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         for msg in messages {
             hasher.combine(msg.role.rawValue)
             hasher.combine(msg.content)
+            for path in msg.imagePaths {
+                hasher.combine(path)
+            }
         }
         return hasher.finalize()
     }
@@ -160,7 +163,20 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         guard !Task.isCancelled else { return }
 
         if let lastUserMessage = messages.last(where: { $0.role == .user }) {
-            let message = LiteRTLM.Message(lastUserMessage.content)
+            // Build multimodal or text-only message
+            let message: LiteRTLM.Message
+            if !lastUserMessage.imagePaths.isEmpty {
+                var contents: [LiteRTLM.Content] = []
+                for path in lastUserMessage.imagePaths {
+                    contents.append(.imageFile(path))
+                }
+                if !lastUserMessage.content.isEmpty {
+                    contents.append(.text(lastUserMessage.content))
+                }
+                message = LiteRTLM.Message(contents: contents)
+            } else {
+                message = LiteRTLM.Message(lastUserMessage.content)
+            }
 
             // Enable thinking mode via extraContext
             let extraContext: [String: Any]? = ProviderManager.shared.thinkingMode

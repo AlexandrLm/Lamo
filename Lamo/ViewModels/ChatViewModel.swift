@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import UIKit
+import PhotosUI
 
 @MainActor
 @Observable
@@ -8,6 +9,8 @@ final class ChatViewModel {
     var messages: [Message] = []
     var inputText: String = ""
     var isStreaming: Bool = false
+    /// Images attached to the current input, waiting to be sent.
+    var pendingImages: [UIImage] = []
 
     var conversationTitle: String { conversation.title }
 
@@ -30,30 +33,39 @@ final class ChatViewModel {
 
     func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || !pendingImages.isEmpty else { return }
 
-        // 1) Add user message
-        let userMessage = Message(content: text, role: .user, conversation: conversation)
+        // 1) Save pending images to tmp directory
+        let imagePaths = saveImagesToTmp(pendingImages)
+        pendingImages = []
+
+        // 2) Add user message
+        let userMessage = Message(
+            content: text,
+            role: .user,
+            imagePaths: imagePaths,
+            conversation: conversation
+        )
         addMessage(userMessage)
         inputText = ""
 
-        // 2) Add empty assistant message (streaming placeholder)
+        // 3) Add empty assistant message (streaming placeholder)
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id
         isStreaming = true
 
-        // 3) Update title from first message
+        // 4) Update title from first message
         if conversation.title == "New Chat" {
             conversation.title = String(text.prefix(40))
         }
 
-        // 4) Build chat history for the provider (only non-empty messages)
+        // 5) Build chat history for the provider (only non-empty messages)
         let chatMessages = messages
-            .filter { !$0.content.isEmpty }
-            .map { ChatMessage(role: $0.role, content: $0.content) }
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
+            .map { ChatMessage(role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
 
-        // 5) Stream response
+        // 6) Stream response
         startStreaming(chatMessages: chatMessages)
     }
 
@@ -71,8 +83,8 @@ final class ChatViewModel {
         isStreaming = true
 
         let chatMessages = messages
-            .filter { !$0.content.isEmpty }
-            .map { ChatMessage(role: $0.role, content: $0.content) }
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
+            .map { ChatMessage(role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
 
         startStreaming(chatMessages: chatMessages)
     }
@@ -156,5 +168,22 @@ final class ChatViewModel {
         } catch {
             print("[Lamo] SwiftData save error: \(error)")
         }
+    }
+
+    /// Save UIImages to tmp directory as JPEG, return file paths.
+    private func saveImagesToTmp(_ images: [UIImage]) -> [String] {
+        var paths: [String] = []
+        for image in images {
+            guard let data = image.jpegData(compressionQuality: 0.85) else { continue }
+            let filename = "img_\(UUID().uuidString).jpg"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            do {
+                try data.write(to: url)
+                paths.append(url.path)
+            } catch {
+                print("[Lamo] Failed to save image: \(error)")
+            }
+        }
+        return paths
     }
 }

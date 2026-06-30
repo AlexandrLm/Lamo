@@ -56,6 +56,7 @@ struct ChatView: View {
         .safeAreaInset(edge: .bottom) {
             ChatInputBar(
                 text: $viewModel.inputText,
+                pendingImages: $viewModel.pendingImages,
                 isStreaming: viewModel.isStreaming,
                 onSend: { viewModel.send() },
                 onStop: { viewModel.stopGeneration() }

@@ -9,6 +9,8 @@ final class Message {
     var roleRaw: String
     var timestamp: Date
     var isStreaming: Bool
+    /// Paths to attached images (stored in app's tmp directory).
+    var imagePaths: [String] = []
 
     @Relationship(inverse: \Conversation.messages)
     var conversation: Conversation?
@@ -18,6 +20,8 @@ final class Message {
         set { roleRaw = newValue.rawValue }
     }
 
+    var hasImages: Bool { !imagePaths.isEmpty }
+
     init(
         id: UUID = UUID(),
         content: String,
@@ -25,6 +29,7 @@ final class Message {
         role: MessageRole,
         timestamp: Date = .now,
         isStreaming: Bool = false,
+        imagePaths: [String] = [],
         conversation: Conversation? = nil
     ) {
         self.id = id
@@ -33,6 +38,7 @@ final class Message {
         self.roleRaw = role.rawValue
         self.timestamp = timestamp
         self.isStreaming = isStreaming
+        self.imagePaths = imagePaths
         self.conversation = conversation
     }
 }

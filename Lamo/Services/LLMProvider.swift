@@ -10,6 +10,13 @@ enum StreamingToken: Sendable {
 struct ChatMessage: Sendable {
     let role: MessageRole
     let content: String
+    let imagePaths: [String]
+
+    init(role: MessageRole, content: String, imagePaths: [String] = []) {
+        self.role = role
+        self.content = content
+        self.imagePaths = imagePaths
+    }
 }
 
 protocol LLMProvider: Sendable {
