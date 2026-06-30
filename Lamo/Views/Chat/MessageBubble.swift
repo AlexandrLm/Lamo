@@ -5,6 +5,8 @@ struct MessageBubble: View {
     let message: Message
     let onRetry: (() -> Void)?
     @State private var showCopyConfirmation = false
+    @State private var showImageViewer = false
+    @State private var selectedImageIndex = 0
 
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
@@ -70,18 +72,29 @@ struct MessageBubble: View {
     private var userImagesView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(message.imagePaths, id: \.self) { path in
+                ForEach(message.imagePaths.indices, id: \.self) { index in
+                    let path = message.imagePaths[index]
                     if let uiImage = UIImage(contentsOfFile: path) {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
                             .frame(maxWidth: 200, maxHeight: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedImageIndex = index
+                                showImageViewer = true
+                            }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .fullScreenCover(isPresented: $showImageViewer) {
+            let uiImages = message.imagePaths.compactMap { UIImage(contentsOfFile: $0) }
+            ImageViewer(images: uiImages, startIndex: selectedImageIndex)
+                .ignoresSafeArea()
+        }
     }
 
     // MARK: - Assistant Content

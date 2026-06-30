@@ -9,7 +9,9 @@ struct ChatInputBar: View {
     let onStop: () -> Void
     @FocusState private var isTextFieldFocused: Bool
     @State private var showModelPicker = false
-    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var photoPickerItems: [PhotosPickerItem] = []
+    @State private var showCamera = false
+    @State private var showPhotoPicker = false
     @ObservedObject private var provider = ProviderManager.shared
 
     var body: some View {
@@ -37,23 +39,49 @@ struct ChatInputBar: View {
 
             // Bottom: toolbar row
             HStack(spacing: 10) {
-                // Plus button — photo picker
-                PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Color.white.opacity(0.1), in: Circle())
+                // Plus button — menu with Camera + Photo Library
+                Menu {
+                    Button {
+                        showCamera = true
+                    } label: {
+                        Label("Camera", systemImage: "camera.fill")
+                    }
+
+                    Button {
+                        showPhotoPicker = true
+                    } label: {
+                        Label("Photo Library", systemImage: "photo.on.rectangle")
+                    }
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Color.white.opacity(0.1), in: Circle())
+
+                        // Badge: image count
+                        if !pendingImages.isEmpty {
+                            Text("\(pendingImages.count)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.black)
+                                .frame(width: 16, height: 16)
+                                .background(LamoTheme.Colors.accent, in: Circle())
+                                .offset(x: 6, y: -6)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
-                .onChange(of: photoPickerItem) {
-                    guard let item = photoPickerItem else { return }
+                .onChange(of: photoPickerItems) {
+                    guard !photoPickerItems.isEmpty else { return }
                     Task {
-                        if let data = try? await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
-                            pendingImages.append(image)
+                        for item in photoPickerItems {
+                            if let data = try? await item.loadTransferable(type: Data.self),
+                               let image = UIImage(data: data) {
+                                pendingImages.append(image)
+                            }
                         }
-                        photoPickerItem = nil
+                        photoPickerItems = []
                     }
                 }
 
@@ -142,6 +170,23 @@ struct ChatInputBar: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraView(image: Binding(
+                get: { nil },
+                set: { newImage in
+                    if let img = newImage {
+                        pendingImages.append(img)
+                    }
+                }
+            ))
+            .ignoresSafeArea()
+        }
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $photoPickerItems,
+            maxSelectionCount: 5,
+            matching: .images
+        )
     }
 
     private var modelDisplayName: String {
@@ -159,26 +204,50 @@ struct ChatInputBar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(pendingImages.indices, id: \.self) { index in
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: pendingImages[index])
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        Button {
-                            pendingImages.remove(at: index)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.white, Color.black.opacity(0.6))
+                    PendingImageThumb(
+                        image: pendingImages[index],
+                        onRemove: {
+                            withAnimation(.spring(response: 0.2)) {
+                                if pendingImages.indices.contains(index) {
+                                    pendingImages.remove(at: index)
+                                }
+                            }
                         }
-                        .offset(x: 4, y: -4)
-                    }
+                    )
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+        }
+    }
+}
+
+// MARK: - Pending Image Thumbnail
+
+private struct PendingImageThumb: View {
+    let image: UIImage
+    let onRemove: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                )
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.black.opacity(0.55))
+            }
+            .offset(x: 5, y: -5)
         }
     }
 }

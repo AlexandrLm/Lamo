@@ -170,11 +170,12 @@ final class ChatViewModel {
         }
     }
 
-    /// Save UIImages to tmp directory as JPEG, return file paths.
+    /// Save UIImages to tmp directory as JPEG (resized to max 1024px), return file paths.
     private func saveImagesToTmp(_ images: [UIImage]) -> [String] {
         var paths: [String] = []
         for image in images {
-            guard let data = image.jpegData(compressionQuality: 0.85) else { continue }
+            let resized = image.resizedForModel(maxDimension: 1024)
+            guard let data = resized.jpegData(compressionQuality: 0.8) else { continue }
             let filename = "img_\(UUID().uuidString).jpg"
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
             do {
@@ -185,5 +186,25 @@ final class ChatViewModel {
             }
         }
         return paths
+    }
+}
+
+// MARK: - UIImage Resize for Model
+
+private extension UIImage {
+    /// Resize image so the longest side is `maxDimension` pixels.
+    /// Reduces token usage and memory without losing visual quality for the model.
+    func resizedForModel(maxDimension: CGFloat) -> UIImage {
+        let size = self.size
+        let longestSide = max(size.width, size.height)
+        guard longestSide > maxDimension else { return self }
+
+        let scale = maxDimension / longestSide
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }

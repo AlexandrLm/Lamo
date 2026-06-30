@@ -189,6 +189,12 @@ struct MainView: View {
     }
 
     private func deleteConversation(_ conversation: Conversation) {
+        // Clean up temp image files for this conversation
+        for message in conversation.messages {
+            for path in message.imagePaths {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
         if selectedID == conversation.id {
             selectedID = nil
         }
