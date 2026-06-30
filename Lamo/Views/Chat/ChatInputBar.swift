@@ -6,6 +6,7 @@ struct ChatInputBar: View {
     let onSend: () -> Void
     let onStop: () -> Void
     @FocusState private var isTextFieldFocused: Bool
+    @State private var showModelPicker = false
 
     private var provider: ProviderManager { ProviderManager.shared }
 
@@ -39,8 +40,10 @@ struct ChatInputBar: View {
                 }
                 .buttonStyle(.plain)
 
-                // Model selector pill — shows real model name
-                Button {} label: {
+                // Model selector pill
+                Button {
+                    showModelPicker = true
+                } label: {
                     HStack(spacing: 6) {
                         Text(modelDisplayName)
                             .font(.system(size: 13, weight: .medium))
@@ -117,6 +120,11 @@ struct ChatInputBar: View {
         .padding(.horizontal, 5)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: canSend)
+        .sheet(isPresented: $showModelPicker) {
+            ModelPickerSheet(isPresented: $showModelPicker)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var modelDisplayName: String {
@@ -126,5 +134,77 @@ struct ChatInputBar: View {
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+// MARK: - Model Picker Sheet
+
+struct ModelPickerSheet: View {
+    @Binding var isPresented: Bool
+    private var provider: ProviderManager { ProviderManager.shared }
+
+    private var availableModels: [(displayName: String, path: String)] {
+        ProviderManager.listModels().map { filename in
+            let cleanName = filename
+                .replacingOccurrences(of: ".litertlm", with: "")
+                .replacingOccurrences(of: "-", with: " ")
+                .replacingOccurrences(of: "_", with: " ")
+            let fullPath = ProviderManager.modelsDirectory.appendingPathComponent(filename).path
+            return (cleanName, fullPath)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Providers") {
+                    // Apple Intelligence
+                    Button {
+                        provider.selectedProvider = .appleIntelligence
+                        isPresented = false
+                    } label: {
+                        HStack {
+                            Label("Apple Intelligence", systemImage: "apple.logo")
+                            Spacer()
+                            if provider.selectedProvider == .appleIntelligence {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(LamoTheme.Colors.accent)
+                            }
+                        }
+                    }
+                    .tint(.primary)
+                }
+
+                if !availableModels.isEmpty {
+                    Section("On-Device Models") {
+                        ForEach(availableModels, id: \.path) { model in
+                            Button {
+                                provider.selectedProvider = .litertLM
+                                provider.litertLMModelPath = model.path
+                                isPresented = false
+                            } label: {
+                                HStack {
+                                    Label(model.displayName, systemImage: "cpu")
+                                    Spacer()
+                                    if provider.selectedProvider == .litertLM &&
+                                        provider.litertLMModelPath == model.path {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(LamoTheme.Colors.accent)
+                                    }
+                                }
+                            }
+                            .tint(.primary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Model")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { isPresented = false }
+                }
+            }
+        }
     }
 }
