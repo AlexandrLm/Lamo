@@ -10,9 +10,7 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Model indicator
-            modelIndicator
-
+            // Input row
             HStack(alignment: .bottom, spacing: 10) {
                 // Plus button (future: photo attach)
                 Button {
@@ -67,17 +65,13 @@ struct ChatInputBar: View {
                         }
                     }
 
-                // Send / Stop button
+                // Send / Stop — native system buttons
                 if isStreaming {
                     Button(action: onStop) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemRed))
-                                .frame(width: 34, height: 34)
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(.white)
-                                .frame(width: 12, height: 12)
-                        }
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(.red)
+                            .glassEffect(.regular.interactive(), in: .circle)
                     }
                     .buttonStyle(.plain)
                     .transition(.scale.combined(with: .opacity))
@@ -87,14 +81,10 @@ struct ChatInputBar: View {
                         isTextFieldFocused = false
                         onSend()
                     }) {
-                        ZStack {
-                            Circle()
-                                .fill(canSend ? LamoTheme.Colors.accent : Color(.quaternarySystemFill))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(canSend ? .white : Color(.tertiaryLabel))
-                        }
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(canSend ? LamoTheme.Colors.accent : Color(.quaternarySystemFill))
+                            .glassEffect(.regular.interactive(), in: .circle)
                     }
                     .buttonStyle(.plain)
                     .disabled(!canSend)
@@ -108,28 +98,6 @@ struct ChatInputBar: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: isTextEmpty)
-    }
-
-    // MARK: - Model Indicator
-
-    private var modelIndicator: some View {
-        let provider = ProviderManager.shared
-        let modelName = provider.currentModelDisplayName
-
-        return Group {
-            if !modelName.isEmpty {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(provider.isEngineReady ? LamoTheme.Colors.accent : .orange)
-                        .frame(width: 6, height: 6)
-                    Text(modelName)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.top, 4)
-                .padding(.bottom, 2)
-            }
-        }
     }
 
     private var canSend: Bool {
