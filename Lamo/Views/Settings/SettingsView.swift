@@ -5,6 +5,7 @@ struct SettingsView: View {
     @StateObject private var vm = SettingsViewModel()
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var benchmark = DeviceBenchmark()
+    @Environment(\.modelContext) private var modelContext
     @State private var isImportingModel = false
     @State private var importError: String?
     @State private var importSuccess = false
@@ -19,6 +20,7 @@ struct SettingsView: View {
         case engine = "AI Engine"
         case models = "Models"
         case sampler = "Generation"
+        case memory = "Memory"
         case advanced = "Advanced"
         case device = "Device"
         case privacy = "Privacy"
@@ -63,6 +65,7 @@ struct SettingsView: View {
             .onAppear {
                 vm.refreshModels()
                 vm.loadModelInfo()
+                MemoryService.shared.setModelContext(modelContext)
             }
             .fileImporter(
                 isPresented: $isImportingModel,
@@ -233,6 +236,21 @@ struct SettingsView: View {
                     settingsIcon("sparkles", color: .purple)
                 }
             }
+
+            // Memory
+            NavigationLink(value: SettingsSection.memory) {
+                Label {
+                    HStack {
+                        Text("Memory")
+                        Spacer()
+                        Text("\(MemoryService.shared.totalEntries) facts")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    settingsIcon("brain", color: .orange)
+                }
+            }
         }
     }
 
@@ -306,6 +324,8 @@ struct SettingsView: View {
             modelsSection
         case .sampler:
             samplerSection
+        case .memory:
+            memorySection
         case .advanced:
             advancedSection
         case .device:
@@ -482,6 +502,92 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    // MARK: - Memory Section
+
+    private var memorySection: some View {
+        List {
+            // Toggle
+            Section {
+                Toggle(isOn: $vm.memoryEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Remember Facts")
+                        Text("AI extracts key facts from conversations")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .tint(LamoTheme.Colors.accent)
+            } footer: {
+                Text("After each conversation, the AI extracts important facts about you (name, preferences, projects, dates). These facts are injected into context for future conversations.")
+            }
+
+            if vm.memoryEnabled {
+                // Stats
+                Section {
+                    HStack {
+                        Label("Total Facts", systemImage: "brain")
+                        Spacer()
+                        Text("\(MemoryService.shared.totalEntries)")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+
+                // Stored facts list
+                let facts = MemoryService.shared.allFacts
+                if !facts.isEmpty {
+                    Section("What AI Remembers") {
+                        ForEach(facts, id: \.id) { fact in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "text.quote")
+                                    .font(.caption)
+                                    .foregroundStyle(LamoTheme.Colors.accent)
+                                    .frame(width: 16)
+                                    .padding(.top, 2)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(fact.text)
+                                        .font(.subheadline)
+                                        .textSelection(.enabled)
+
+                                    Text(fact.timestamp, style: .relative)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .onDelete { indexSet in
+                            for index in indexSet {
+                                MemoryService.shared.deleteFact(facts[index])
+                            }
+                        }
+                    }
+                } else {
+                    Section {
+                        ContentUnavailableView(
+                            "No Facts Yet",
+                            systemImage: "brain",
+                            description: Text("Facts will appear here as you chat with the AI.")
+                        )
+                    }
+                }
+
+                // Actions
+                Section {
+                    Button(role: .destructive) {
+                        MemoryService.shared.clearAll()
+                    } label: {
+                        Label("Clear All Facts", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Memory")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
     // MARK: - Advanced Section
 
     private var advancedSection: some View {
@@ -605,40 +711,6 @@ struct SettingsView: View {
                 Text("System Prompt")
             } footer: {
                 Text("Instructions the model follows. Changes apply to new conversations only.")
-            }
-
-            Section {
-                Toggle(isOn: $vm.memoryEnabled) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Label("Memory", systemImage: "brain")
-                        Text("Remember facts across conversations")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .tint(LamoTheme.Colors.accent)
-
-                if vm.memoryEnabled {
-                    HStack {
-                        Label("Stored facts", systemImage: "circle.fill")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(MemoryService.shared.totalEntries)")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    .font(.subheadline)
-
-                    Button(role: .destructive) {
-                        MemoryService.shared.clearAll()
-                    } label: {
-                        Label("Clear All Memories", systemImage: "trash")
-                    }
-                }
-            } header: {
-                Text("Memory")
-            } footer: {
-                Text("The AI extracts and remembers key facts from your conversations. All data stays on-device.")
             }
         }
         .listStyle(.insetGrouped)

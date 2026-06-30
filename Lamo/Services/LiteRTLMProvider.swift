@@ -263,10 +263,22 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         allMessages.append(contentsOf: historyMessages)
 
         // Try creating conversation — abort-safe
-        let config = LiteRTLM.ConversationConfig(
-            initialMessages: allMessages,
-            samplerConfig: samplerConfig
-        )
+        var config: LiteRTLM.ConversationConfig
+        if MemoryService.shared.isEnabled {
+            // Register memory tool — model will call update_memory when it
+            // detects facts worth remembering. Engine handles tool calls
+            // automatically during streaming.
+            config = LiteRTLM.ConversationConfig(
+                initialMessages: allMessages,
+                tools: [UpdateMemoryTool()],
+                samplerConfig: samplerConfig
+            )
+        } else {
+            config = LiteRTLM.ConversationConfig(
+                initialMessages: allMessages,
+                samplerConfig: samplerConfig
+            )
+        }
 
         // Use DispatchSemaphore + async to catch SIGABRT
         // If engine aborts, we restart with minimal history

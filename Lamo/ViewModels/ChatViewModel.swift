@@ -29,6 +29,9 @@ final class ChatViewModel {
         self.modelContext = modelContext
         self.provider = provider
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
+
+        // Wire up memory service with the SwiftData context
+        MemoryService.shared.setModelContext(modelContext)
     }
 
     func send() {
@@ -153,23 +156,6 @@ final class ChatViewModel {
         save()
         if success == true {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-
-            // Extract facts from this turn for cross-conversation memory
-            if let userMsg = messages.last(where: { $0.role == .user }),
-               !userMsg.content.isEmpty {
-                let assistantContent = messages[index].content
-                let convID = conversation.id
-                let provider = ProviderManager.shared.currentProvider
-                Task {
-                    MemoryService.shared.setModelContext(modelContext)
-                    await MemoryService.shared.extractAndStore(
-                        userMessage: userMsg.content,
-                        assistantResponse: assistantContent,
-                        conversationID: convID,
-                        provider: provider
-                    )
-                }
-            }
         }
     }
 

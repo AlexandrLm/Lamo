@@ -2,14 +2,14 @@ import Foundation
 import SwiftData
 import Combine
 
-/// Semantic memory that extracts and stores facts about the user.
+/// Semantic memory that stores facts about the user.
 ///
 /// Architecture (like ChatGPT):
-/// 1. After each LLM response → extract key facts via a quick LLM call
-/// 2. Store facts as plain text strings in SwiftData
-/// 3. Before each LLM call → inject ALL facts into system prompt
+/// 1. During LLM response → model calls update_memory tool with facts
+/// 2. Facts stored as plain text in SwiftData
+/// 3. Before each LLM call → ALL facts injected into system prompt
 ///
-/// No embedding model needed — the LLM itself extracts facts.
+/// No embedding model needed — the LLM extracts facts via function calling.
 /// No vector search needed — all facts fit in the system prompt.
 @MainActor
 final class MemoryService: ObservableObject {
@@ -46,75 +46,22 @@ final class MemoryService: ObservableObject {
 
     // MARK: - Fact Extraction
 
-    /// Extract facts from a conversation turn and store them.
-    /// Uses the LLM itself — no separate embedding model needed.
-    ///
-    /// - Parameters:
-    ///   - userMessage: What the user said
-    ///   - assistantResponse: What the assistant replied
-    ///   - conversationID: Current conversation ID
-    ///   - provider: LLM provider to use for extraction
-    func extractAndStore(
-        userMessage: String,
-        assistantResponse: String,
-        conversationID: UUID,
-        provider: any LLMProvider
-    ) async {
+    /// Store facts directly (called by UpdateMemoryTool).
+    func storeFacts(_ facts: [String]) async {
         guard isEnabled, let context = modelContext else { return }
 
-        // Build extraction prompt
-        let existingFacts = factsCache.map { "• \($0.text)" }.joined(separator: "\n")
-
-        let extractionPrompt = """
-        Analyze this conversation and extract important facts about the user that would be useful for future conversations.
-
-        Rules:
-        - Extract ONLY facts about the user (preferences, personal info, work, projects, dates)
-        - Each fact must be one short sentence starting with "•"
-        - Do NOT extract facts already listed below
-        - Do NOT extract general knowledge or assistant's responses
-        - If nothing worth remembering, respond with exactly: NONE
-
-        Already known facts:
-        \(existingFacts.isEmpty ? "(none)" : existingFacts)
-
-        Conversation:
-        User: \(userMessage)
-        Assistant: \(assistantResponse.prefix(500))
-
-        Extracted facts:
-        """
-
-        // Run extraction via LLM (quick, ~1-2 sec)
-        let chatMessages = [ChatMessage(role: .user, content: extractionPrompt)]
-        var result = ""
-
-        for await token in provider.streamResponse(messages: chatMessages) {
-            switch token {
-            case .delta(let text): result += text
-            case .done: break
-            case .error: return
-            case .thinkingDelta: break
-            }
-        }
-
-        // Parse facts from response
-        let facts = parseFacts(from: result)
-
-        // Store new facts
         for fact in facts {
-            // Deduplicate — skip if very similar to existing
-            if !isDuplicate(fact) {
-                let entry = MemoryEntry(
-                    text: fact,
-                    conversationID: conversationID
-                )
-                context.insert(entry)
-                factsCache.append(entry)
-            }
+            let trimmed = fact.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.count >= 10, !isDuplicate(trimmed) else { continue }
+
+            let entry = MemoryEntry(
+                text: trimmed,
+                conversationID: UUID()
+            )
+            context.insert(entry)
+            factsCache.append(entry)
         }
 
-        // Enforce max limit — remove oldest facts if over budget
         if factsCache.count > maxFacts * 2 {
             pruneOldest(keepCount: maxFacts)
         }
@@ -124,6 +71,30 @@ final class MemoryService: ObservableObject {
             updateEntryCount()
         } catch {
             print("[Memory] Save error: \(error)")
+        }
+    }
+
+    /// Remove facts that match the given strings (called by UpdateMemoryTool).
+    func removeFacts(_ factsToRemove: [String]) async {
+        guard let context = modelContext else { return }
+        let toRemove = factsToRemove.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        for entry in factsCache {
+            let entryText = entry.text.lowercased()
+            for removeText in toRemove {
+                if entryText.contains(removeText) || removeText.contains(entryText) {
+                    context.delete(entry)
+                    factsCache.removeAll { $0.id == entry.id }
+                    break
+                }
+            }
+        }
+
+        do {
+            try context.save()
+            updateEntryCount()
+        } catch {
+            print("[Memory] Remove error: \(error)")
         }
     }
 
@@ -158,6 +129,25 @@ final class MemoryService: ObservableObject {
 
     // MARK: - Maintenance
 
+    /// All stored facts, sorted by date.
+    var allFacts: [MemoryEntry] {
+        if !cacheLoaded { loadCache() }
+        return factsCache.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// Delete a single fact by ID.
+    func deleteFact(_ entry: MemoryEntry) {
+        guard let context = modelContext else { return }
+        context.delete(entry)
+        factsCache.removeAll { $0.id == entry.id }
+        do {
+            try context.save()
+            updateEntryCount()
+        } catch {
+            print("[Memory] Delete error: \(error)")
+        }
+    }
+
     func clearAll() {
         guard let context = modelContext else { return }
         do {
@@ -190,38 +180,6 @@ final class MemoryService: ObservableObject {
     }
 
     // MARK: - Private
-
-    /// Parse facts from LLM response. Expected format: "• fact\n• fact\n..."
-    private func parseFacts(from text: String) -> [String] {
-        let lines = text.components(separatedBy: .newlines)
-        var facts: [String] = []
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            // Skip empty lines and "NONE" response
-            guard !trimmed.isEmpty,
-                  trimmed.uppercased() != "NONE",
-                  !trimmed.lowercased().contains("none") else { continue }
-
-            // Extract fact after bullet point
-            var fact = trimmed
-            if fact.hasPrefix("•") {
-                fact = String(fact.dropFirst()).trimmingCharacters(in: .whitespaces)
-            } else if fact.hasPrefix("- ") {
-                fact = String(fact.dropFirst(2)).trimmingCharacters(in: .whitespaces)
-            } else if fact.hasPrefix("* ") {
-                fact = String(fact.dropFirst(2)).trimmingCharacters(in: .whitespaces)
-            }
-
-            // Validate — must be a real fact, not garbage
-            guard fact.count >= 10, fact.count <= 200 else { continue }
-
-            facts.append(fact)
-        }
-
-        return facts
-    }
 
     /// Check if a fact is too similar to any existing fact.
     private func isDuplicate(_ newFact: String) -> Bool {
