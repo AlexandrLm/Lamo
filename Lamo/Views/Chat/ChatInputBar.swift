@@ -39,23 +39,6 @@ struct ChatInputBar: View {
                 }
                 .buttonStyle(.plain)
 
-                // Thinking mode toggle
-                Button {
-                    provider.thinkingMode.toggle()
-                } label: {
-                    Image(systemName: "brain")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(provider.thinkingMode ? LamoTheme.Colors.accent : .white.opacity(0.4))
-                        .frame(width: 32, height: 32)
-                        .background(
-                            provider.thinkingMode
-                                ? LamoTheme.Colors.accent.opacity(0.15)
-                                : Color.white.opacity(0.1),
-                            in: Circle()
-                        )
-                }
-                .buttonStyle(.plain)
-
                 // Model selector pill
                 Button {
                     showModelPicker = true
@@ -209,6 +192,29 @@ struct ModelPickerSheet: View {
                             }
                             .tint(.primary)
                         }
+                    }
+                }
+
+                // Thinking mode
+                if provider.selectedProvider == .litertLM {
+                    Section {
+                        Toggle(isOn: Binding(
+                            get: { provider.thinkingMode },
+                            set: { provider.thinkingMode = $0 }
+                        )) {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Thinking Mode")
+                                    Text("Extended reasoning before answering")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            } icon: {
+                                Image(systemName: "brain")
+                                    .foregroundStyle(provider.thinkingMode ? LamoTheme.Colors.accent : .secondary)
+                            }
+                        }
+                        .tint(LamoTheme.Colors.accent)
                     }
                 }
 
