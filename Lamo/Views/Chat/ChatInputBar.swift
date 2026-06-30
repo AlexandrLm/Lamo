@@ -16,7 +16,8 @@ struct ChatInputBar: View {
                     .textFieldStyle(.plain)
                     .focused($isTextFieldFocused)
                     .animation(.easeOut(duration: 0.15), value: text.isEmpty)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
                 // Send / Stop — comfortable tap target
                 if isStreaming {
                     Button(action: onStop) {
@@ -28,6 +29,7 @@ struct ChatInputBar: View {
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .padding(.horizontal, 5)
                     .transition(.scale.combined(with: .opacity))
                 } else if canSend {
                     Button(action: {
@@ -43,16 +45,17 @@ struct ChatInputBar: View {
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .padding(.horizontal, 5)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 10)
+            
             
             .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
         }
         .frame(maxWidth: LamoTheme.maxContentWidth)
-        .padding(.horizontal, 10)
-        .padding(.bottom, 4)
+        .padding(.bottom, 6)
+        .padding(.horizontal, 5)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: canSend)
     }
