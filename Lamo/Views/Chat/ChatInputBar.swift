@@ -8,9 +8,8 @@ struct ChatInputBar: View {
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            // Text field + clear + send button inside one glass bubble
-            HStack(alignment: .bottom, spacing: 6) {
+        HStack(alignment: .bottom, spacing: 0) {
+            HStack(alignment: .bottom, spacing: 8) {
                 TextField("Message", text: $text, axis: .vertical)
                     .lineLimit(1...8)
                     .font(.body)
@@ -18,54 +17,43 @@ struct ChatInputBar: View {
                     .focused($isTextFieldFocused)
                     .animation(.easeOut(duration: 0.15), value: text.isEmpty)
 
-                // Clear button — only when text is present
-                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            text = ""
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .transition(.scale.combined(with: .opacity))
-                }
-
-                // Send / Stop button — same radius as input field
+                // Send / Stop — embedded trailing icon
                 if isStreaming {
                     Button(action: onStop) {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.red)
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                            .background(.red, in: Circle())
                     }
                     .buttonStyle(.plain)
                     .transition(.scale.combined(with: .opacity))
-                } else {
+                } else if canSend {
                     Button(action: {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         isTextFieldFocused = false
                         onSend()
                     }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(canSend ? LamoTheme.Colors.accent : Color(.quaternarySystemFill))
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                            .background(LamoTheme.Colors.accent, in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(!canSend)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
         }
         .frame(maxWidth: LamoTheme.maxContentWidth)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .padding(.bottom, 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
+        .animation(.easeOut(duration: 0.15), value: canSend)
     }
 
     private var canSend: Bool {
