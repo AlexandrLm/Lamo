@@ -515,6 +515,23 @@ final class ProviderManager: ObservableObject {
 
     // MARK: - Model Discovery
 
+    /// Human-readable name of the currently active model.
+    var currentModelDisplayName: String {
+        switch selectedProvider {
+        case .appleIntelligence:
+            return "Apple Intelligence"
+        case .litertLM:
+            guard let path = litertLMModelPath ?? Self.findFirstModel() else {
+                return ""
+            }
+            let filename = (path as NSString).lastPathComponent
+                .replacingOccurrences(of: ".litertlm", with: "")
+                .replacingOccurrences(of: "-", with: " ")
+                .replacingOccurrences(of: "_", with: " ")
+            return filename
+        }
+    }
+
     /// The models directory: ~/Documents/models/
     static var modelsDirectory: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

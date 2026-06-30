@@ -201,6 +201,11 @@ struct MainView: View {
                         startNewChat()
                     }
                 )
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        modelStatusBadge
+                    }
+                }
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "bubble.left")
@@ -210,6 +215,41 @@ struct MainView: View {
                         .font(.title3)
                         .foregroundStyle(.secondary)
                 }
+            }
+        }
+    }
+
+    // MARK: - Model Status Badge
+
+    private var modelStatusBadge: some View {
+        let provider = ProviderManager.shared
+        let modelName = provider.currentModelDisplayName
+        let isReady = provider.isEngineReady
+
+        return Group {
+            if !modelName.isEmpty {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(isReady ? LamoTheme.Colors.accent : .orange)
+                        .frame(width: 6, height: 6)
+                        .overlay {
+                            if isReady {
+                                Circle()
+                                    .fill(LamoTheme.Colors.accent.opacity(0.4))
+                                    .frame(width: 10, height: 10)
+                                    .scaleEffect(1.5)
+                                    .opacity(0.5)
+                            }
+                        }
+                    Text(modelName)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(.tertiarySystemFill))
+                .clipShape(Capsule())
             }
         }
     }

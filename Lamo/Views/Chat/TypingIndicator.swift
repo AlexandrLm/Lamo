@@ -1,28 +1,43 @@
 import SwiftUI
 
 struct TypingIndicator: View {
-    @State private var isAnimating = false
+    @State private var animationPhase = 0.0
+    @State private var showDots = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { index in
-                Circle()
-                    .fill(.tertiary)
-                    .frame(width: 5, height: 5)
-                    .scaleEffect(isAnimating ? 1.0 : 0.3)
-                    .opacity(isAnimating ? 1.0 : 0.4)
-                    .animation(
-                        .easeInOut(duration: 0.5)
-                        .repeatForever(autoreverses: true)
-                        .delay(Double(index) * 0.15),
-                        value: isAnimating
-                    )
+        HStack(alignment: .bottom, spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(LamoTheme.Colors.accent.opacity(0.6))
+                        .frame(width: 7, height: 7)
+                        .offset(y: showDots ? sin(animationPhase + Double(index) * 0.8) * 4 : 0)
+                        .opacity(showDots ? 0.5 + 0.5 * abs(sin(animationPhase + Double(index) * 0.8)) : 0.3)
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemFill))
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 4,
+                    bottomLeadingRadius: 16,
+                    bottomTrailingRadius: 16,
+                    topTrailingRadius: 16,
+                    style: .continuous
+                )
+            )
+
+            Spacer(minLength: 48)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .onAppear {
-            isAnimating = true
+            showDots = true
+            withAnimation(
+                .linear(duration: 1.8)
+                .repeatForever(autoreverses: false)
+            ) {
+                animationPhase = .pi * 2
+            }
         }
     }
 }
