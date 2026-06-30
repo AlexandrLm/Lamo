@@ -134,73 +134,8 @@ struct ChatView: View {
                 }
             }
 
-            // Suggestion prompts
-            VStack(spacing: 10) {
-                suggestionRow(
-                    icon: "lightbulb.fill",
-                    title: "Explain",
-                    subtitle: "quantum computing in simple terms",
-                    prompt: "Explain quantum computing in simple terms"
-                )
-                suggestionRow(
-                    icon: "code",
-                    title: "Write",
-                    subtitle: "a Swift function to sort an array",
-                    prompt: "Write a Swift function to sort an array of integers using quicksort"
-                )
-                suggestionRow(
-                    icon: "envelope.fill",
-                    title: "Draft",
-                    subtitle: "a professional email to a client",
-                    prompt: "Draft a professional email to a client explaining a project delay"
-                )
-                suggestionRow(
-                    icon: "list.bullet",
-                    title: "Create",
-                    subtitle: "a meal plan for the week",
-                    prompt: "Create a healthy meal plan for the week with breakfast, lunch, and dinner"
-                )
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 32)
-
             Spacer()
         }
-    }
-
-    private func suggestionRow(icon: String, title: String, subtitle: String, prompt: String) -> some View {
-        Button {
-            viewModel.inputText = prompt
-            viewModel.send()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(LamoTheme.Colors.accent)
-                    .frame(width: 28, height: 28)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(LamoTheme.Colors.textPrimary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(Color(.tertiarySystemFill))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
