@@ -7,20 +7,6 @@ struct MessageBubble: View {
 
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-            if message.role == .assistant {
-                // Model label
-                HStack(spacing: 4) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                    Text(ProviderManager.shared.currentModelDisplayName)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.leading, 18)
-                .padding(.bottom, 2)
-            }
-
             // Content
             if message.role == .user {
                 HStack {
@@ -29,7 +15,6 @@ struct MessageBubble: View {
                 }
                 .padding(.horizontal, 16)
             } else {
-                // Assistant: full width, edge to edge
                 assistantContent
             }
 
@@ -57,16 +42,7 @@ struct MessageBubble: View {
             .foregroundStyle(LamoTheme.Colors.bubbleTextUser)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
-                LinearGradient(
-                    colors: [
-                        LamoTheme.Colors.accent,
-                        LamoTheme.Colors.accent.opacity(0.85)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(LamoTheme.Colors.accent)
             .clipShape(
                 UnevenRoundedRectangle(
                     topLeadingRadius: 16,
@@ -76,7 +52,6 @@ struct MessageBubble: View {
                     style: .continuous
                 )
             )
-            .shadow(color: LamoTheme.Colors.accent.opacity(0.15), radius: 4, y: 2)
     }
 
     // MARK: - Assistant Content

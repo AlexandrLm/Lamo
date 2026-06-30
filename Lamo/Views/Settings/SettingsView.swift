@@ -118,17 +118,7 @@ struct SettingsView: View {
 
     private var appHeader: some View {
         Section {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(LamoTheme.Colors.accent)
-                        .frame(width: 44, height: 44)
-
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.white)
-                }
-
+            Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Lamo")
                         .font(.headline)
@@ -136,6 +126,9 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            } icon: {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .foregroundStyle(LamoTheme.Colors.accent)
             }
             .padding(.vertical, 4)
         }
@@ -297,15 +290,11 @@ struct SettingsView: View {
     // MARK: - Settings Icon Helper
 
     private func settingsIcon(_ name: String, color: Color) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(color)
-                .frame(width: 28, height: 28)
-
-            Image(systemName: name)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-        }
+        Image(systemName: name)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .background(color, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     // MARK: - Section Views

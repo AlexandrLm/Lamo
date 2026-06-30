@@ -6,43 +6,20 @@ struct ChatInputBar: View {
     let onSend: () -> Void
     let onStop: () -> Void
     @FocusState private var isTextFieldFocused: Bool
-    @State private var isTextEmpty = true
 
     var body: some View {
         VStack(spacing: 0) {
-            // Input row
             HStack(alignment: .bottom, spacing: 10) {
-                // Plus button (future: photo attach)
-                Button {
-                    // TODO: photo attach
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.plain)
-
                 // Text field with liquid glass
-                TextField("", text: $text, axis: .vertical)
+                TextField("Message", text: $text, axis: .vertical)
                     .lineLimit(1...8)
                     .font(.body)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .scrollContentBackground(.hidden)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-                    .overlay(alignment: .topLeading) {
-                        if isTextEmpty {
-                            Text("Message")
-                                .font(.body)
-                                .foregroundStyle(.tertiary)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .allowsHitTesting(false)
-                        }
-                    }
                     .overlay(alignment: .topTrailing) {
-                        if !isTextEmpty {
+                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button {
                                 withAnimation(.easeOut(duration: 0.15)) {
                                     text = ""
@@ -59,11 +36,7 @@ struct ChatInputBar: View {
                         }
                     }
                     .focused($isTextFieldFocused)
-                    .onChange(of: text) {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            isTextEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        }
-                    }
+                    .animation(.easeOut(duration: 0.15), value: text.isEmpty)
 
                 // Send / Stop — native system buttons
                 if isStreaming {
@@ -97,7 +70,6 @@ struct ChatInputBar: View {
             .padding(.bottom, 6)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
-        .animation(.easeOut(duration: 0.15), value: isTextEmpty)
     }
 
     private var canSend: Bool {

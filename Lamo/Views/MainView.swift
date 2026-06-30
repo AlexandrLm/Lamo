@@ -115,31 +115,11 @@ struct MainView: View {
             .listRowSeparator(.hidden)
 
             if filteredConversations.isEmpty && !searchText.isEmpty {
-                // Search empty state
-                VStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.title3)
-                        .foregroundStyle(.tertiary)
-                    Text("No chats found")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-                .listRowSeparator(.hidden)
+                ContentUnavailableView("No Chats Found", systemImage: "magnifyingglass")
+                    .listRowSeparator(.hidden)
             } else if filteredConversations.isEmpty {
-                // Empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 32, weight: .ultraLight))
-                        .foregroundStyle(.tertiary)
-                    Text("Start a conversation")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
-                .listRowSeparator(.hidden)
+                ContentUnavailableView("Start a Conversation", systemImage: "bubble.left", description: Text("Your chats will appear here"))
+                    .listRowSeparator(.hidden)
             } else {
                 // Grouped conversations
                 ForEach(groupedConversations, id: \.title) { group in
@@ -207,14 +187,7 @@ struct MainView: View {
                     }
                 }
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 48, weight: .ultraLight))
-                        .foregroundStyle(.tertiary)
-                    Text("Select or start a new chat")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
+                ContentUnavailableView("Select a Chat", systemImage: "bubble.left", description: Text("Choose a conversation or start a new one"))
             }
         }
     }
@@ -301,25 +274,12 @@ struct ConversationRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Chat icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(.quaternarySystemFill))
-                    .frame(width: 36, height: 36)
-
-                Image(systemName: "bubble.left.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.tertiary)
-            }
-
+        Label {
             VStack(alignment: .leading, spacing: 3) {
-                // Title + timestamp row
                 HStack(alignment: .top) {
                     Text(conversation.title)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
-                        .foregroundStyle(LamoTheme.Colors.textPrimary)
 
                     Spacer(minLength: 4)
 
@@ -329,7 +289,6 @@ struct ConversationRow: View {
                         .lineLimit(1)
                 }
 
-                // Last message preview
                 if let lastMessage = conversation.messages
                     .sorted(by: { $0.timestamp < $1.timestamp })
                     .last {
@@ -339,7 +298,8 @@ struct ConversationRow: View {
                         .lineLimit(1)
                 }
             }
+        } icon: {
+            Image(systemName: "bubble.left.fill")
         }
-        .padding(.vertical, 4)
     }
 }
