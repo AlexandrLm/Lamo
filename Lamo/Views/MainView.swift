@@ -181,48 +181,8 @@ struct MainView: View {
                         startNewChat()
                     }
                 )
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        modelStatusBadge
-                    }
-                }
             } else {
                 ContentUnavailableView("Select a Chat", systemImage: "bubble.left", description: Text("Choose a conversation or start a new one"))
-            }
-        }
-    }
-
-    // MARK: - Model Status Badge
-
-    private var modelStatusBadge: some View {
-        let provider = ProviderManager.shared
-        let modelName = provider.currentModelDisplayName
-        let isReady = provider.isEngineReady
-
-        return Group {
-            if !modelName.isEmpty {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(isReady ? LamoTheme.Colors.accent : .orange)
-                        .frame(width: 6, height: 6)
-                        .overlay {
-                            if isReady {
-                                Circle()
-                                    .fill(LamoTheme.Colors.accent.opacity(0.4))
-                                    .frame(width: 10, height: 10)
-                                    .scaleEffect(1.5)
-                                    .opacity(0.5)
-                            }
-                        }
-                    Text(modelName)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color(.tertiarySystemFill))
-                .clipShape(Capsule())
             }
         }
     }
