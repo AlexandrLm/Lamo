@@ -107,7 +107,7 @@ final class ProviderManager: ObservableObject {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "selectedProvider")
-            invalidateEngine()
+            if !suppressInvalidation { invalidateEngine() }
         }
     }
 
@@ -115,7 +115,7 @@ final class ProviderManager: ObservableObject {
         get { UserDefaults.standard.string(forKey: "litertLMModelPath") }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMModelPath")
-            invalidateEngine()
+            if !suppressInvalidation { invalidateEngine() }
         }
     }
 
@@ -428,6 +428,22 @@ final class ProviderManager: ObservableObject {
             await initializeEngineIfNeeded()
         }
     }
+
+    /// Atomically switch to a different model/provider without double-invalidation.
+    func switchModel(provider: ProviderType, modelPath: String? = nil) {
+        // Suppress individual setter invalidation
+        suppressInvalidation = true
+        selectedProvider = provider
+        if let path = modelPath {
+            litertLMModelPath = path
+        }
+        suppressInvalidation = false
+        // Single invalidation with all new values set
+        invalidateEngine()
+    }
+
+    /// When true, property setters skip invalidation (used by switchModel).
+    private var suppressInvalidation = false
 
     // MARK: - Memory Cleanup
 

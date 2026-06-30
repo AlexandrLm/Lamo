@@ -7,8 +7,7 @@ struct ChatInputBar: View {
     let onStop: () -> Void
     @FocusState private var isTextFieldFocused: Bool
     @State private var showModelPicker = false
-
-    private var provider: ProviderManager { ProviderManager.shared }
+    @ObservedObject private var provider = ProviderManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -141,7 +140,7 @@ struct ChatInputBar: View {
 
 struct ModelPickerSheet: View {
     @Binding var isPresented: Bool
-    private var provider: ProviderManager { ProviderManager.shared }
+    @ObservedObject private var provider = ProviderManager.shared
 
     private var availableModels: [(displayName: String, path: String)] {
         ProviderManager.listModels().map { filename in
@@ -158,9 +157,8 @@ struct ModelPickerSheet: View {
         NavigationStack {
             List {
                 Section("Providers") {
-                    // Apple Intelligence
                     Button {
-                        provider.selectedProvider = .appleIntelligence
+                        provider.switchModel(provider: .appleIntelligence)
                         isPresented = false
                     } label: {
                         HStack {
@@ -179,8 +177,7 @@ struct ModelPickerSheet: View {
                     Section("On-Device Models") {
                         ForEach(availableModels, id: \.path) { model in
                             Button {
-                                provider.selectedProvider = .litertLM
-                                provider.litertLMModelPath = model.path
+                                provider.switchModel(provider: .litertLM, modelPath: model.path)
                                 isPresented = false
                             } label: {
                                 HStack {
@@ -194,6 +191,25 @@ struct ModelPickerSheet: View {
                                 }
                             }
                             .tint(.primary)
+                        }
+                    }
+                }
+
+                // Engine status
+                if provider.selectedProvider == .litertLM {
+                    Section {
+                        if provider.isEngineReady {
+                            Label("Model loaded", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        } else if let error = provider.engineError {
+                            Label(error, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                        } else if provider.litertLMModelPath != nil {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Loading…").foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
