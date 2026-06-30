@@ -98,18 +98,9 @@ struct MainView: View {
             Button {
                 startNewChat()
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(LamoTheme.Colors.accent)
-                        .frame(width: 32, height: 32)
-                        .background(LamoTheme.Colors.accent.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    Text("New Chat")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(LamoTheme.Colors.textPrimary)
-                }
+                Label("New Chat", systemImage: "square.and.pencil")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(LamoTheme.Colors.accent)
             }
             .listRowBackground(Color(.tertiarySystemFill))
             .listRowSeparator(.hidden)
@@ -146,9 +137,9 @@ struct MainView: View {
                         }
                     } header: {
                         Text(group.title)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .textCase(.uppercase)
+                            .font(.caption2)
+                            .foregroundStyle(.quaternary)
+                            .textCase(nil)
                     }
                 }
             }
@@ -234,32 +225,18 @@ struct ConversationRow: View {
     }
 
     var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .top) {
-                    Text(conversation.title)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
+        HStack {
+            Text(conversation.title)
+                .font(.subheadline)
+                .lineLimit(1)
 
-                    Spacer(minLength: 4)
+            Spacer(minLength: 6)
 
-                    Text(relativeTime)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-
-                if let lastMessage = conversation.messages
-                    .sorted(by: { $0.timestamp < $1.timestamp })
-                    .last {
-                    Text(lastMessage.content)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-        } icon: {
-            Image(systemName: "bubble.left.fill")
+            Text(relativeTime)
+                .font(.caption2)
+                .foregroundStyle(.quaternary)
+                .lineLimit(1)
         }
+        .padding(.vertical, 2)
     }
 }
