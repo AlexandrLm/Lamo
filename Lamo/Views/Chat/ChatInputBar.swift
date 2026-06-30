@@ -7,6 +7,8 @@ struct ChatInputBar: View {
     let onStop: () -> Void
     @FocusState private var isTextFieldFocused: Bool
 
+    private var provider: ProviderManager { ProviderManager.shared }
+
     var body: some View {
         VStack(spacing: 0) {
             // Top: text field area
@@ -37,15 +39,22 @@ struct ChatInputBar: View {
                 }
                 .buttonStyle(.plain)
 
-                // Model selector pill
+                // Model selector pill — shows real model name
                 Button {} label: {
                     HStack(spacing: 6) {
-                        Text("Sonnet 4.6")
+                        Text(modelDisplayName)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.white)
-                        Text("Low")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1)
+                        if provider.isEngineReady {
+                            Text("Ready")
+                                .font(.system(size: 11))
+                                .foregroundStyle(LamoTheme.Colors.accent)
+                        } else {
+                            Text("Loading")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.orange)
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -65,15 +74,39 @@ struct ChatInputBar: View {
                 }
                 .buttonStyle(.plain)
 
-                // Voice waveform / dictation button
-                Button {} label: {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.black)
+                // Send / Stop button (white circle like the reference)
+                if isStreaming {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .frame(width: 32, height: 32)
+                            .background(Color.white, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
+                } else if canSend {
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        isTextFieldFocused = false
+                        onSend()
+                    }) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .frame(width: 32, height: 32)
+                            .background(Color.white, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
+                } else {
+                    // Dimmed send when empty
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.3))
                         .frame(width: 32, height: 32)
-                        .background(Color.white, in: Circle())
+                        .background(Color.white.opacity(0.1), in: Circle())
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -84,6 +117,11 @@ struct ChatInputBar: View {
         .padding(.horizontal, 5)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: canSend)
+    }
+
+    private var modelDisplayName: String {
+        let name = provider.currentModelDisplayName
+        return name.isEmpty ? "No Model" : name
     }
 
     private var canSend: Bool {
