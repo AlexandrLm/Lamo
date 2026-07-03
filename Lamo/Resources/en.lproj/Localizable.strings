@@ -1,0 +1,18 @@
+/* Lamo Localization - English */
+
+"app.name" = "Lamo";
+"chat.new" = "New Chat";
+"chat.send" = "Send";
+"chat.stop" = "Stop";
+"chat.retry" = "Retry";
+"settings.title" = "Settings";
+"settings.gpu" = "GPU acceleration";
+"settings.memory" = "Memory";
+"empty.select_chat" = "Select a Chat";
+"empty.no_chat" = "Choose a conversation or start a new one";
+"empty.download_model" = "Download a Model";
+"loading.model" = "Loading model...";
+"delete" = "Delete";
+"copy" = "Copy";
+"take_photo" = "Take photo";
+"attach_image" = "Attach image";

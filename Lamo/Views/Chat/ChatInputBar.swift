@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 struct ChatInputBar: View {
     @Binding var text: String
@@ -47,16 +48,18 @@ struct ChatInputBar: View {
                     } label: {
                         Label("Camera", systemImage: "camera.fill")
                     }
+                        .accessibilityLabel("Take photo")
 
                     Button {
                         showPhotoPicker = true
                     } label: {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
+                        .accessibilityLabel("Attach image")
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(width: 32, height: 32)
                             .background(Color.white.opacity(0.1), in: Circle())
@@ -64,7 +67,7 @@ struct ChatInputBar: View {
                         // Badge: image count
                         if !pendingImages.isEmpty {
                             Text("\(pendingImages.count)")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.caption2.weight(.bold))
                                 .foregroundStyle(.black)
                                 .frame(width: 16, height: 16)
                                 .background(LamoTheme.Colors.accent, in: Circle())
@@ -73,6 +76,7 @@ struct ChatInputBar: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Attach image")
                 .onChange(of: photoPickerItems) {
                     guard !photoPickerItems.isEmpty else { return }
                     Task {
@@ -92,16 +96,16 @@ struct ChatInputBar: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(modelDisplayName)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         if provider.isEngineReady {
                             Text("Ready")
-                                .font(.system(size: 11))
+                                .font(.caption)
                                 .foregroundStyle(LamoTheme.Colors.accent)
                         } else {
                             Text("Loading")
-                                .font(.system(size: 11))
+                                .font(.caption)
                                 .foregroundStyle(.orange)
                         }
                     }
@@ -110,13 +114,14 @@ struct ChatInputBar: View {
                     .background(Color.white.opacity(0.1), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(modelDisplayName)
 
                 Spacer()
 
                 // Microphone button
                 Button {} label: {
                     Image(systemName: "microphone")
-                        .font(.system(size: 15))
+                        .font(.body)
                         .foregroundStyle(.white)
                         .frame(width: 32, height: 32)
                         .background(Color.white.opacity(0.1), in: Circle())
@@ -127,12 +132,13 @@ struct ChatInputBar: View {
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.black)
                             .frame(width: 32, height: 32)
                             .background(Color.white, in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Stop")
                     .transition(.scale.combined(with: .opacity))
                 } else if canSend {
                     Button(action: {
@@ -141,18 +147,19 @@ struct ChatInputBar: View {
                         onSend()
                     }) {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(.black)
                             .frame(width: 32, height: 32)
                             .background(Color.white, in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Send")
                     .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
                     .transition(.scale.combined(with: .opacity))
                 } else {
                     // Dimmed send when empty
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.3))
                         .frame(width: 32, height: 32)
                         .background(Color.white.opacity(0.1), in: Circle())
@@ -165,6 +172,7 @@ struct ChatInputBar: View {
         .frame(maxWidth: LamoTheme.maxContentWidth)
         .padding(.bottom, 6)
         .padding(.horizontal, 5)
+        .onDrop(of: [.image], delegate: ImageDropDelegate(pendingImages: $pendingImages))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: canSend)
         .sheet(isPresented: $showModelPicker) {
@@ -245,11 +253,63 @@ private struct PendingImageThumb: View {
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.body)
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, Color.black.opacity(0.55))
             }
             .offset(x: 5, y: -5)
+        }
+    }
+}
+
+// MARK: - Image Drop Delegate (iPad Drag & Drop)
+
+struct ImageDropDelegate: DropDelegate {
+    @Binding var pendingImages: [UIImage]
+
+    func performDrop(info: DropInfo) -> Bool {
+        let providers = info.itemProviders(for: [.image])
+        guard !providers.isEmpty else { return false }
+
+        for provider in providers {
+            _ = provider.loadObject(ofClass: UIImage.self) { image, error in
+                guard let uiImage = image as? UIImage, error == nil else { return }
+                let resized = uiImage.resizedForModel(maxDimension: 1024)
+                DispatchQueue.main.async {
+                    pendingImages.append(resized)
+                }
+            }
+        }
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        // Visual feedback could be added here
+    }
+
+    func dropExited(info: DropInfo) {
+        // Reset visual feedback if added
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .copy)
+    }
+}
+
+// MARK: - Image Resize Helper
+
+private extension UIImage {
+    func resizedForModel(maxDimension: CGFloat) -> UIImage {
+        let size = self.size
+        let longestSide = max(size.width, size.height)
+        guard longestSide > maxDimension else { return self }
+
+        let scale = maxDimension / longestSide
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: newSize))
         }
     }
 }

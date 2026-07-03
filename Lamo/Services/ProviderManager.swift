@@ -1,6 +1,7 @@
 import Foundation
 import LiteRTLM
 import Combine
+import os
 
 
 /// Manages the active LLM provider and engine lifecycle.
@@ -71,7 +72,7 @@ final class ProviderManager: ObservableObject {
 
         // Round down to nearest 256 (clean KV-cache blocks)
         let result = (capped / 256) * 256
-        print("[Lamo] safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
+        LamoLogger.engine.debug("safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
         return result
     }
 
@@ -85,15 +86,15 @@ final class ProviderManager: ObservableObject {
                 if newValue.contains("/") {
                     // Full path — must end in .litertlm and file should exist
                     if !newValue.hasSuffix(".litertlm") {
-                        print("[Lamo] Warning: model path '\(newValue)' doesn't end in .litertlm")
+                        LamoLogger.engine.warning("Model path '\(newValue)' doesn't end in .litertlm")
                     } else if !FileManager.default.fileExists(atPath: newValue) {
-                        print("[Lamo] Warning: model file not found at '\(newValue)'")
+                        LamoLogger.engine.warning("Model file not found at '\(newValue)'")
                     }
                 } else {
                     // Filename (no slashes) — check in modelsDirectory
                     let fullPath = Self.modelsDirectory.appendingPathComponent(newValue).path
                     if !FileManager.default.fileExists(atPath: fullPath) {
-                        print("[Lamo] Warning: model '\(newValue)' not found in models directory")
+                        LamoLogger.engine.warning("Model '\(newValue)' not found in models directory")
                     }
                 }
             }
@@ -235,10 +236,10 @@ final class ProviderManager: ObservableObject {
         if let path = Self.resolveModelPath(custom: litertLMModelPath) {
             resolvedPath = path
         } else if litertLMModelPath != nil {
-            engineError = "Model file not found: \(litertLMModelPath!)"
+            engineError = LamoError.modelNotFound(litertLMModelPath!).errorDescription
             return
         } else {
-            engineError = "No .litertlm model found in ~/Documents/models/"
+            engineError = LamoError.noModelAvailable.errorDescription
             return
         }
 
@@ -247,7 +248,7 @@ final class ProviderManager: ObservableObject {
            let freeBytes = attrs[.systemFreeSize] as? UInt64 {
             let freeGB = Double(freeBytes) / 1_073_741_824
             if freeGB < 1.0 {
-                engineError = "Not enough storage. Free up at least 1 GB."
+                engineError = LamoError.insufficientDiskSpace.errorDescription
                 return
             }
         }
@@ -257,12 +258,12 @@ final class ProviderManager: ObservableObject {
            let fileSize = fileAttrs[.size] as? Int64 {
             let fileSizeGB = Double(fileSize) / 1_073_741_824
             if fileSizeGB < 0.5 {
-                engineError = "Model file too small (\(String(format: "%.2f", fileSizeGB)) GB). Re-download the model."
+                engineError = LamoError.modelTooSmall(fileSizeGB).errorDescription
                 return
             }
             // E4B should be ~3.66 GB, E2B ~2 GB — flag if suspiciously small
             if fileSizeGB < 1.5 {
-                engineError = "Model file appears incomplete (\(String(format: "%.2f", fileSizeGB)) GB). Re-download recommended."
+                engineError = LamoError.modelTooSmall(fileSizeGB).errorDescription
                 return
             }
         }
@@ -274,7 +275,7 @@ final class ProviderManager: ObservableObject {
             if magicData.count == 4 {
                 let bytes = [UInt8](magicData)
                 if bytes == [0x00, 0x00, 0x00, 0x00] {
-                    engineError = "Model file appears corrupted (all-zero header). Re-download the model."
+                    engineError = LamoError.modelCorrupted(resolvedPath).errorDescription
                     return
                 }
             }
@@ -299,7 +300,7 @@ final class ProviderManager: ObservableObject {
             }
             if availableMB < requiredMB {
                 // Try to free memory before giving up
-                print("[Lamo] Low memory (\(String(format: "%.0f", availableMB))MB), attempting cleanup...")
+                LamoLogger.engine.warning("Low memory (\(String(format: "%.0f", availableMB))MB), attempting cleanup...")
                 performPreloadCleanup()
                 // Re-check after cleanup
                 let newAvailableMB = Double(os_proc_available_memory()) / 1_048_576
@@ -309,7 +310,7 @@ final class ProviderManager: ObservableObject {
                     engineError = "Only \(availGB) GB RAM available but \(preset.displayName) needs ~\(reqGB) GB.\n\nTry:\n• Close other apps (especially Safari, Instagram, games)\n• Restart Lamo after closing apps\n• Use \(PresetModel.gemma4E2B.displayName) instead"
                     return
                 }
-                print("[Lamo] Cleanup freed memory: \(String(format: "%.0f", newAvailableMB))MB now available")
+                LamoLogger.engine.info("Cleanup freed memory: \(String(format: "%.0f", newAvailableMB))MB now available")
             }
         }
 
@@ -334,7 +335,7 @@ final class ProviderManager: ObservableObject {
         var lastEngineError = ""
         for attempt in 1...maxAttempts {
             if attempt > 1 {
-                print("[Lamo] Engine init retry attempt \(attempt)/\(maxAttempts)...")
+                LamoLogger.engine.info("Engine init retry attempt \(attempt)/\(maxAttempts)...")
                 try? await Task.sleep(for: .seconds(1))
             }
 
@@ -346,16 +347,16 @@ final class ProviderManager: ObservableObject {
                 maxNumTokens: maxTokens,
                 cacheDir: NSTemporaryDirectory()
             ) else {
-                lastEngineError = "Failed to create engine config"
-                print("[Lamo] \(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
+                lastEngineError = LamoError.engineInitFailed("config creation").errorDescription ?? "Failed to create engine config"
+                LamoLogger.engine.error("\(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
                 continue
             }
 
             let engine = LiteRTLM.Engine(engineConfig: engineConfig)
             do {
-                print("[Lamo] Initializing engine for: \(filename), backend=\(litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1) (attempt \(attempt)/\(maxAttempts))")
+                LamoLogger.engine.info("Initializing engine for: \(filename), backend=\(self.litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1) (attempt \(attempt)/\(maxAttempts))")
                 try await engine.initialize()
-                print("[Lamo] Engine initialized successfully")
+                LamoLogger.engine.info("Engine initialized successfully")
 
                 cachedEngine = engine
                 let provider = LiteRTLMProvider(
@@ -368,8 +369,8 @@ final class ProviderManager: ObservableObject {
                 isEngineReady = true
                 return
             } catch {
-                lastEngineError = "Engine init failed: \(error.localizedDescription)"
-                print("[Lamo] \(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
+                lastEngineError = LamoError.engineInitFailed(error.localizedDescription).errorDescription ?? "Engine init failed: \(error.localizedDescription)"
+                LamoLogger.engine.error("\(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
             }
         }
         // All retry attempts exhausted
@@ -473,9 +474,9 @@ final class ProviderManager: ObservableObject {
         let targetMB = max(500, Int(availableBefore) / 3)  // Try to reclaim ~33% of available
         performMemoryPressureTrunc(targetMB: min(targetMB, 2000))  // Cap at 2 GB
         let availableAfter = os_proc_available_memory() / 1_048_576
-        print("[Lamo] Preload cleanup: \(availableBefore)MB → \(availableAfter)MB (freed \(availableAfter - availableBefore)MB)")
+        LamoLogger.engine.info("Preload cleanup: \(availableBefore)MB → \(availableAfter)MB (freed \(availableAfter - availableBefore)MB)")
         #else
-        print("[Lamo] Preload cleanup done (macOS — pressure trick skipped)")
+        LamoLogger.engine.info("Preload cleanup done (macOS — pressure trick skipped)")
         #endif
     }
 
@@ -491,7 +492,7 @@ final class ProviderManager: ObservableObject {
         guard let ptr = mmap(nil, targetBytes, PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0),
               ptr != MAP_FAILED else {
-            print("[Lamo] Pressure trick: mmap failed for \(targetMB)MB")
+            LamoLogger.engine.warning("Pressure trick: mmap failed for \(targetMB)MB")
             return
         }
 
@@ -509,7 +510,7 @@ final class ProviderManager: ObservableObject {
 
         // Free the virtual address space
         munmap(ptr, targetBytes)
-        print("[Lamo] Pressure trick: allocated/touched/released \(targetMB)MB")
+        LamoLogger.engine.info("Pressure trick: allocated/touched/released \(targetMB)MB")
     }
 
     /// Force-reload the engine (e.g., after model download completes).

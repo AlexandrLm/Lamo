@@ -113,6 +113,7 @@ struct MainView: View {
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
+                                    .accessibilityLabel("Delete")
                                 }
                                 .contextMenu {
                                     Button {
@@ -129,6 +130,7 @@ struct MainView: View {
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
+                                    .accessibilityLabel("Delete")
                                 }
                         }
                     } header: {
@@ -151,6 +153,7 @@ struct MainView: View {
                     Image(systemName: "gearshape")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
+                        .accessibilityLabel("Settings")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -159,7 +162,9 @@ struct MainView: View {
                 } label: {
                     Image(systemName: "square.and.pencil")
                         .font(.body.weight(.medium))
+                        .accessibilityLabel("New Chat")
                 }
+                .keyboardShortcut("n", modifiers: .command)
             }
         }
     }
@@ -221,6 +226,8 @@ struct MainView: View {
     }
 
     private func deleteConversation(_ conversation: Conversation) {
+        // Haptic feedback
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         // Clean up temp image files for this conversation
         for message in conversation.messages {
             for path in message.imagePaths {
@@ -241,6 +248,22 @@ struct MainView: View {
             }
         }
         try? modelContext.save()
+        
+        // Clean up orphan temp image files older than 1 hour
+        let tmpDir = FileManager.default.temporaryDirectory
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: tmpDir,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: .skipsHiddenFiles
+        ) else { return }
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        for file in files where file.lastPathComponent.hasPrefix("img_") && file.pathExtension == "jpg" {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+               let created = attrs[.creationDate] as? Date,
+               created < oneHourAgo {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
     }
 
     private func resetLeftoverStreamingState() {
@@ -292,5 +315,6 @@ struct ConversationRow: View {
             Image(systemName: "bubble.left.fill")
         }
         .padding(.vertical, 2)
+        .accessibilityLabel("\(conversation.title), \(relativeTime)")
     }
 }

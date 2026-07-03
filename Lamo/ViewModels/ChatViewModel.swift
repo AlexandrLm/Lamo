@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import UIKit
 import PhotosUI
+import os
 
 @MainActor
 @Observable
@@ -170,7 +171,7 @@ final class ChatViewModel {
         do {
             try modelContext.save()
         } catch {
-            print("[Lamo] SwiftData save error: \(error)")
+            LamoLogger.general.error("SwiftData save error: \(error)")
         }
     }
 
@@ -186,7 +187,7 @@ final class ChatViewModel {
                 try data.write(to: url)
                 paths.append(url.path)
             } catch {
-                print("[Lamo] Failed to save image: \(error)")
+                LamoLogger.ui.error("Failed to save image: \(error)")
             }
         }
         return paths

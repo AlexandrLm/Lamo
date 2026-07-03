@@ -495,6 +495,7 @@ struct SettingsView: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
+                .accessibilityLabel("Memory")
                 .tint(LamoTheme.Colors.accent)
             } footer: {
                 Text("After each conversation, the AI extracts important facts about you (name, preferences, projects, dates). These facts are injected into context for future conversations.")
@@ -575,6 +576,7 @@ struct SettingsView: View {
                 Toggle(isOn: $vm.useGPU) {
                     Label("GPU Acceleration", systemImage: "bolt.fill")
                 }
+                .accessibilityLabel("GPU acceleration")
                 .tint(LamoTheme.Colors.accent)
 
                 if !vm.useGPU {

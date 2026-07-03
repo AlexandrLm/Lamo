@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import CryptoKit
+import os
 
 /// Manages downloading LiteRT-LM models from HuggingFace.
 @MainActor
@@ -72,7 +73,7 @@ final class DownloadManager: ObservableObject {
             let filename = file.deletingPathExtension().lastPathComponent
             if let data = try? Data(contentsOf: file) {
                 resumeData[filename] = data
-                print("[Lamo] Loaded persisted resume data for \(filename)")
+                LamoLogger.download.info("Loaded persisted resume data for \(filename)")
             }
         }
     }
@@ -90,7 +91,7 @@ final class DownloadManager: ObservableObject {
                let creationDate = attrs.creationDate,
                creationDate < cutoff {
                 try? FileManager.default.removeItem(at: file)
-                print("[Lamo] Cleaned up old resume data: \(file.lastPathComponent)")
+                LamoLogger.download.debug("Cleaned up old resume data: \(file.lastPathComponent)")
             }
         }
     }
@@ -100,7 +101,7 @@ final class DownloadManager: ObservableObject {
         try? FileManager.default.createDirectory(at: resumeDataURL, withIntermediateDirectories: true)
         let fileURL = resumeDataURL.appendingPathComponent(filename + ".resume")
         try? data.write(to: fileURL)
-        print("[Lamo] Persisted resume data for \(filename)")
+        LamoLogger.download.info("Persisted resume data for \(filename)")
     }
 
     /// Removes persisted resume data for a filename.
@@ -237,7 +238,7 @@ final class DownloadManager: ObservableObject {
                                     .map { String(format: "%02x", $0) }
                                     .joined()
                                 if computedHash != expectedHash {
-                                    print("[Lamo] SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
+                                    LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
                                     try FileManager.default.removeItem(at: destination)
                                     self.activeDownloads[filename]?.error = "File integrity check failed (SHA256 mismatch). Please re-download."
                                     self.activeDownloads[filename]?.isDownloading = false
@@ -245,11 +246,11 @@ final class DownloadManager: ObservableObject {
                                     self.tasks.removeValue(forKey: filename)
                                     return
                                 }
-                                print("[Lamo] SHA256 verified for \(filename)")
+                                LamoLogger.download.info("SHA256 verified for \(filename)")
                             }
                         } catch {
                             // .sha256 file doesn't exist or network error — skip verification
-                            print("[Lamo] SHA256 verification skipped for \(filename): \(error.localizedDescription)")
+                            LamoLogger.download.warning("SHA256 verification skipped for \(filename): \(error.localizedDescription)")
                         }
                     }
                 }

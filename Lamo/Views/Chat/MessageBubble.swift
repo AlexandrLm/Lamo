@@ -74,13 +74,24 @@ struct MessageBubble: View {
             HStack(spacing: 6) {
                 ForEach(message.imagePaths.indices, id: \.self) { index in
                     let path = message.imagePaths[index]
-                    if let uiImage = UIImage(contentsOfFile: path) {
+                    let uiImage: UIImage? = {
+                        if let cached = ImageCache.shared.image(forKey: path) {
+                            return cached
+                        }
+                        if let loaded = UIImage(contentsOfFile: path) {
+                            ImageCache.shared.setImage(loaded, forKey: path)
+                            return loaded
+                        }
+                        return nil
+                    }()
+                    if let uiImage {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
                             .frame(maxWidth: 200, maxHeight: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .contentShape(Rectangle())
+                            .accessibilityLabel("Image attachment")
                             .onTapGesture {
                                 selectedImageIndex = index
                                 showImageViewer = true
@@ -91,7 +102,14 @@ struct MessageBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .fullScreenCover(isPresented: $showImageViewer) {
-            let uiImages = message.imagePaths.compactMap { UIImage(contentsOfFile: $0) }
+            let uiImages = message.imagePaths.compactMap { path -> UIImage? in
+                if let cached = ImageCache.shared.image(forKey: path) { return cached }
+                if let loaded = UIImage(contentsOfFile: path) {
+                    ImageCache.shared.setImage(loaded, forKey: path)
+                    return loaded
+                }
+                return nil
+            }
             ImageViewer(images: uiImages, startIndex: selectedImageIndex)
                 .ignoresSafeArea()
         }
@@ -121,17 +139,18 @@ struct MessageBubble: View {
         Button { copyContent() } label: {
             if showCopyConfirmation {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(LamoTheme.Colors.accent)
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .transition(.scale.combined(with: .opacity))
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Copy message")
         .sensoryFeedback(.impact(weight: .light), trigger: showCopyConfirmation)
     }
 
@@ -189,7 +208,7 @@ struct ThinkingView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "brain")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(LamoTheme.Colors.accent)
 
                     if isStreaming && !isExpanded {
@@ -205,7 +224,7 @@ struct ThinkingView: View {
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }

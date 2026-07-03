@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Combine
+import os
 
 /// Semantic memory that stores facts about the user.
 ///
@@ -74,7 +75,7 @@ final class MemoryService: ObservableObject {
             try context.save()
             updateEntryCount()
         } catch {
-            print("[Memory] Save error: \(error)")
+            LamoLogger.memory.error("Save error: \(error)")
         }
     }
 
@@ -109,7 +110,7 @@ final class MemoryService: ObservableObject {
             try context.save()
             updateEntryCount()
         } catch {
-            print("[Memory] Remove error: \(error)")
+            LamoLogger.memory.error("Remove error: \(error)")
         }
     }
 
@@ -159,7 +160,7 @@ final class MemoryService: ObservableObject {
             try context.save()
             updateEntryCount()
         } catch {
-            print("[Memory] Delete error: \(error)")
+            LamoLogger.memory.error("Delete error: \(error)")
         }
     }
 
@@ -172,7 +173,7 @@ final class MemoryService: ObservableObject {
             cacheLoaded = false
             updateEntryCount()
         } catch {
-            print("[Memory] Clear error: \(error)")
+            LamoLogger.memory.error("Clear error: \(error)")
         }
     }
 
@@ -190,7 +191,7 @@ final class MemoryService: ObservableObject {
             cacheLoaded = false
             updateEntryCount()
         } catch {
-            print("[Memory] Prune error: \(error)")
+            LamoLogger.memory.error("Prune error: \(error)")
         }
     }
 

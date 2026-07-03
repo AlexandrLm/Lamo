@@ -62,6 +62,16 @@ struct ChatView: View {
                 onStop: { viewModel.stopGeneration() }
             )
         }
+        .overlay(alignment: .topTrailing) {
+            if viewModel.isStreaming {
+                Button(action: { viewModel.stopGeneration() }) {
+                    EmptyView()
+                }
+                .keyboardShortcut(".", modifiers: .command)
+                .accessibilityLabel("Stop generation")
+                .hidden()
+            }
+        }
         .background(LamoTheme.Colors.background)
         .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
