@@ -11,10 +11,6 @@ final class SettingsViewModel: ObservableObject {
 
     // MARK: - Engine Settings
 
-    @Published var selectedProviderType: ProviderType {
-        didSet { providerManager.selectedProvider = selectedProviderType }
-    }
-
     @Published var useGPU: Bool {
         didSet { defaults.set(useGPU, forKey: "litertLMUseGPU") }
     }
@@ -95,7 +91,6 @@ final class SettingsViewModel: ObservableObject {
     // MARK: - Init
 
     init() {
-        self.selectedProviderType = providerManager.selectedProvider
         self.useGPU = defaults.object(forKey: "litertLMUseGPU") as? Bool ?? true
         self.cpuThreadCount = defaults.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4
         self.selectedModel = providerManager.litertLMModelPath

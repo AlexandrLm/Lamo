@@ -33,13 +33,11 @@ struct SettingsView: View {
                 // App header
                 appHeader
 
-                // Engine picker
-                enginePickerSection
+                // Engine status
+                engineStatusSection
 
-                // AI section (conditional on LiteRT-LM)
-                if vm.selectedProviderType == .litertLM {
-                    aiSection
-                }
+                // AI section
+                aiSection
 
                 // System section
                 systemSection
@@ -139,30 +137,11 @@ struct SettingsView: View {
 
     // MARK: - Engine Picker
 
-    private var enginePickerSection: some View {
+    private var engineStatusSection: some View {
         Section {
-            Picker(selection: $vm.selectedProviderType) {
-                ForEach(ProviderType.allCases) { provider in
-                    HStack {
-                        Image(systemName: provider.icon)
-                        Text(provider.displayName)
-                    }
-                    .tag(provider)
-                }
-            } label: {
-                Label("AI Engine", systemImage: "cpu")
-            }
-            .pickerStyle(.navigationLink)
-
-            if vm.selectedProviderType == .litertLM {
-                engineStatusRow
-            }
+            engineStatusRow
         } footer: {
-            if vm.selectedProviderType == .litertLM {
-                Text("Runs AI models directly on your device. No internet needed.")
-            } else {
-                Text("Uses Apple's built-in AI. Requires Apple Intelligence.")
-            }
+            Text("Runs AI models directly on your device. No internet needed.")
         }
     }
 

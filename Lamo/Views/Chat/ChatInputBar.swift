@@ -274,35 +274,17 @@ struct ModelPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Providers") {
-                    Button {
-                        provider.switchModel(provider: .appleIntelligence)
-                        isPresented = false
-                    } label: {
-                        HStack {
-                            Label("Apple Intelligence", systemImage: "apple.logo")
-                            Spacer()
-                            if provider.selectedProvider == .appleIntelligence {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(LamoTheme.Colors.accent)
-                            }
-                        }
-                    }
-                    .tint(.primary)
-                }
-
                 if !availableModels.isEmpty {
                     Section("On-Device Models") {
                         ForEach(availableModels, id: \.path) { model in
                             Button {
-                                provider.switchModel(provider: .litertLM, modelPath: model.path)
+                                provider.switchModel(modelPath: model.path)
                                 isPresented = false
                             } label: {
                                 HStack {
                                     Label(model.displayName, systemImage: "cpu")
                                     Spacer()
-                                    if provider.selectedProvider == .litertLM &&
-                                        provider.litertLMModelPath == model.path {
+                                    if provider.litertLMModelPath == model.path {
                                         Image(systemName: "checkmark")
                                             .foregroundStyle(LamoTheme.Colors.accent)
                                     }
@@ -313,44 +295,38 @@ struct ModelPickerSheet: View {
                     }
                 }
 
-                // Thinking mode
-                if provider.selectedProvider == .litertLM {
-                    Section {
-                        Toggle(isOn: Binding(
-                            get: { provider.thinkingMode },
-                            set: { provider.thinkingMode = $0 }
-                        )) {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Thinking Mode")
-                                    Text("Extended reasoning before answering")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                            } icon: {
-                                Image(systemName: "brain")
-                                    .foregroundStyle(provider.thinkingMode ? LamoTheme.Colors.accent : .secondary)
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { provider.thinkingMode },
+                        set: { provider.thinkingMode = $0 }
+                    )) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Thinking Mode")
+                                Text("Extended reasoning before answering")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
+                        } icon: {
+                            Image(systemName: "brain")
+                                .foregroundStyle(provider.thinkingMode ? LamoTheme.Colors.accent : .secondary)
                         }
-                        .tint(LamoTheme.Colors.accent)
                     }
+                    .tint(LamoTheme.Colors.accent)
                 }
 
-                // Engine status
-                if provider.selectedProvider == .litertLM {
-                    Section {
-                        if provider.isEngineReady {
-                            Label("Model loaded", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        } else if let error = provider.engineError {
-                            Label(error, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                                .font(.caption)
-                        } else if provider.litertLMModelPath != nil {
-                            HStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text("Loading…").foregroundStyle(.secondary)
-                            }
+                Section {
+                    if provider.isEngineReady {
+                        Label("Model loaded", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else if let error = provider.engineError {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                    } else if provider.litertLMModelPath != nil {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Loading…").foregroundStyle(.secondary)
                         }
                     }
                 }

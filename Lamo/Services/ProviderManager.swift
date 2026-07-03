@@ -2,27 +2,7 @@ import Foundation
 import LiteRTLM
 import Combine
 
-/// Available LLM providers in the app.
-enum ProviderType: String, CaseIterable, Identifiable {
-    case appleIntelligence = "apple"
-    case litertLM = "litertlm"
 
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .appleIntelligence: return "Apple Intelligence"
-        case .litertLM: return "On-Device AI"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .appleIntelligence: return "apple.logo"
-        case .litertLM: return "cpu"
-        }
-    }
-}
 
 /// Manages the active LLM provider and engine lifecycle.
 ///
@@ -97,18 +77,6 @@ final class ProviderManager: ObservableObject {
     }
 
     // MARK: - Settings (persisted via UserDefaults)
-
-    var selectedProvider: ProviderType {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: "selectedProvider"),
-                  let type = ProviderType(rawValue: raw) else { return .litertLM }
-            return type
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "selectedProvider")
-            if !suppressInvalidation { invalidateEngine() }
-        }
-    }
 
     var litertLMModelPath: String? {
         get { UserDefaults.standard.string(forKey: "litertLMModelPath") }
@@ -204,22 +172,16 @@ final class ProviderManager: ObservableObject {
     /// Debounce: prevents rapid re-initialization when settings change quickly.
     private var invalidateTask: Task<Void, Never>?
 
-    /// The currently active provider (Apple Intelligence or LiteRT-LM).
+    /// The currently active provider (LiteRT-LM only).
     /// Always returns a **cached** provider — never creates a new one on the fly.
-    /// Returns AppleIntelligenceProvider as fallback when LiteRT-LM engine isn't ready yet.
     var currentProvider: any LLMProvider {
-        switch selectedProvider {
-        case .appleIntelligence:
-            return AppleIntelligenceProvider()
-        case .litertLM:
-            if let cached = cachedProvider {
-                return cached
-            }
-            // Engine not ready yet — return Apple Intelligence as placeholder.
-            // This prevents creating an engine-less LiteRTLMProvider that would
-            // try to load the model synchronously on the first message send.
-            return AppleIntelligenceProvider()
+        if let cached = cachedProvider {
+            return cached
         }
+        // Engine not ready yet — return a temporary provider.
+        // This prevents creating an engine-less LiteRTLMProvider that would
+        // try to load the model synchronously on the first message send.
+        return LiteRTLMProvider(modelPath: litertLMModelPath ?? "")
     }
 
     // MARK: - Engine Lifecycle
@@ -227,10 +189,6 @@ final class ProviderManager: ObservableObject {
     /// Initializes and caches the engine. Safe to call multiple times —
     /// subsequent calls return immediately if already loaded.
     func initializeEngineIfNeeded() async {
-        guard selectedProvider == .litertLM else {
-            isEngineReady = true  // Apple Intelligence doesn't need engine
-            return
-        }
         guard cachedEngine == nil else {
             isEngineReady = true
             return
@@ -409,14 +367,11 @@ final class ProviderManager: ObservableObject {
         }
     }
 
-    /// Atomically switch to a different model/provider without double-invalidation.
-    func switchModel(provider: ProviderType, modelPath: String? = nil) {
+    /// Atomically switch to a different model without double-invalidation.
+    func switchModel(modelPath: String) {
         // Suppress individual setter invalidation
         suppressInvalidation = true
-        selectedProvider = provider
-        if let path = modelPath {
-            litertLMModelPath = path
-        }
+        litertLMModelPath = modelPath
         suppressInvalidation = false
         // Single invalidation with all new values set
         invalidateEngine()
@@ -513,19 +468,14 @@ final class ProviderManager: ObservableObject {
 
     /// Human-readable name of the currently active model.
     var currentModelDisplayName: String {
-        switch selectedProvider {
-        case .appleIntelligence:
-            return "Apple Intelligence"
-        case .litertLM:
-            guard let path = litertLMModelPath ?? Self.findFirstModel() else {
-                return ""
-            }
-            let filename = (path as NSString).lastPathComponent
-                .replacingOccurrences(of: ".litertlm", with: "")
-                .replacingOccurrences(of: "-", with: " ")
-                .replacingOccurrences(of: "_", with: " ")
-            return filename
+        guard let path = litertLMModelPath ?? Self.findFirstModel() else {
+            return ""
         }
+        let filename = (path as NSString).lastPathComponent
+            .replacingOccurrences(of: ".litertlm", with: "")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+        return filename
     }
 
     /// The models directory: ~/Documents/models/
