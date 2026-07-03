@@ -469,10 +469,16 @@ struct SettingsView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                         Spacer()
-                        Text("Balanced")
-                            .font(.caption2)
-                            .foregroundStyle(vm.temperature < 0.5 || vm.temperature > 1.0 ? .tertiary : LamoTheme.Colors.accent)
-                            .fontWeight(vm.temperature >= 0.5 && vm.temperature <= 1.0 ? .medium : .regular)
+                        if vm.temperature >= 0.5 && vm.temperature <= 1.0 {
+                            Text("Balanced")
+                                .font(.caption2)
+                                .foregroundStyle(LamoTheme.Colors.accent)
+                                .fontWeight(.medium)
+                        } else {
+                            Text("Balanced")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                         Spacer()
                         Text("Creative")
                             .font(.caption2)

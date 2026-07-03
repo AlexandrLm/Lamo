@@ -5,6 +5,7 @@ struct ModelCardView: View {
     @ObservedObject var downloadManager: DownloadManager
     var isActiveModel: Bool = false
     @State private var isExpanded = false
+    @State private var showDeleteConfirmation = false
 
     private var downloadState: DownloadManager.DownloadState? {
         downloadManager.activeDownloads[model.filename]
@@ -53,6 +54,7 @@ struct ModelCardView: View {
                         .padding(.vertical, 3)
                         .background(themeColor)
                         .clipShape(Capsule())
+                        .transition(.scale.combined(with: .opacity))
                 } else if isDownloaded {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(LamoTheme.Colors.success)
@@ -216,7 +218,7 @@ struct ModelCardView: View {
                     }
 
                     Button(role: .destructive) {
-                        downloadManager.deleteModel(model)
+                        showDeleteConfirmation = true
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -248,6 +250,14 @@ struct ModelCardView: View {
             .background(Color.clear)
         }
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+        .confirmationDialog("Delete \(model.displayName)?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                downloadManager.deleteModel(model)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove the model from your device.")
+        }
     }
 }
 
