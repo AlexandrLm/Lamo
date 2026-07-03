@@ -98,6 +98,20 @@ struct ChatView: View {
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }
+
+                // Empty state CTA: Download a Model button
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Label("Download a Model", systemImage: "arrow.down.circle")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(LamoTheme.Colors.accent.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
             Spacer()
         }

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import CryptoKit
 
 /// Manages downloading LiteRT-LM models from HuggingFace.
 @MainActor
@@ -13,6 +14,13 @@ final class DownloadManager: ObservableObject {
     private var resumeData: [String: Data] = [:]
     private let session: URLSession
     private let backgroundSessionID = "com.lamo.download"
+
+    /// Directory for persisting resume data across app launches.
+    private var resumeDataURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("models")
+            .appendingPathComponent(".resume_data")
+    }
 
     struct DownloadState {
         var progress: Double = 0
@@ -44,6 +52,61 @@ final class DownloadManager: ObservableObject {
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
         session = URLSession(configuration: config, delegate: DownloadSessionDelegate.shared, delegateQueue: nil)
+
+        // #7: Load persisted resume data from disk
+        loadPersistedResumeData()
+        // #7: Clean up old resume data (> 7 days)
+        cleanupOldResumeData()
+    }
+
+    // MARK: - Resume Data Persistence (#7)
+
+    /// Loads any persisted resume data from ~/Documents/models/.resume_data/
+    private func loadPersistedResumeData() {
+        guard FileManager.default.fileExists(atPath: resumeDataURL.path) else { return }
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: resumeDataURL, includingPropertiesForKeys: [.creationDateKey]
+        ) else { return }
+
+        for file in files where file.pathExtension == "resume" {
+            let filename = file.deletingPathExtension().lastPathComponent
+            if let data = try? Data(contentsOf: file) {
+                resumeData[filename] = data
+                print("[Lamo] Loaded persisted resume data for \(filename)")
+            }
+        }
+    }
+
+    /// Removes resume data files older than 7 days.
+    private func cleanupOldResumeData() {
+        guard FileManager.default.fileExists(atPath: resumeDataURL.path) else { return }
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: resumeDataURL, includingPropertiesForKeys: [.creationDateKey]
+        ) else { return }
+
+        let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        for file in files where file.pathExtension == "resume" {
+            if let attrs = try? file.resourceValues(forKeys: [.creationDateKey]),
+               let creationDate = attrs.creationDate,
+               creationDate < cutoff {
+                try? FileManager.default.removeItem(at: file)
+                print("[Lamo] Cleaned up old resume data: \(file.lastPathComponent)")
+            }
+        }
+    }
+
+    /// Persists resume data to ~/Documents/models/.resume_data/
+    private func persistResumeData(_ data: Data, for filename: String) {
+        try? FileManager.default.createDirectory(at: resumeDataURL, withIntermediateDirectories: true)
+        let fileURL = resumeDataURL.appendingPathComponent(filename + ".resume")
+        try? data.write(to: fileURL)
+        print("[Lamo] Persisted resume data for \(filename)")
+    }
+
+    /// Removes persisted resume data for a filename.
+    private func removePersistedResumeData(for filename: String) {
+        let fileURL = resumeDataURL.appendingPathComponent(filename + ".resume")
+        try? FileManager.default.removeItem(at: fileURL)
     }
 
     func download(model: PresetModel) {
@@ -90,7 +153,14 @@ final class DownloadManager: ObservableObject {
 
     func cancelDownload(model: PresetModel) {
         guard let task = tasks[model.filename] else { return }
-        task.cancel()
+        // #7: Save resume data to disk before cancelling
+        task.cancel { [weak self] resumeData in
+            guard let self, let resumeData else { return }
+            Task { @MainActor in
+                self.resumeData[model.filename] = resumeData
+                self.persistResumeData(resumeData, for: model.filename)
+            }
+        }
         tasks.removeValue(forKey: model.filename)
         observations.removeValue(forKey: model.filename)
         activeDownloads[model.filename]?.isDownloading = false
@@ -101,6 +171,8 @@ final class DownloadManager: ObservableObject {
         let fileURL = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
         try? FileManager.default.removeItem(at: fileURL)
         activeDownloads.removeValue(forKey: model.filename)
+        // Clean up any persisted resume data for this model
+        removePersistedResumeData(for: model.filename)
 
         if ProviderManager.shared.litertLMModelPath == model.filename {
             ProviderManager.shared.litertLMModelPath = nil
@@ -148,6 +220,40 @@ final class DownloadManager: ObservableObject {
                     try FileManager.default.removeItem(at: destination)
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destination)
+
+                // #10: SHA256 verification after download
+                if let model = DownloadSessionDelegate.shared.pendingModels[filename],
+                   let modelURL = model.downloadURL {
+                    let sha256URL = URL(string: modelURL.absoluteString + ".sha256")
+                    if let sha256URL = sha256URL {
+                        do {
+                            let (sha256Data, _) = try await URLSession.shared.data(from: sha256URL)
+                            let expectedHash = String(data: sha256Data, encoding: .utf8)?
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                            if let expectedHash = expectedHash, !expectedHash.isEmpty {
+                                // Compute SHA256 of the downloaded model file
+                                let fileData = try Data(contentsOf: destination)
+                                let computedHash = SHA256.hash(data: fileData)
+                                    .map { String(format: "%02x", $0) }
+                                    .joined()
+                                if computedHash != expectedHash {
+                                    print("[Lamo] SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
+                                    try FileManager.default.removeItem(at: destination)
+                                    self.activeDownloads[filename]?.error = "File integrity check failed (SHA256 mismatch). Please re-download."
+                                    self.activeDownloads[filename]?.isDownloading = false
+                                    self.observations.removeValue(forKey: filename)
+                                    self.tasks.removeValue(forKey: filename)
+                                    return
+                                }
+                                print("[Lamo] SHA256 verified for \(filename)")
+                            }
+                        } catch {
+                            // .sha256 file doesn't exist or network error — skip verification
+                            print("[Lamo] SHA256 verification skipped for \(filename): \(error.localizedDescription)")
+                        }
+                    }
+                }
+
                 self.activeDownloads[filename]?.isComplete = true
                 self.activeDownloads[filename]?.isDownloading = false
                 self.activeDownloads[filename]?.progress = 1.0
@@ -155,6 +261,8 @@ final class DownloadManager: ObservableObject {
                 self.activeDownloads[filename]?.lastError = nil
                 self.observations.removeValue(forKey: filename)
                 self.tasks.removeValue(forKey: filename)
+                // Clean up persisted resume data for completed download
+                self.removePersistedResumeData(for: filename)
 
                 ProviderManager.shared.reloadEngine()
             } catch {

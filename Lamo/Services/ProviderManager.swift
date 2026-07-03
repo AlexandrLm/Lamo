@@ -3,7 +3,6 @@ import LiteRTLM
 import Combine
 
 
-
 /// Manages the active LLM provider and engine lifecycle.
 ///
 /// Responsibilities:
@@ -58,7 +57,7 @@ final class ProviderManager: ObservableObject {
 
         // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
         let usableMB = availableMB * safetyFactor
-        let maxTokensFromMemory = max(256, Int(usableMB / 300.0 * 1024))
+        let maxTokensFromMemory = max(512, Int(usableMB / 300.0 * 1024))
 
         let requested: Int
         if kvCacheAuto {
@@ -81,6 +80,23 @@ final class ProviderManager: ObservableObject {
     var litertLMModelPath: String? {
         get { UserDefaults.standard.string(forKey: "litertLMModelPath") }
         set {
+            // #8: Validate model path before setting
+            if let newValue = newValue {
+                if newValue.contains("/") {
+                    // Full path — must end in .litertlm and file should exist
+                    if !newValue.hasSuffix(".litertlm") {
+                        print("[Lamo] Warning: model path '\(newValue)' doesn't end in .litertlm")
+                    } else if !FileManager.default.fileExists(atPath: newValue) {
+                        print("[Lamo] Warning: model file not found at '\(newValue)'")
+                    }
+                } else {
+                    // Filename (no slashes) — check in modelsDirectory
+                    let fullPath = Self.modelsDirectory.appendingPathComponent(newValue).path
+                    if !FileManager.default.fileExists(atPath: fullPath) {
+                        print("[Lamo] Warning: model '\(newValue)' not found in models directory")
+                    }
+                }
+            }
             UserDefaults.standard.set(newValue, forKey: "litertLMModelPath")
             if !suppressInvalidation { invalidateEngine() }
         }
@@ -98,7 +114,7 @@ final class ProviderManager: ObservableObject {
         get { UserDefaults.standard.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4 }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMCpuThreadCount")
-            invalidateEngine()
+            updateNonCriticalSettings()
         }
     }
 
@@ -137,7 +153,7 @@ final class ProviderManager: ObservableObject {
         get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMSpeculativeDecoding")
-            invalidateEngine()
+            updateNonCriticalSettings()
         }
     }
 
@@ -159,6 +175,16 @@ final class ProviderManager: ObservableObject {
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
         "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
+    }
+
+    // MARK: - Non-Critical Settings (#6)
+
+    /// Updates UserDefaults for non-critical settings without triggering engine invalidation.
+    /// Settings like cpuThreadCount and speculativeDecoding take effect on the next
+    /// inference run without requiring a full engine reload.
+    func updateNonCriticalSettings() {
+        // No-op: these settings are applied at inference time.
+        // The UserDefaults write already happened in the caller's setter.
     }
 
     // MARK: - Internal State
@@ -197,6 +223,10 @@ final class ProviderManager: ObservableObject {
         engineError = nil
         isEngineReady = false
 
+        // #9: Start monitoring memory pressure BEFORE engine load
+        // so memory pressure events during loading are caught immediately.
+        startMemoryPressureMonitoring()
+
         // Free up memory before loading — model is mmap'd but engine still
         // needs working RAM for KV-cache, tokenizer, and execution buffers.
         performPreloadCleanup()
@@ -234,6 +264,19 @@ final class ProviderManager: ObservableObject {
             if fileSizeGB < 1.5 {
                 engineError = "Model file appears incomplete (\(String(format: "%.2f", fileSizeGB)) GB). Re-download recommended."
                 return
+            }
+        }
+
+        // #4: Pre-flight: validate model file magic bytes (detect corrupted/truncated files)
+        if let fileHandle = FileHandle(forReadingAtPath: resolvedPath) {
+            defer { fileHandle.closeFile() }
+            let magicData = fileHandle.readData(ofLength: 4)
+            if magicData.count == 4 {
+                let bytes = [UInt8](magicData)
+                if bytes == [0x00, 0x00, 0x00, 0x00] {
+                    engineError = "Model file appears corrupted (all-zero header). Re-download the model."
+                    return
+                }
             }
         }
 
@@ -286,41 +329,51 @@ final class ProviderManager: ObservableObject {
         // Use safe token limit to prevent OOM on larger models
         let maxTokens = safeMaxTokens(modelPath: resolvedPath)
 
-        guard let engineConfig = try? LiteRTLM.EngineConfig(
-            modelPath: resolvedPath,
-            backend: backend,
-            visionBackend: .cpu(),
-            audioBackend: nil,
-            maxNumTokens: maxTokens,
-            cacheDir: NSTemporaryDirectory()
-        ) else {
-            engineError = "Failed to create engine config"
-            return
+        // #2: Auto-retry engine creation + initialization (max 3 attempts)
+        let maxAttempts = 3
+        var lastEngineError = ""
+        for attempt in 1...maxAttempts {
+            if attempt > 1 {
+                print("[Lamo] Engine init retry attempt \(attempt)/\(maxAttempts)...")
+                try? await Task.sleep(for: .seconds(1))
+            }
+
+            guard let engineConfig = try? LiteRTLM.EngineConfig(
+                modelPath: resolvedPath,
+                backend: backend,
+                visionBackend: .cpu(),
+                audioBackend: nil,
+                maxNumTokens: maxTokens,
+                cacheDir: NSTemporaryDirectory()
+            ) else {
+                lastEngineError = "Failed to create engine config"
+                print("[Lamo] \(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
+                continue
+            }
+
+            let engine = LiteRTLM.Engine(engineConfig: engineConfig)
+            do {
+                print("[Lamo] Initializing engine for: \(filename), backend=\(litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1) (attempt \(attempt)/\(maxAttempts))")
+                try await engine.initialize()
+                print("[Lamo] Engine initialized successfully")
+
+                cachedEngine = engine
+                let provider = LiteRTLMProvider(
+                    modelPath: litertLMModelPath,
+                    useGPU: litertLMUseGPU,
+                    maxNumTokens: maxTokens,
+                    engine: engine
+                )
+                cachedProvider = provider
+                isEngineReady = true
+                return
+            } catch {
+                lastEngineError = "Engine init failed: \(error.localizedDescription)"
+                print("[Lamo] \(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
+            }
         }
-
-        let engine = LiteRTLM.Engine(engineConfig: engineConfig)
-        do {
-            print("[Lamo] Initializing engine for: \(filename), backend=\(litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1)")
-            try await engine.initialize()
-            print("[Lamo] Engine initialized successfully")
-        } catch {
-            print("[Lamo] Engine init FAILED: \(error)")
-            engineError = "Engine init failed: \(error.localizedDescription)"
-            return
-        }
-
-        cachedEngine = engine
-        let provider = LiteRTLMProvider(
-            modelPath: litertLMModelPath,
-            useGPU: litertLMUseGPU,
-            maxNumTokens: maxTokens,
-            engine: engine
-        )
-        cachedProvider = provider
-        isEngineReady = true
-
-        // Start monitoring memory pressure after engine loads
-        startMemoryPressureMonitoring()
+        // All retry attempts exhausted
+        engineError = lastEngineError
     }
 
     // MARK: - Memory Pressure

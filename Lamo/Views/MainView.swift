@@ -10,6 +10,7 @@ struct MainView: View {
     @State private var hasAppeared = false
     @State private var renamingID: UUID?
     @State private var renameText = ""
+    @StateObject private var providerManager = ProviderManager.shared
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -166,17 +167,45 @@ struct MainView: View {
     // MARK: - Detail
 
     private var detailContent: some View {
-        Group {
-            if let conversation = selectedConversation {
-                ChatView(
-                    conversation: conversation,
-                    modelContext: modelContext,
-                    onNewChat: {
-                        startNewChat()
+        ZStack {
+            Group {
+                if let conversation = selectedConversation {
+                    ChatView(
+                        conversation: conversation,
+                        modelContext: modelContext,
+                        onNewChat: {
+                            startNewChat()
+                        }
+                    )
+                } else {
+                    ContentUnavailableView("Select a Chat", systemImage: "bubble.left", description: Text("Choose a conversation or start a new one"))
+                }
+            }
+
+            // Startup gate: show loading overlay until engine is ready
+            if !providerManager.isEngineReady {
+                VStack(spacing: 16) {
+                    if let error = providerManager.engineError {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.largeTitle)
+                            .foregroundStyle(.red)
+                        Text("Engine Error")
+                            .font(.headline)
+                        Text(error)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    } else {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Loading model...")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                )
-            } else {
-                ContentUnavailableView("Select a Chat", systemImage: "bubble.left", description: Text("Choose a conversation or start a new one"))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(LamoTheme.Colors.background)
             }
         }
     }
