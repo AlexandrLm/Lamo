@@ -7,6 +7,8 @@ struct MessageBubble: View {
     @State private var showCopyConfirmation = false
     @State private var showImageViewer = false
     @State private var selectedImageIndex = 0
+    @State private var showActions = false
+    @State private var showShareSheet = false
 
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
@@ -21,20 +23,99 @@ struct MessageBubble: View {
                 assistantContent
             }
 
-            // Timestamp + actions
-            HStack(spacing: 8) {
-                Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+            // Actions bar (assistant only)
+            if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
+                HStack(spacing: 12) {
+                    // Timestamp
+                    Text(message.timestamp, style: .time)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
 
-                if message.role == .assistant {
-                    copyButton
+                    Spacer()
+
+                    // Model badge
+                    modelBadge
+
+                    // Copy
+                    actionButton(
+                        icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
+                        label: "Copy",
+                        color: showCopyConfirmation ? LamoTheme.Colors.accent : Color(.tertiaryLabel)
+                    ) {
+                        copyContent()
+                    }
+
+                    // Retry
+                    if let onRetry {
+                        actionButton(icon: "arrow.clockwise", label: "Retry", color: Color(.tertiaryLabel)) {
+                            onRetry()
+                        }
+                    }
+
+                    // Share
+                    actionButton(icon: "square.and.arrow.up", label: "Share", color: Color(.tertiaryLabel)) {
+                        showShareSheet = true
+                    }
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 2)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .padding(.leading, message.role == .user ? 0 : 18)
-            .padding(.trailing, message.role == .user ? 16 : 0)
+
+            // User timestamp (simpler)
+            if message.role == .user {
+                HStack {
+                    Spacer()
+                    Text(message.timestamp, style: .time)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.trailing, 16)
+            }
         }
         .messageAppear()
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: [message.content])
+        }
+    }
+
+    // MARK: - Model Badge
+
+    private var modelBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "cpu")
+                .font(.system(size: 8))
+            Text(modelName)
+                .font(.system(.caption2, design: .rounded).weight(.medium))
+        }
+        .foregroundStyle(LamoTheme.Colors.accent)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(LamoTheme.Colors.accent.opacity(0.1))
+        .clipShape(Capsule())
+    }
+
+    private var modelName: String {
+        let name = ProviderManager.shared.currentModelDisplayName
+        return name.isEmpty ? "AI" : name
+    }
+
+    // MARK: - Action Button
+
+    private func actionButton(
+        icon: String,
+        label: String,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(color)
+                .frame(width: 20, height: 20)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     // MARK: - User Content
@@ -135,25 +216,6 @@ struct MessageBubble: View {
 
     // MARK: - Actions
 
-    private var copyButton: some View {
-        Button { copyContent() } label: {
-            if showCopyConfirmation {
-                Image(systemName: "checkmark")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(LamoTheme.Colors.accent)
-                    .transition(.scale.combined(with: .opacity))
-            } else {
-                Image(systemName: "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Copy message")
-        .sensoryFeedback(.impact(weight: .light), trigger: showCopyConfirmation)
-    }
-
     private func copyContent() {
         let content = message.content
         #if os(iOS)
@@ -166,6 +228,18 @@ struct MessageBubble: View {
             withAnimation { showCopyConfirmation = false }
         }
     }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Appear Modifier
@@ -258,5 +332,3 @@ struct ThinkingView: View {
         .glassEffect(.regular.tint(LamoTheme.Colors.accent.opacity(0.08)), in: .rect(cornerRadius: 10))
     }
 }
-
-

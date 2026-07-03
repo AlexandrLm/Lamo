@@ -25,17 +25,19 @@ struct MainView: View {
         conversations.first { $0.id == selectedID }
     }
 
-    // MARK: - Grouped Conversations
+    // MARK: - Grouped Conversations (Pinned first)
 
     private var groupedConversations: [(title: String, items: [Conversation])] {
         let cal = Calendar.current
         let now = Date()
+        let unpinned = filteredConversations.filter { !$0.isPinned }
+
         var today: [Conversation] = []
         var yesterday: [Conversation] = []
         var lastWeek: [Conversation] = []
         var older: [Conversation] = []
 
-        for conv in filteredConversations {
+        for conv in unpinned {
             let updated = conv.updatedAt
             if cal.isDateInToday(updated) {
                 today.append(conv)
@@ -49,6 +51,11 @@ struct MainView: View {
         }
 
         var groups: [(String, [Conversation])] = []
+
+        let pinned = filteredConversations.filter { $0.isPinned }
+        if !pinned.isEmpty {
+            groups.append(("Pinned", pinned))
+        }
         if !today.isEmpty { groups.append(("Today", today)) }
         if !yesterday.isEmpty { groups.append(("Yesterday", yesterday)) }
         if !lastWeek.isEmpty { groups.append(("Previous 7 Days", lastWeek)) }
@@ -115,12 +122,32 @@ struct MainView: View {
                                     }
                                     .accessibilityLabel("Delete")
                                 }
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        togglePin(conversation)
+                                    } label: {
+                                        Label(
+                                            conversation.isPinned ? "Unpin" : "Pin",
+                                            systemImage: conversation.isPinned ? "pin.slash" : "pin"
+                                        )
+                                    }
+                                    .tint(conversation.isPinned ? .gray : .orange)
+                                }
                                 .contextMenu {
                                     Button {
                                         renamingID = conversation.id
                                         renameText = conversation.title
                                     } label: {
                                         Label("Rename", systemImage: "pencil")
+                                    }
+
+                                    Button {
+                                        togglePin(conversation)
+                                    } label: {
+                                        Label(
+                                            conversation.isPinned ? "Unpin" : "Pin",
+                                            systemImage: conversation.isPinned ? "pin.slash" : "pin"
+                                        )
                                     }
 
                                     Divider()
@@ -134,10 +161,17 @@ struct MainView: View {
                                 }
                         }
                     } header: {
-                        Text(group.title)
-                            .font(.caption2)
-                            .foregroundStyle(.quaternary)
-                            .textCase(nil)
+                        HStack(spacing: 4) {
+                            if group.title == "Pinned" {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.orange)
+                            }
+                            Text(group.title)
+                                .font(.caption2)
+                                .foregroundStyle(.quaternary)
+                                .textCase(nil)
+                        }
                     }
                 }
             }
@@ -225,10 +259,14 @@ struct MainView: View {
         selectedID = conversation.id
     }
 
+    private func togglePin(_ conversation: Conversation) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        conversation.isPinned.toggle()
+        try? modelContext.save()
+    }
+
     private func deleteConversation(_ conversation: Conversation) {
-        // Haptic feedback
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        // Clean up temp image files for this conversation
         for message in conversation.messages {
             for path in message.imagePaths {
                 try? FileManager.default.removeItem(atPath: path)
@@ -249,7 +287,6 @@ struct MainView: View {
         }
         try? modelContext.save()
         
-        // Clean up orphan temp image files older than 1 hour
         let tmpDir = FileManager.default.temporaryDirectory
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: tmpDir,
@@ -285,14 +322,46 @@ struct ConversationRow: View {
         return formatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
     }
 
+    private var firstUserMessage: String? {
+        conversation.messages
+            .sorted(by: { $0.timestamp < $1.timestamp })
+            .first(where: { $0.role == .user })?.content
+    }
+
     private var lastMessagePreview: String? {
         conversation.messages
             .sorted(by: { $0.timestamp < $1.timestamp })
             .last?.content
     }
 
+    private var previewText: String? {
+        // Prefer first user message as preview (like ChatGPT)
+        if let first = firstUserMessage, !first.isEmpty {
+            return String(first.prefix(60))
+        }
+        return lastMessagePreview.map { String($0.prefix(60)) }
+    }
+
     var body: some View {
-        Label {
+        HStack(spacing: 10) {
+            // Chat icon with pin indicator
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+
+                if conversation.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(.white)
+                        .padding(2)
+                        .background(.orange)
+                        .clipShape(Circle())
+                        .offset(x: 3, y: 3)
+                }
+            }
+
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .top) {
                     Text(conversation.title)
@@ -304,15 +373,13 @@ struct ConversationRow: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
-                if let preview = lastMessagePreview {
+                if let preview = previewText {
                     Text(preview)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
             }
-        } icon: {
-            Image(systemName: "bubble.left.fill")
         }
         .padding(.vertical, 2)
         .accessibilityLabel("\(conversation.title), \(relativeTime)")

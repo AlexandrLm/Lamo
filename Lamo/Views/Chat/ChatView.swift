@@ -36,6 +36,12 @@ struct ChatView: View {
                     })
                     .id(message.id)
                 }
+
+                // Streaming indicator
+                if viewModel.isStreaming && (viewModel.messages.last?.content.isEmpty ?? true) {
+                    StreamingIndicator()
+                        .id("streaming")
+                }
             }
             .padding(.vertical, 20)
             .padding(.bottom, 8)
@@ -135,5 +141,74 @@ struct ChatView: View {
 
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+// MARK: - Streaming Indicator (Three Dots)
+
+struct StreamingIndicator: View {
+    @State private var dotOffsets: [CGFloat] = [0, 0, 0]
+    @State private var animating = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 4) {
+            // Model avatar
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 28, height: 28)
+
+                Image(systemName: "sparkle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+
+            // Bubble with dots
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(LamoTheme.Colors.accent)
+                        .frame(width: 7, height: 7)
+                        .offset(y: dotOffsets[index])
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 4,
+                    bottomLeadingRadius: 16,
+                    bottomTrailingRadius: 16,
+                    topTrailingRadius: 16,
+                    style: .continuous
+                )
+            )
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .onAppear {
+            startAnimation()
+        }
+    }
+
+    private func startAnimation() {
+        animating = true
+        for index in 0..<3 {
+            withAnimation(
+                .easeInOut(duration: 0.4)
+                .repeatForever(autoreverses: true)
+                .delay(Double(index) * 0.15)
+            ) {
+                dotOffsets[index] = -6
+            }
+        }
     }
 }
