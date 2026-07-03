@@ -325,7 +325,7 @@ private struct InlineMarkdown: View {
     var font: Font = .subheadline
 
     var body: some View {
-        if let attributed = try? formatInlineMarkdown(text) {
+        if let attributed = formatInlineMarkdown(text) {
             Text(attributed)
                 .font(font)
                 .foregroundStyle(textColor)

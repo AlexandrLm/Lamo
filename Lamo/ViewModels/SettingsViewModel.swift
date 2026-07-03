@@ -118,8 +118,10 @@ final class SettingsViewModel: ObservableObject {
             if let filename = notification.userInfo?["filename"] as? String {
                 let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 let path = documents.appendingPathComponent("models").appendingPathComponent(filename).path
-                self?.selectedModel = path
-                self?.loadModelInfo()
+                Task { @MainActor [weak self] in
+                    self?.selectedModel = path
+                    self?.loadModelInfo()
+                }
             }
         }
     }

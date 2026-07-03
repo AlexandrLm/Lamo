@@ -1,10 +1,10 @@
 import Foundation
 
-enum StreamingToken: Sendable {
+enum StreamingToken: @unchecked Sendable {
     case delta(String)
     case thinkingDelta(String)
     case done
-    case error(Error)
+    case error(any Error & Sendable)
 }
 
 struct ChatMessage: Sendable {

@@ -1,6 +1,7 @@
 import Foundation
-import LiteRTLM
+@preconcurrency import LiteRTLM
 import SwiftData
+import os
 
 /// Provider that runs a local LLM via Google's LiteRT-LM framework.
 /// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
@@ -29,17 +30,17 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     // MARK: - Persistent Conversation Cache
 
     /// Cached native conversation — reused to avoid KV-cache rebuild.
-    private var cachedConversation: LiteRTLM.Conversation?
+    nonisolated(unsafe) private var cachedConversation: LiteRTLM.Conversation?
     /// Hash of the messages last used to build `cachedConversation`.
-    private var cachedMessagesHash: Int = 0
+    nonisolated(unsafe) private var cachedMessagesHash: Int = 0
     /// Whether the provider's conversation still matches the incoming message list.
-    private func isCacheValid(for messages: [ChatMessage]) -> Bool {
+    nonisolated private func isCacheValid(for messages: [ChatMessage]) -> Bool {
         return cachedConversation != nil
             && messageHash(messages) == cachedMessagesHash
     }
 
     /// Lock for thread-safe access to cached conversation
-    private let cacheLock = NSLock()
+    private let cacheLock = OSAllocatedUnfairLock(initialState: ())
 
     init(
         modelPath: String? = nil,
@@ -65,43 +66,28 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                     guard !Task.isCancelled else { return }
                     continuation.yield(.error(error))
                 }
-                // finish() is called inside runInference on success path
-                // or here on error path — but only if not cancelled
-                if !Task.isCancelled {
-                    continuation.finish()
-                }
             }
             // When the AsyncStream consumer is deallocated or cancelled,
             // cancel the inference task so the native C stream stops too.
             continuation.onTermination = { _ in
                 task.cancel()
                 // Attempt to cancel the native conversation stream
-                provider.cancelNativeStream()
+                let conv = provider.cacheLock.withLock { provider.cachedConversation }
+                try? conv?.cancel()
             }
         }
     }
 
     /// Invalidate cached conversation (e.g. when model or GPU setting changes).
     func invalidateConversationCache() {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        cachedConversation = nil
-        cachedMessagesHash = 0
-    }
-
-    /// Attempt to cancel the native C++ streaming process.
-    private func cancelNativeStream() {
-        // The C API provides litert_lm_conversation_cancel_process
-        // which safely interrupts the streaming callback loop.
-        cacheLock.lock()
-        let conversation = cachedConversation
-        cacheLock.unlock()
-        if let conversation {
-            try? conversation.cancel()
+        cacheLock.withLock {
+            cachedConversation = nil
+            cachedMessagesHash = 0
         }
     }
 
-    private func messageHash(_ messages: [ChatMessage]) -> Int {
+
+    nonisolated private func messageHash(_ messages: [ChatMessage]) -> Int {
         var hasher = Hasher()
         for msg in messages {
             hasher.combine(msg.role.rawValue)
@@ -147,17 +133,17 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         // Reuse or rebuild conversation (thread-safe)
         let conversation: LiteRTLM.Conversation
-        cacheLock.lock()
-        if isCacheValid(for: messages) {
-            conversation = cachedConversation!
-            cacheLock.unlock()
+        let cached: LiteRTLM.Conversation? = cacheLock.withLock {
+            isCacheValid(for: messages) ? cachedConversation : nil
+        }
+        if let cached {
+            conversation = cached
         } else {
-            cacheLock.unlock()
             conversation = try await buildConversation(engine: resolvedEngine, messages: messages)
-            cacheLock.lock()
-            cachedConversation = conversation
-            cachedMessagesHash = messageHash(messages)
-            cacheLock.unlock()
+            cacheLock.withLock {
+                cachedConversation = conversation
+                cachedMessagesHash = messageHash(messages)
+            }
         }
 
         // Send the last user message and stream the response

@@ -24,12 +24,11 @@ enum ProviderType: String, CaseIterable, Identifiable {
     }
 }
 
-/// Manages the active LLM provider, engine lifecycle, and shared ChatService.
+/// Manages the active LLM provider and engine lifecycle.
 ///
 /// Responsibilities:
 /// - Caches the LiteRT-LM engine (loaded once, reused across conversations)
 /// - Invalidates cache when model path or GPU setting changes
-/// - Provides a shared ChatService that reuses the same provider
 /// - Notifies observers when engine state changes
 @MainActor
 final class ProviderManager: ObservableObject {
@@ -191,7 +190,7 @@ final class ProviderManager: ObservableObject {
 
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
-        "You are a helpful assistant. Answer in the same language the user writes in."
+        "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
     }
 
     // MARK: - Internal State
@@ -201,11 +200,6 @@ final class ProviderManager: ObservableObject {
 
     /// The provider wrapping the cached engine.
     private var cachedProvider: (any LLMProvider)?
-
-    /// Shared chat service that reuses the cached provider.
-    private(set) lazy var chatService: ChatService = {
-        ChatService(provider: currentProvider)
-    }()
 
     /// Debounce: prevents rapid re-initialization when settings change quickly.
     private var invalidateTask: Task<Void, Never>?
@@ -320,13 +314,8 @@ final class ProviderManager: ObservableObject {
 
         // Enable speculative decoding experimental flag if requested
         if speculativeDecoding {
-            do {
-                LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
-                LiteRTLM.ExperimentalFlags.enableSpeculativeDecoding = true
-            } catch {
-                // Non-fatal: continue without speculative decoding
-                print("[Lamo] Failed to enable speculative decoding: \(error)")
-            }
+            LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
+            LiteRTLM.ExperimentalFlags.enableSpeculativeDecoding = true
         }
 
         let backend: LiteRTLM.Backend
@@ -370,7 +359,6 @@ final class ProviderManager: ObservableObject {
             engine: engine
         )
         cachedProvider = provider
-        chatService = ChatService(provider: provider)
         isEngineReady = true
 
         // Start monitoring memory pressure after engine loads

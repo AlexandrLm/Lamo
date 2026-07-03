@@ -70,53 +70,49 @@ final class DeviceBenchmark: ObservableObject {
         result = nil
         errorMessage = nil
 
-        do {
-            // Phase 1: Device info
-            progress = 0.05
-            let deviceName = await getDeviceName()
-            let chipName = getChipName()
-            let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
-            let storageFree = getFreeStorageGB()
-            let gpuInfo = getGPUInfo()
-            let hasGPU = gpuInfo.hasGPU
-            let gpuCores = gpuInfo.coreCount
+        // Phase 1: Device info
+        progress = 0.05
+        let deviceName = await getDeviceName()
+        let chipName = getChipName()
+        let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+        let storageFree = getFreeStorageGB()
+        let gpuInfo = getGPUInfo()
+        let hasGPU = gpuInfo.hasGPU
+        let gpuCores = gpuInfo.coreCount
 
-            // Phase 2: CPU benchmark
-            progress = 0.15
-            let cpuScore = runCPUBenchmark()
+        // Phase 2: CPU benchmark
+        progress = 0.15
+        let cpuScore = runCPUBenchmark()
 
-            // Phase 3: GPU benchmark
-            progress = 0.55
-            let gpuScore = hasGPU ? runGPUBenchmark() : 0
+        // Phase 3: GPU benchmark
+        progress = 0.55
+        let gpuScore = hasGPU ? runGPUBenchmark() : 0
 
-            // Phase 4: Combined score (weighted: 40% CPU, 60% GPU for AI workloads)
-            let combinedScore = hasGPU ? (cpuScore * 0.4 + gpuScore * 0.6) : cpuScore
+        // Phase 4: Combined score (weighted: 40% CPU, 60% GPU for AI workloads)
+        let combinedScore = hasGPU ? (cpuScore * 0.4 + gpuScore * 0.6) : cpuScore
 
-            // Phase 5: Rate the device
-            progress = 0.85
-            let tier = rateDevice(ramGB: ramGB, combinedScore: combinedScore, gpuCores: gpuCores, hasGPU: hasGPU)
+        // Phase 5: Rate the device
+        progress = 0.85
+        let tier = rateDevice(ramGB: ramGB, combinedScore: combinedScore, gpuCores: gpuCores, hasGPU: hasGPU)
 
-            // Phase 6: Recommendations
-            let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
+        // Phase 6: Recommendations
+        let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
 
-            progress = 1.0
+        progress = 1.0
 
-            result = BenchmarkResult(
-                deviceName: deviceName,
-                chipName: chipName,
-                ramGB: ramGB,
-                storageFreeGB: storageFree,
-                hasGPU: hasGPU,
-                gpuCoreCount: gpuCores,
-                cpuScore: cpuScore,
-                gpuScore: gpuScore,
-                combinedScore: combinedScore,
-                aiTier: tier,
-                recommendations: recs
-            )
-        } catch {
-            errorMessage = "Benchmark failed: \(error.localizedDescription)"
-        }
+        result = BenchmarkResult(
+            deviceName: deviceName,
+            chipName: chipName,
+            ramGB: ramGB,
+            storageFreeGB: storageFree,
+            hasGPU: hasGPU,
+            gpuCoreCount: gpuCores,
+            cpuScore: cpuScore,
+            gpuScore: gpuScore,
+            combinedScore: combinedScore,
+            aiTier: tier,
+            recommendations: recs
+        )
 
         isRunning = false
     }

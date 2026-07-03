@@ -75,10 +75,11 @@ final class DownloadManager: ObservableObject {
 
         // Track progress
         let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            guard let self else { return }
             Task { @MainActor in
-                self?.activeDownloads[model.filename]?.progress = progress.fractionCompleted
-                self?.activeDownloads[model.filename]?.bytesWritten = progress.completedUnitCount
-                self?.activeDownloads[model.filename]?.totalBytes = progress.totalUnitCount
+                self.activeDownloads[model.filename]?.progress = progress.fractionCompleted
+                self.activeDownloads[model.filename]?.bytesWritten = progress.completedUnitCount
+                self.activeDownloads[model.filename]?.totalBytes = progress.totalUnitCount
             }
         }
 
