@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var isCopyingFile = false
     @State private var showError = false
     @State private var showResetAlert = false
+    @State private var showDeleteModelAlert = false
+    @State private var modelToDelete: PresetModel?
     @Environment(\.dismiss) private var dismiss
 
     private var providerManager: ProviderManager { ProviderManager.shared }
@@ -20,25 +22,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                // ── Header ──
                 appHeader
-
-                // ── Engine Status ──
                 engineSection
-
-                // ── AI ──
                 aiSection
-
-                // ── System ──
                 systemSection
-
-                // ── Device ──
                 deviceLink
-
-                // ── Privacy ──
                 privacyBadge
-
-                // ── About ──
                 aboutSection
             }
             .listStyle(.insetGrouped)
@@ -99,6 +88,18 @@ struct SettingsView: View {
             } message: {
                 Text("This will restore all settings to their defaults.")
             }
+            .alert("Delete Model?", isPresented: $showDeleteModelAlert) {
+                Button("Delete", role: .destructive) {
+                    if let model = modelToDelete {
+                        downloadManager.deleteModel(model)
+                    }
+                }
+                Button("Cancel", role: .cancel) { modelToDelete = nil }
+            } message: {
+                if let model = modelToDelete {
+                    Text("Remove \(model.displayName) from your device?")
+                }
+            }
             .navigationDestination(for: SettingsSection.self) { section in
                 sectionView(section)
             }
@@ -121,7 +122,6 @@ struct SettingsView: View {
     private var appHeader: some View {
         Section {
             HStack(spacing: 14) {
-                // Gradient icon
                 ZStack {
                     Circle()
                         .fill(
@@ -449,8 +449,9 @@ struct SettingsView: View {
 
     private var samplerSection: some View {
         List {
+            // Temperature with visual indicator
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Temperature")
                         Spacer()
@@ -458,18 +459,33 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
+
                     Slider(value: $vm.temperature, in: 0.0...2.0, step: 0.05)
                         .tint(LamoTheme.Colors.accent)
-                    Text("Lower = focused, higher = creative")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+
+                    // Visual range indicator
+                    HStack(spacing: 0) {
+                        Text("Focused")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text("Balanced")
+                            .font(.caption2)
+                            .foregroundStyle(vm.temperature < 0.5 || vm.temperature > 1.0 ? .tertiary : LamoTheme.Colors.accent)
+                            .fontWeight(vm.temperature >= 0.5 && vm.temperature <= 1.0 ? .medium : .regular)
+                        Spacer()
+                        Text("Creative")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             } footer: {
                 Text("0.7 is a good balance.")
             }
 
+            // Top-K
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Top-K")
                         Spacer()
@@ -482,11 +498,24 @@ struct SettingsView: View {
                         set: { vm.topK = Int($0) }
                     ), in: 1...100, step: 1)
                         .tint(LamoTheme.Colors.accent)
+
+                    HStack(spacing: 0) {
+                        Text("Focused")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text("Diverse")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+            } footer: {
+                Text("Number of top tokens to consider.")
             }
 
+            // Top-P
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Top-P")
                         Spacer()
@@ -496,7 +525,19 @@ struct SettingsView: View {
                     }
                     Slider(value: $vm.topP, in: 0.0...1.0, step: 0.05)
                         .tint(LamoTheme.Colors.accent)
+
+                    HStack(spacing: 0) {
+                        Text("Narrow")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text("Broad")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+            } footer: {
+                Text("Nucleus sampling probability mass.")
             }
 
             Button {
@@ -606,7 +647,7 @@ struct SettingsView: View {
                 .tint(LamoTheme.Colors.accent)
 
                 if !vm.useGPU {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text("CPU Threads")
                             Spacer()
@@ -619,7 +660,18 @@ struct SettingsView: View {
                             set: { vm.cpuThreadCount = Int($0) }
                         ), in: 1...8, step: 1)
                             .tint(LamoTheme.Colors.accent)
+
+                        HStack(spacing: 0) {
+                            Text("Battery")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Spacer()
+                            Text("Speed")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             } header: {
                 Text("Compute Backend")
@@ -634,7 +686,7 @@ struct SettingsView: View {
                 .tint(LamoTheme.Colors.accent)
 
                 if !vm.kvCacheAuto {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text("Max Tokens")
                             Spacer()
@@ -647,7 +699,18 @@ struct SettingsView: View {
                             set: { vm.maxNumTokens = Int($0) }
                         ), in: 1024...16384, step: 256)
                             .tint(LamoTheme.Colors.accent)
+
+                        HStack(spacing: 0) {
+                            Text("Short")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Spacer()
+                            Text("Long")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             } header: {
                 Text("KV-Cache")
@@ -678,7 +741,7 @@ struct SettingsView: View {
             }
 
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Visual Token Budget")
                         Spacer()
