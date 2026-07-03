@@ -72,12 +72,33 @@ struct ChatView: View {
     private var emptyChatView: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 60)
-            ContentUnavailableView {
-                Label("How can I help you today?", systemImage: "bubble.left.and.bubble.right.fill")
-            } description: {
-                Text("Ask anything — I'm running 100% on your device.")
+            VStack(spacing: 20) {
+                // Gradient logo
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.6)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 72, height: 72)
+
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .shadow(color: LamoTheme.Colors.accent.opacity(0.3), radius: 12, y: 4)
+
+                VStack(spacing: 6) {
+                    Text("How can I help you today?")
+                        .font(.title2.weight(.semibold))
+                    Text("Ask anything — I'm running 100% on your device.")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
             }
-            .tint(LamoTheme.Colors.accent)
             Spacer()
         }
     }

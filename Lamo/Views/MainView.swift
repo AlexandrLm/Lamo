@@ -233,19 +233,35 @@ struct ConversationRow: View {
         return formatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
     }
 
+    private var lastMessagePreview: String? {
+        conversation.messages
+            .sorted(by: { $0.timestamp < $1.timestamp })
+            .last?.content
+    }
+
     var body: some View {
-        HStack {
-            Text(conversation.title)
-                .font(.subheadline)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            Text(relativeTime)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .top) {
+                    Text(conversation.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(relativeTime)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                if let preview = lastMessagePreview {
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+        } icon: {
+            Image(systemName: "bubble.left.fill")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }

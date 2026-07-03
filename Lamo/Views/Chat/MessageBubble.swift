@@ -118,9 +118,7 @@ struct MessageBubble: View {
     // MARK: - Actions
 
     private var copyButton: some View {
-        Button {
-            copyContent()
-        } label: {
+        Button { copyContent() } label: {
             if showCopyConfirmation {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .semibold))
@@ -134,6 +132,7 @@ struct MessageBubble: View {
             }
         }
         .buttonStyle(.plain)
+        .sensoryFeedback(.impact(weight: .light), trigger: showCopyConfirmation)
     }
 
     private func copyContent() {
