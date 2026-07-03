@@ -13,42 +13,32 @@ struct SettingsView: View {
     @State private var isCopyingFile = false
     @State private var showError = false
     @State private var showResetAlert = false
-    @State private var activeSection: SettingsSection?
     @Environment(\.dismiss) private var dismiss
 
-    enum SettingsSection: String, CaseIterable {
-        case engine = "AI Engine"
-        case models = "Models"
-        case sampler = "Generation"
-        case memory = "Memory"
-        case advanced = "Advanced"
-        case device = "Device"
-        case privacy = "Privacy"
-        case about = "About"
-    }
+    private var providerManager: ProviderManager { ProviderManager.shared }
 
     var body: some View {
         NavigationStack {
             List {
-                // App header
+                // ── Header ──
                 appHeader
 
-                // Engine status
-                engineStatusSection
+                // ── Engine Status ──
+                engineSection
 
-                // AI section
+                // ── AI ──
                 aiSection
 
-                // System section
+                // ── System ──
                 systemSection
 
-                // Device section
-                deviceLinkSection
+                // ── Device ──
+                deviceLink
 
-                // Privacy
-                privacySection
+                // ── Privacy ──
+                privacyBadge
 
-                // About
+                // ── About ──
                 aboutSection
             }
             .listStyle(.insetGrouped)
@@ -115,53 +105,76 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - App Header
+    // MARK: - Sections
+
+    enum SettingsSection: String, CaseIterable, Hashable {
+        case engine = "AI Engine"
+        case models = "Models"
+        case sampler = "Generation"
+        case memory = "Memory"
+        case advanced = "Advanced"
+        case device = "Device"
+    }
+
+    // ── App Header ──
 
     private var appHeader: some View {
         Section {
-            Label {
+            HStack(spacing: 14) {
+                // Gradient icon
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.6)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Lamo")
                         .font(.headline)
                     Text(appVersion)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
-            } icon: {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .foregroundStyle(LamoTheme.Colors.accent)
+                .padding(.leading, 2)
             }
             .padding(.vertical, 4)
         }
     }
 
-    // MARK: - Engine Picker
+    // ── Engine Status ──
 
-    private var engineStatusSection: some View {
+    private var engineSection: some View {
         Section {
-            engineStatusRow
-        } footer: {
-            Text("Runs AI models directly on your device. No internet needed.")
-        }
-    }
-
-    private var engineStatusRow: some View {
-        Group {
-            if providerManager.isEngineReady {
-                Label("Model loaded", systemImage: "checkmark.circle.fill")
+            Group {
+                if providerManager.isEngineReady {
+                    Label {
+                        Text("Model loaded")
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .symbolEffect(.bounce, value: providerManager.isEngineReady)
+                    }
                     .foregroundStyle(.green)
-                    .font(.subheadline)
-            } else if let error = providerManager.engineError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.subheadline)
-            } else {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Loading…").foregroundStyle(.secondary)
+                } else if let error = providerManager.engineError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading…").foregroundStyle(.secondary)
+                    }
                 }
-                .font(.subheadline)
             }
+            .font(.subheadline)
 
             if let current = vm.selectedModel {
                 HStack {
@@ -173,17 +186,17 @@ struct SettingsView: View {
                         .truncationMode(.middle)
                         .foregroundStyle(.secondary)
                 }
+                .font(.subheadline)
             }
+        } footer: {
+            Text("On-device AI. No internet needed.")
         }
     }
 
-    private var providerManager: ProviderManager { ProviderManager.shared }
-
-    // MARK: - AI Section
+    // ── AI Section ──
 
     private var aiSection: some View {
         Section("AI") {
-            // Models
             NavigationLink(value: SettingsSection.models) {
                 Label {
                     HStack {
@@ -197,11 +210,11 @@ struct SettingsView: View {
                         }
                     }
                 } icon: {
-                    settingsIcon("internaldrive", color: .blue)
+                    Image(systemName: "internaldrive")
+                        .foregroundStyle(.blue)
                 }
             }
 
-            // Generation
             NavigationLink(value: SettingsSection.sampler) {
                 Label {
                     HStack {
@@ -212,11 +225,11 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 } icon: {
-                    settingsIcon("sparkles", color: .purple)
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.purple)
                 }
             }
 
-            // Memory
             NavigationLink(value: SettingsSection.memory) {
                 Label {
                     HStack {
@@ -227,39 +240,33 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 } icon: {
-                    settingsIcon("brain", color: .orange)
+                    Image(systemName: "brain")
+                        .foregroundStyle(.orange)
                 }
             }
         }
     }
 
-    // MARK: - System Section
+    // ── System Section ──
 
     private var systemSection: some View {
         Section("System") {
             NavigationLink(value: SettingsSection.advanced) {
-                Label {
-                    Text("Advanced")
-                } icon: {
-                    settingsIcon("gearshape.2", color: .gray)
-                }
+                Label("Advanced", systemImage: "gearshape.2")
             }
 
             Button {
                 showResetAlert = true
             } label: {
-                Label {
-                    Text("Reset All Settings")
-                } icon: {
-                    settingsIcon("arrow.counterclockwise", color: .red)
-                }
+                Label("Reset All Settings", systemImage: "arrow.counterclockwise")
             }
             .foregroundStyle(.red)
         }
     }
 
-    // MARK: - Device Link Section
-    private var deviceLinkSection: some View {
+    // ── Device Link ──
+
+    private var deviceLink: some View {
         Section("Device") {
             NavigationLink(value: SettingsSection.device) {
                 Label {
@@ -278,23 +285,57 @@ struct SettingsView: View {
                         }
                     }
                 } icon: {
-                    settingsIcon("iphone", color: .green)
+                    Image(systemName: "iphone")
+                        .foregroundStyle(.green)
                 }
             }
         }
     }
 
-    // MARK: - Settings Icon Helper
+    // ── Privacy Badge ──
 
-    private func settingsIcon(_ name: String, color: Color) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 28, height: 28)
-            .background(color, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    private var privacyBadge: some View {
+        Section {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fully Private")
+                        .fontWeight(.medium)
+                    Text("All processing happens on your device.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "lock.shield.fill")
+                    .foregroundStyle(.green)
+            }
+        }
     }
 
-    // MARK: - Section Views
+    // ── About ──
+
+    private var aboutSection: some View {
+        Section("About") {
+            Link(destination: URL(string: "https://ai.google.dev/edge/litert-lm")!) {
+                HStack {
+                    Text("LiteRT-LM by Google")
+                    Spacer()
+                    Image(systemName: "arrow.up.right.square")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Link(destination: URL(string: "https://huggingface.co/litert-community")!) {
+                HStack {
+                    Text("Models from HuggingFace")
+                    Spacer()
+                    Image(systemName: "arrow.up.right.square")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Navigation
 
     @ViewBuilder
     private func sectionView(_ section: SettingsSection) -> some View {
@@ -314,11 +355,10 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Models Section
+    // MARK: - Models
 
     private var modelsSection: some View {
         List {
-            // Active model picker
             if !vm.availableModels.isEmpty {
                 Section {
                     Picker(selection: Binding(
@@ -332,23 +372,23 @@ struct SettingsView: View {
                     } label: {
                         Label("Active Model", systemImage: "bolt.circle.fill")
                     }
-                } header: {
-                    Text("Active")
                 } footer: {
-                    Text("Model used for inference. Auto-detect picks the best available.")
+                    Text("Auto-detect picks the best available model.")
                 }
             }
 
-            // Preset models (download)
             Section("Available Models") {
                 ForEach(PresetModel.allCases) { model in
-                    ModelCardView(model: model, downloadManager: downloadManager, isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    ModelCardView(
+                        model: model,
+                        downloadManager: downloadManager,
+                        isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                 }
             }
 
-            // Import from Files
             Section {
                 Button {
                     isImportingModel = true
@@ -365,10 +405,9 @@ struct SettingsView: View {
                 }
                 .disabled(isCopyingFile)
             } footer: {
-                Text("Import .litertlm, .bin, or .tflite model files from your device.")
+                Text(".litertlm, .bin, or .tflite model files.")
             }
 
-            // Local models (imported)
             let localModels = vm.availableModels.filter { path in
                 !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
             }
@@ -393,7 +432,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Model info
             if let info = vm.modelInfo {
                 Section("Model Info") {
                     LabeledContent("Name", value: info.name)
@@ -407,7 +445,7 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Sampler Section
+    // MARK: - Generation
 
     private var samplerSection: some View {
         List {
@@ -422,14 +460,12 @@ struct SettingsView: View {
                     }
                     Slider(value: $vm.temperature, in: 0.0...2.0, step: 0.05)
                         .tint(LamoTheme.Colors.accent)
-                    Text("Lower = more focused, higher = more creative")
+                    Text("Lower = focused, higher = creative")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-            } header: {
-                Text("Sampling")
             } footer: {
-                Text("Controls randomness in text generation. 0.7 is a good balance.")
+                Text("0.7 is a good balance.")
             }
 
             Section {
@@ -446,9 +482,6 @@ struct SettingsView: View {
                         set: { vm.topK = Int($0) }
                     ), in: 1...100, step: 1)
                         .tint(LamoTheme.Colors.accent)
-                    Text("Number of top tokens to consider. Lower = more focused.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             }
 
@@ -463,9 +496,6 @@ struct SettingsView: View {
                     }
                     Slider(value: $vm.topP, in: 0.0...1.0, step: 0.05)
                         .tint(LamoTheme.Colors.accent)
-                    Text("Nucleus sampling. 0.95 = consider 95% probability mass.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             }
 
@@ -481,11 +511,10 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Memory Section
+    // MARK: - Memory
 
     private var memorySection: some View {
         List {
-            // Toggle
             Section {
                 Toggle(isOn: $vm.memoryEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -498,11 +527,10 @@ struct SettingsView: View {
                 .accessibilityLabel("Memory")
                 .tint(LamoTheme.Colors.accent)
             } footer: {
-                Text("After each conversation, the AI extracts important facts about you (name, preferences, projects, dates). These facts are injected into context for future conversations.")
+                Text("Facts are injected into context for future conversations.")
             }
 
             if vm.memoryEnabled {
-                // Stats
                 Section {
                     HStack {
                         Label("Total Facts", systemImage: "brain")
@@ -513,7 +541,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // Stored facts list
                 let facts = MemoryService.shared.allFacts
                 if !facts.isEmpty {
                     Section("What AI Remembers") {
@@ -548,12 +575,11 @@ struct SettingsView: View {
                         ContentUnavailableView(
                             "No Facts Yet",
                             systemImage: "brain",
-                            description: Text("Facts will appear here as you chat with the AI.")
+                            description: Text("Facts will appear as you chat.")
                         )
                     }
                 }
 
-                // Actions
                 Section {
                     Button(role: .destructive) {
                         MemoryService.shared.clearAll()
@@ -568,7 +594,7 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Advanced Section
+    // MARK: - Advanced
 
     private var advancedSection: some View {
         List {
@@ -593,15 +619,12 @@ struct SettingsView: View {
                             set: { vm.cpuThreadCount = Int($0) }
                         ), in: 1...8, step: 1)
                             .tint(LamoTheme.Colors.accent)
-                        Text("More threads = faster but uses more battery")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
                     }
                 }
             } header: {
                 Text("Compute Backend")
             } footer: {
-                Text("GPU (Metal) is faster for most models. CPU uses less battery.")
+                Text("GPU (Metal) is faster for most models.")
             }
 
             Section {
@@ -630,9 +653,9 @@ struct SettingsView: View {
                 Text("KV-Cache")
             } footer: {
                 if vm.kvCacheAuto {
-                    Text("Uses model's recommended context size. Best for most users.")
+                    Text("Uses model's recommended context size.")
                 } else {
-                    Text("Larger values = longer conversations but more RAM. 4096 is a good default.")
+                    Text("4096 is a good default.")
                 }
             }
 
@@ -650,7 +673,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Speculative Decoding")
                 } footer: {
-                    Text("Uses a draft model to predict multiple tokens at once. Requires model support.")
+                    Text("Uses a draft model to predict multiple tokens.")
                 }
             }
 
@@ -671,14 +694,11 @@ struct SettingsView: View {
                         Text("1120 (Best)").tag(1120)
                     }
                     .pickerStyle(.segmented)
-                    Text("Number of visual tokens per image. Higher = better quality but slower.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             } header: {
                 Text("Vision")
             } footer: {
-                Text("Controls image processing quality for multimodal models like Gemma 4.")
+                Text("Image processing quality for multimodal models.")
             }
 
             Section {
@@ -691,7 +711,7 @@ struct SettingsView: View {
             } header: {
                 Text("System Prompt")
             } footer: {
-                Text("Instructions the model follows. Changes apply to new conversations only.")
+                Text("Applies to new conversations only.")
             }
         }
         .listStyle(.insetGrouped)
@@ -699,12 +719,11 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Device Section
+    // MARK: - Device
 
     private var deviceSection: some View {
         List {
             if let result = benchmark.result {
-                // ── Device Identity ──
                 Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -719,26 +738,17 @@ struct SettingsView: View {
                     }
                 }
 
-                // ── Hardware Specs ──
                 Section("Hardware") {
                     HStack(spacing: 0) {
-                        statItem("Memory",
-                                 value: String(format: "%.1f GB", result.ramGB),
-                                 icon: "memorychip")
+                        statItem("Memory", value: String(format: "%.1f GB", result.ramGB), icon: "memorychip")
                         Spacer()
-                        statItem("GPU Cores",
-                                 value: result.hasGPU ? "\(result.gpuCoreCount)" : "—",
-                                 icon: "gpu")
+                        statItem("GPU Cores", value: result.hasGPU ? "\(result.gpuCoreCount)" : "—", icon: "gpu")
                         Spacer()
-                        statItem("Storage",
-                                 value: String(format: "%.1f GB free", result.storageFreeGB),
-                                 icon: "internaldrive")
+                        statItem("Storage", value: String(format: "%.1f GB free", result.storageFreeGB), icon: "internaldrive")
                     }
                 }
 
-                // ── Compute Performance ──
                 Section("Performance") {
-                    // CPU row
                     HStack {
                         Label("CPU", systemImage: "cpu")
                             .font(.subheadline)
@@ -758,7 +768,6 @@ struct SettingsView: View {
                             .clipShape(Capsule())
                     }
 
-                    // GPU row
                     if result.hasGPU {
                         HStack {
                             Label("GPU", systemImage: "gpu")
@@ -782,7 +791,6 @@ struct SettingsView: View {
 
                     Divider()
 
-                    // Combined AI Score
                     HStack {
                         Text("AI Score")
                             .font(.headline)
@@ -793,7 +801,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // ── Recommendations ──
                 if !result.recommendations.isEmpty {
                     Section("Recommendations") {
                         ForEach(result.recommendations) { rec in
@@ -815,7 +822,6 @@ struct SettingsView: View {
                     }
                 }
             } else if benchmark.isRunning {
-                // ── Progress State ──
                 Section {
                     VStack(spacing: 16) {
                         ProgressView(value: benchmark.progress)
@@ -828,7 +834,6 @@ struct SettingsView: View {
                 }
             }
 
-            // ── Action Button ──
             Section {
                 Button {
                     Task { await benchmark.runBenchmark() }
@@ -854,6 +859,14 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    // MARK: - Helpers
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "Version \(version) (\(build))"
+    }
+
     private func benchmarkProgressLabel(_ progress: Double) -> String {
         switch progress {
         case 0..<0.15: return "Collecting device info…"
@@ -863,106 +876,6 @@ struct SettingsView: View {
         default: return "Done!"
         }
     }
-
-    // MARK: - Privacy Section
-
-    private var privacySection: some View {
-        Section {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Fully Private")
-                        .font(.body)
-                        .fontWeight(.medium)
-                    Text("All processing happens on your device.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: "lock.shield.fill")
-                    .foregroundStyle(.green)
-                    .frame(width: 28, height: 28)
-                    .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    // MARK: - About Section
-
-    private var aboutSection: some View {
-        Section("About") {
-            Link(destination: URL(string: "https://ai.google.dev/edge/litert-lm")!) {
-                HStack {
-                    Text("LiteRT-LM by Google")
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Link(destination: URL(string: "https://huggingface.co/litert-community")!) {
-                HStack {
-                    Text("Models from HuggingFace")
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "Version \(version) (\(build))"
-    }
-
-    private func handleModelImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-
-        let ext = url.pathExtension.lowercased()
-        guard ext == "litertlm" || ext == "bin" || ext == "tflite" else {
-            importError = "Unsupported file type '.\(ext)'. Please select a .litertlm file."
-            showError = true
-            return
-        }
-
-        isCopyingFile = true
-        Task.detached {
-            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let modelsDir = documents.appendingPathComponent("models")
-            try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-
-            let fileName = url.lastPathComponent
-            let destination = modelsDir.appendingPathComponent(fileName)
-
-            do {
-                let accessing = url.startAccessingSecurityScopedResource()
-                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.removeItem(at: destination)
-                }
-                try FileManager.default.copyItem(at: url, to: destination)
-
-                await MainActor.run {
-                    self.isCopyingFile = false
-                    self.importedModelName = fileName
-                    self.importSuccess = true
-                }
-            } catch {
-                await MainActor.run {
-                    self.isCopyingFile = false
-                    self.importError = "Import failed: \(error.localizedDescription)"
-                    self.showError = true
-                }
-            }
-        }
-    }
-
-    // MARK: - Benchmark Helpers
 
     @ViewBuilder
     private func tierBadge(_ result: DeviceBenchmark.BenchmarkResult) -> some View {
@@ -1015,5 +928,50 @@ struct SettingsView: View {
         if gflops >= 1.0 { return .blue }
         if gflops >= 0.5 { return .orange }
         return .red
+    }
+
+    // MARK: - Model Import
+
+    private func handleModelImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+
+        let ext = url.pathExtension.lowercased()
+        guard ext == "litertlm" || ext == "bin" || ext == "tflite" else {
+            importError = "Unsupported file type '.\(ext)'. Select a .litertlm file."
+            showError = true
+            return
+        }
+
+        isCopyingFile = true
+        Task.detached {
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let modelsDir = documents.appendingPathComponent("models")
+            try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+            let fileName = url.lastPathComponent
+            let destination = modelsDir.appendingPathComponent(fileName)
+
+            do {
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.copyItem(at: url, to: destination)
+
+                await MainActor.run {
+                    self.isCopyingFile = false
+                    self.importedModelName = fileName
+                    self.importSuccess = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.isCopyingFile = false
+                    self.importError = "Import failed: \(error.localizedDescription)"
+                    self.showError = true
+                }
+            }
+        }
     }
 }
