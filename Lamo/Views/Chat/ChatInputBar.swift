@@ -118,16 +118,6 @@ struct ChatInputBar: View {
 
                 Spacer()
 
-                // Microphone button
-                Button {} label: {
-                    Image(systemName: "microphone")
-                        .font(.body)
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Color.white.opacity(0.1), in: Circle())
-                }
-                .buttonStyle(.plain)
-
                 // Send / Stop button (white circle like the reference)
                 if isStreaming {
                     Button(action: onStop) {
