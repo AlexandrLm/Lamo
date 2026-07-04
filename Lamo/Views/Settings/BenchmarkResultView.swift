@@ -113,7 +113,7 @@ struct BenchmarkResultView: View {
 
             Text("AI Performance Score")
                 .font(.subheadline)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
 
             // Score bar
             GeometryReader { geo in
@@ -151,7 +151,12 @@ struct BenchmarkResultView: View {
             HStack(spacing: 12) {
                 hardwareCard(icon: "memorychip", title: "Memory", value: String(format: "%.1f GB", result.ramGB))
                 hardwareCard(icon: "gpu", title: "GPU Cores", value: result.hasGPU ? "\(result.gpuCoreCount)" : "—")
-                hardwareCard(icon: "internaldrive", title: "Free", value: String(format: "%.1f GB", result.storageFreeGB))
+                hardwareCard(icon: result.hasNeuralEngine ? "brain.head.profile" : "xmark.circle", title: "Neural Engine", value: result.hasNeuralEngine ? "Yes" : "No")
+            }
+            HStack(spacing: 12) {
+                hardwareCard(icon: "internaldrive", title: "Free Storage", value: String(format: "%.1f GB", result.storageFreeGB))
+                hardwareCard(icon: "memories", title: "Bandwidth", value: String(format: "%.0f GB/s", result.memoryBandwidthGBps))
+                hardwareCard(icon: "cpu", title: "CPU Cores", value: "\(ProcessInfo.processInfo.activeProcessorCount)")
             }
         }
         .padding(16)
@@ -183,46 +188,70 @@ struct BenchmarkResultView: View {
                 .font(.headline)
                 .foregroundStyle(.secondary)
 
-            // CPU
+            // CPU Single-Core
             perfRow(
                 icon: "cpu.fill",
-                title: "CPU",
-                score: result.cpuScore,
+                title: "CPU Single-Core",
+                score: result.cpuSingleCore,
                 normalized: result.cpuNormalized,
-                time: result.cpuTime,
-                maxScore: 3.0
+                time: result.cpuTime * 0.5,
+                maxScore: 3.0,
+                unit: "GFLOPS"
+            )
+
+            // CPU Multi-Core
+            perfRow(
+                icon: "cpu.fill",
+                title: "CPU Multi-Core",
+                score: result.cpuMultiCore,
+                normalized: result.cpuMultiNormalized,
+                time: result.cpuTime * 0.5,
+                maxScore: 8.0,
+                unit: "GFLOPS"
             )
 
             // GPU
             if result.hasGPU {
                 perfRow(
                     icon: "gpu",
-                    title: "GPU",
+                    title: "GPU Matrix Multiply",
                     score: result.gpuScore,
                     normalized: result.gpuNormalized,
                     time: result.gpuTime,
-                    maxScore: 6.0
+                    maxScore: 10.0,
+                    unit: "GFLOPS"
                 )
             }
+
+            // Memory Bandwidth
+            perfRow(
+                icon: "memories",
+                title: "Memory Bandwidth",
+                score: result.memoryBandwidthGBps,
+                normalized: result.memoryNormalized,
+                time: result.memoryTime,
+                maxScore: 70.0,
+                unit: "GB/s"
+            )
         }
         .padding(16)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
-    private func perfRow(icon: String, title: String, score: Double, normalized: Double, time: Double, maxScore: Double) -> some View {
+    private func perfRow(icon: String, title: String, score: Double, normalized: Double, time: Double, maxScore: Double, unit: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 HStack(spacing: 6) {
                     Image(systemName: icon)
                         .font(.subheadline)
-                        .foregroundStyle(scoreColor(score))
+                        .foregroundStyle(scoreColor(score, max: maxScore))
                     Text(title)
                         .font(.subheadline.weight(.medium))
                 }
                 Spacer()
-                Text(String(format: "%.2f GFLOPS", score))
+                Text(String(format: "%.2f %@", score, unit))
                     .font(.subheadline.monospacedDigit())
-                scoreBadge(score)
+                scoreBadge(score, max: maxScore)
             }
 
             GeometryReader { geo in
@@ -231,8 +260,8 @@ struct BenchmarkResultView: View {
                         .fill(Color(.tertiarySystemFill))
                         .frame(height: 6)
                     Capsule()
-                        .fill(scoreColor(score))
-                        .frame(width: geo.size.width * normalized, height: 6)
+                        .fill(scoreColor(score, max: maxScore))
+                        .frame(width: geo.size.width * min(normalized, 1.0), height: 6)
                         .animation(.easeOut(duration: 1.0).delay(0.6), value: showContent)
                 }
             }
@@ -244,13 +273,14 @@ struct BenchmarkResultView: View {
         }
     }
 
-    private func scoreBadge(_ gflops: Double) -> some View {
-        Text(scoreLabel(gflops))
+    private func scoreBadge(_ value: Double, max: Double) -> some View {
+        let ratio = value / max
+        return Text(scoreLabel(ratio))
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(scoreColor(gflops).opacity(0.15))
-            .foregroundStyle(scoreColor(gflops))
+            .background(scoreColor(value, max: max).opacity(0.15))
+            .foregroundStyle(scoreColor(value, max: max))
             .clipShape(Capsule())
     }
 
@@ -339,10 +369,13 @@ struct BenchmarkResultView: View {
     // MARK: - Timing
 
     private var timingSection: some View {
-        HStack(spacing: 20) {
-            timingItem(label: "CPU", value: result.cpuTime)
-            timingItem(label: "GPU", value: result.gpuTime)
-            timingItem(label: "Total", value: result.totalTime)
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                timingItem(label: "CPU", value: result.cpuTime)
+                timingItem(label: "GPU", value: result.gpuTime)
+                timingItem(label: "Memory", value: result.memoryTime)
+                timingItem(label: "Total", value: result.totalTime)
+            }
         }
         .padding(16)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
@@ -370,17 +403,18 @@ struct BenchmarkResultView: View {
         }
     }
 
-    private func scoreLabel(_ gflops: Double) -> String {
-        if gflops >= 2.0 { return "Excellent" }
-        if gflops >= 1.0 { return "Good" }
-        if gflops >= 0.5 { return "Moderate" }
+    private func scoreLabel(_ ratio: Double) -> String {
+        if ratio >= 0.8 { return "Excellent" }
+        if ratio >= 0.5 { return "Good" }
+        if ratio >= 0.25 { return "Moderate" }
         return "Slow"
     }
 
-    private func scoreColor(_ gflops: Double) -> Color {
-        if gflops >= 2.0 { return .green }
-        if gflops >= 1.0 { return .blue }
-        if gflops >= 0.5 { return .orange }
+    private func scoreColor(_ value: Double, max: Double) -> Color {
+        let ratio = value / max
+        if ratio >= 0.8 { return .green }
+        if ratio >= 0.5 { return .blue }
+        if ratio >= 0.25 { return .orange }
         return .red
     }
 }
