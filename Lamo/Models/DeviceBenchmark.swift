@@ -281,11 +281,34 @@ final class DeviceBenchmark: ObservableObject {
     }
 
     private func getChipName() -> String {
+        // Try machdep.cpu.brand_string first (works on macOS, may be empty on iOS)
         var size = 0
         sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
-        var chip = [CChar](repeating: 0, count: size + 1)
-        sysctlbyname("machdep.cpu.brand_string", &chip, &size, nil, 0)
-        return String(cString: chip)
+        if size > 0 {
+            var chip = [CChar](repeating: 0, count: size + 1)
+            sysctlbyname("machdep.cpu.brand_string", &chip, &size, nil, 0)
+            let name = String(cString: chip)
+            if !name.isEmpty { return name }
+        }
+
+        // Fallback: infer chip from device model (utsname.machine)
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let model = withUnsafeBytes(of: &systemInfo.machine) { rawPtr -> String in
+            let ptr = rawPtr.baseAddress!.assumingMemoryBound(to: CChar.self)
+            return String(cString: ptr)
+        }
+
+        // Map known device models to chip names
+        let chipMap: [String: String] = [
+            "iPhone17,1": "Apple A18 Pro",  "iPhone17,2": "Apple A18 Pro",
+            "iPhone17,3": "Apple A18",       "iPhone17,4": "Apple A18",
+            "iPhone16,1": "Apple A17 Pro",   "iPhone16,2": "Apple A17 Pro",
+            "iPhone15,2": "Apple A16 Bionic","iPhone15,3": "Apple A16 Bionic",
+            "iPhone14,2": "Apple A15 Bionic","iPhone14,3": "Apple A15 Bionic",
+            "iPhone13,2": "Apple A15 Bionic","iPhone13,3": "Apple A15 Bionic",
+        ]
+        return chipMap[model] ?? "Unknown Chip"
     }
 
     private func getFreeStorageGB() -> Double {
@@ -312,29 +335,15 @@ final class DeviceBenchmark: ObservableObject {
     private func detectNeuralEngine() -> Bool {
         let chip = getChipName().lowercased()
 
-        // On simulator, chip name is the Mac's CPU — all Apple Silicon Macs have ANE
-        #if targetEnvironment(simulator)
-        return chip.contains("apple") && (chip.contains("m1") || chip.contains("m2") ||
-               chip.contains("m3") || chip.contains("m4") || chip.contains("m5") ||
-               chip.contains("a1"))
-        #endif
-
-        // Parse chip number: "apple a17 pro" → 17, "apple m3 max" → 3
-        if let range = chip.range(of: #"[am](\d+)"#, options: .regularExpression) {
-            let match = String(chip[range])
-            let numStr = match.dropFirst() // remove "a" or "m"
-            if let num = Int(numStr) {
-                if chip.contains("a") {
-                    // A11+ has Neural Engine (first gen 2-core), A12+ proper (8-core)
-                    return num >= 11
-                } else {
-                    // All M-series have Neural Engine
-                    return num >= 1
-                }
-            }
+        // All Apple chips from A11+ and all M-series have Neural Engine
+        // Since getChipName() now returns reliable names, just check directly
+        if chip.contains("a1") || chip.contains("a2") || chip.contains("m1") ||
+           chip.contains("m2") || chip.contains("m3") || chip.contains("m4") ||
+           chip.contains("m5") {
+            return true
         }
 
-        // Fallback: check for known ANE frameworks
+        // Fallback: check for ANE framework
         return NSClassFromString("ANEService") != nil
     }
 
@@ -622,28 +631,24 @@ final class DeviceBenchmark: ObservableObject {
         defer { free(buffer) }
 
         // Fill with data
-        let ptr = buffer.assumingMemoryBound(to: UInt8.self)
-        for i in 0..<sizeBytes {
-            ptr[i] = UInt8(i & 0xFF)
-        }
+        memset(buffer, 0xAB, sizeBytes)
 
         var totalTime: CFAbsoluteTime = 0
-        var sink: UInt8 = 0
 
         for _ in 0..<iterations {
             let start = CFAbsoluteTimeGetCurrent()
-            // Sequential read — tests memory bandwidth
+            // Sequential read via pointer arithmetic — compiler can't optimize away
             let intPtr = buffer.assumingMemoryBound(to: UInt64.self)
             let count = sizeBytes / MemoryLayout<UInt64>.size
             var acc: UInt64 = 0
             for i in 0..<count {
                 acc &+= intPtr[i]
             }
-            sink = UInt8(acc & 0xFF)
+            // Prevent dead store elimination — force acc to be consumed
+            withUnsafePointer(to: acc) { _ = $0.pointee }
             totalTime += CFAbsoluteTimeGetCurrent() - start
         }
 
-        _ = sink
         let avgTime = totalTime / Double(iterations)
         let bytesPerSec = Double(sizeBytes) / avgTime
         return bytesPerSec / 1_000_000_000 // GB/s
