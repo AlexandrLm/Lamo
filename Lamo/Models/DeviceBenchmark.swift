@@ -32,7 +32,7 @@ final class DeviceBenchmark: ObservableObject {
         }
     }
 
-    struct BenchmarkResult {
+    struct BenchmarkResult: Codable {
         let deviceName: String
         let chipName: String
         let ramGB: Double
@@ -111,14 +111,22 @@ final class DeviceBenchmark: ObservableObject {
         }
     }
 
-    struct ModelCompat: Identifiable {
-        let id = UUID()
+    struct ModelCompat: Identifiable, Codable {
         let name: String
         let size: String
         let status: CompatStatus
         let icon: String
+        let id: String
 
-        enum CompatStatus {
+        init(name: String, size: String, status: CompatStatus, icon: String) {
+            self.name = name
+            self.size = size
+            self.status = status
+            self.icon = icon
+            self.id = UUID().uuidString
+        }
+
+        enum CompatStatus: String, Codable {
             case optimal, slow, incompatible
             var color: String {
                 switch self {
@@ -137,15 +145,22 @@ final class DeviceBenchmark: ObservableObject {
         }
     }
 
-    enum AITier {
+    enum AITier: String, Codable {
         case excellent, good, moderate, limited
     }
 
-    struct Recommendation: Identifiable {
-        let id = UUID()
+    struct Recommendation: Identifiable, Codable {
         let icon: String
         let title: String
         let detail: String
+        let id: String
+
+        init(icon: String, title: String, detail: String) {
+            self.icon = icon
+            self.title = title
+            self.detail = detail
+            self.id = UUID().uuidString
+        }
     }
 
     func runBenchmark() async {
@@ -226,9 +241,31 @@ final class DeviceBenchmark: ObservableObject {
             totalTime: totalTime
         )
 
+        // Persist result so it survives app restart
+        saveResult()
+
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         isRunning = false
         currentPhase = .idle
+    }
+
+    // MARK: - Persistence
+
+    private static let storageKey = "com.lamo.benchmark.result"
+
+    init() {
+        // Load previously saved result on startup
+        if let data = UserDefaults.standard.data(forKey: Self.storageKey),
+           let decoded = try? JSONDecoder().decode(BenchmarkResult.self, from: data) {
+            result = decoded
+        }
+    }
+
+    private func saveResult() {
+        guard let result else { return }
+        if let data = try? JSONEncoder().encode(result) {
+            UserDefaults.standard.set(data, forKey: Self.storageKey)
+        }
     }
 
     // MARK: - Device Info
@@ -236,10 +273,9 @@ final class DeviceBenchmark: ObservableObject {
     private func getDeviceName() async -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
-        let machineMirror = Mirror(reflecting: systemInfo.machine)
-        let identifier = machineMirror.children.reduce("") { identifier, element in
-            guard let value = element.value as? Int8, value != 0 else { return identifier }
-            return identifier + String(UnicodeScalar(UInt8(value)))
+        let identifier = withUnsafeBytes(of: &systemInfo.machine) { rawPtr -> String in
+            let ptr = rawPtr.baseAddress!.assumingMemoryBound(to: CChar.self)
+            return String(cString: ptr)
         }
         return mapDeviceIdentifier(identifier)
     }

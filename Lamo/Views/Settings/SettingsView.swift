@@ -792,61 +792,75 @@ struct SettingsView: View {
     // MARK: - Device
 
     private var deviceSection: some View {
-        List {
-            Section {
-                Button {
-                    Task {
-                        await benchmark.runBenchmark()
-                        navigateToResults = true
-                    }
-                } label: {
-                    HStack {
-                        if benchmark.isRunning {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                            Text("Analyzing…")
-                                .foregroundStyle(.white)
-                        } else {
-                            Image(systemName: benchmark.result != nil ? "arrow.clockwise" : "bolt.fill")
-                                .font(.body)
-                            Text(benchmark.result != nil ? "Run Again" : "Start Benchmark")
-                                .fontWeight(.semibold)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: benchmark.isRunning
-                                ? [Color(.systemGray3), Color(.systemGray4)]
-                                : [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-                .disabled(benchmark.isRunning)
-            } footer: {
-                Text(benchmark.isRunning
-                     ? "Running tests across CPU, GPU, memory and Neural Engine…"
-                     : "Takes about 5–10 seconds. Detailed results will open automatically.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle("Device")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $navigateToResults) {
-            if let result = benchmark.result {
-                BenchmarkResultView(result: result)
+        Group {
+            if benchmark.result != nil {
+                // Result already exists — show details directly
+                BenchmarkResultView(result: benchmark.result!)
                     .navigationTitle("Benchmark Results")
                     .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                Task {
+                                    await benchmark.runBenchmark()
+                                }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .disabled(benchmark.isRunning)
+                        }
+                    }
+            } else if benchmark.isRunning {
+                // Running — show progress
+                List {
+                    Section {
+                        VStack(spacing: 20) {
+                            ProgressView(value: benchmark.progress)
+                                .tint(LamoTheme.Colors.accent)
+                            Text(benchmarkProgressLabel(benchmark.progress))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+                .listStyle(.insetGrouped)
+            } else {
+                // No result yet — show start button
+                List {
+                    Section {
+                        Button {
+                            Task { await benchmark.runBenchmark() }
+                        } label: {
+                            HStack {
+                                Image(systemName: "bolt.fill")
+                                    .font(.body)
+                                Text("Start Benchmark")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(
+                                    colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.8)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                    } footer: {
+                        Text("Takes about 5–10 seconds. Tests CPU, GPU, memory and Neural Engine.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .listStyle(.insetGrouped)
             }
         }
+        .navigationTitle("Device")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Quick Stat
