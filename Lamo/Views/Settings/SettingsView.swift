@@ -793,68 +793,6 @@ struct SettingsView: View {
 
     private var deviceSection: some View {
         List {
-            if let result = benchmark.result {
-                Section {
-                    HStack(spacing: 12) {
-                        // Mini tier icon
-                        ZStack {
-                            Circle()
-                                .fill(tierColor(result.aiTierColor).opacity(0.15))
-                                .frame(width: 40, height: 40)
-                            Image(systemName: result.aiTierIcon)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(tierColor(result.aiTierColor))
-                        }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Last Benchmark")
-                                .font(.subheadline.weight(.medium))
-                            Text("\(result.deviceName) — \(result.aiTierLabel)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Text(String(format: "%.2f", result.combinedScore))
-                            .font(.headline.monospacedDigit())
-                            .foregroundStyle(tierColor(result.aiTierColor))
-                        Text("GFLOPS")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-
-                Section("Quick Stats") {
-                    HStack(spacing: 12) {
-                        quickStat(icon: "cpu.fill", label: "CPU", value: String(format: "%.2f", result.cpuScore), unit: "GFLOPS", color: scoreColor(result.cpuScore))
-                        quickStat(icon: "gpu", label: "GPU", value: result.hasGPU ? String(format: "%.2f", result.gpuScore) : "—", unit: "GFLOPS", color: scoreColor(result.gpuScore))
-                        quickStat(icon: "gauge.with.dots.needle.33percent", label: "AI", value: String(format: "%.2f", result.combinedScore), unit: "GFLOPS", color: tierColor(result.aiTierColor))
-                    }
-                }
-            } else if benchmark.isRunning {
-                Section {
-                    VStack(spacing: 20) {
-                        // Phase indicator
-                        HStack(spacing: 8) {
-                            ForEach(DeviceBenchmark.BenchmarkPhase.allCases.filter { $0 != .idle }, id: \.self) { phase in
-                                phaseIndicator(phase, current: benchmark.currentPhase)
-                            }
-                        }
-
-                        // Progress bar
-                        VStack(spacing: 8) {
-                            ProgressView(value: benchmark.progress)
-                                .tint(LamoTheme.Colors.accent)
-                            Text(benchmarkProgressLabel(benchmark.progress))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-            }
-
             Section {
                 Button {
                     Task {
@@ -872,7 +810,7 @@ struct SettingsView: View {
                         } else {
                             Image(systemName: benchmark.result != nil ? "arrow.clockwise" : "bolt.fill")
                                 .font(.body)
-                            Text(benchmark.result != nil ? "Run Benchmark Again" : "Start Benchmark")
+                            Text(benchmark.result != nil ? "Run Again" : "Start Benchmark")
                                 .fontWeight(.semibold)
                         }
                     }
@@ -892,30 +830,11 @@ struct SettingsView: View {
                 }
                 .disabled(benchmark.isRunning)
             } footer: {
-                if benchmark.result != nil {
-                    Text("Takes about 5–10 seconds. Tests CPU, GPU, memory and Neural Engine.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            // Hidden NavigationLink triggered by state
-            if let result = benchmark.result {
-                Section {
-                    NavigationLink {
-                        BenchmarkResultView(result: result)
-                            .navigationTitle("Benchmark Results")
-                            .navigationBarTitleDisplayMode(.inline)
-                    } label: {
-                        Label("View Full Results", systemImage: "chart.bar.fill")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(LamoTheme.Colors.accent)
-                    }
-                    .opacity(navigateToResults ? 1 : 0)
-                    .frame(height: 0)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                }
+                Text(benchmark.isRunning
+                     ? "Running tests across CPU, GPU, memory and Neural Engine…"
+                     : "Takes about 5–10 seconds. Detailed results will open automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
         .listStyle(.insetGrouped)
