@@ -310,11 +310,32 @@ final class DeviceBenchmark: ObservableObject {
     }
 
     private func detectNeuralEngine() -> Bool {
-        // Apple Neural Engine exists on A12+ and all Apple Silicon
-        // Detection via sysctl or chip name heuristic
         let chip = getChipName().lowercased()
-        return chip.contains("a1") || chip.contains("m1") || chip.contains("m2") ||
-               chip.contains("m3") || chip.contains("m4") || chip.contains("a2")
+
+        // On simulator, chip name is the Mac's CPU — all Apple Silicon Macs have ANE
+        #if targetEnvironment(simulator)
+        return chip.contains("apple") && (chip.contains("m1") || chip.contains("m2") ||
+               chip.contains("m3") || chip.contains("m4") || chip.contains("m5") ||
+               chip.contains("a1"))
+        #endif
+
+        // Parse chip number: "apple a17 pro" → 17, "apple m3 max" → 3
+        if let range = chip.range(of: #"[am](\d+)"#, options: .regularExpression) {
+            let match = String(chip[range])
+            let numStr = match.dropFirst() // remove "a" or "m"
+            if let num = Int(numStr) {
+                if chip.contains("a") {
+                    // A11+ has Neural Engine (first gen 2-core), A12+ proper (8-core)
+                    return num >= 11
+                } else {
+                    // All M-series have Neural Engine
+                    return num >= 1
+                }
+            }
+        }
+
+        // Fallback: check for known ANE frameworks
+        return NSClassFromString("ANEService") != nil
     }
 
     // MARK: - CPU Single-Core Benchmark
