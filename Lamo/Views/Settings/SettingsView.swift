@@ -793,111 +793,66 @@ struct SettingsView: View {
     private var deviceSection: some View {
         List {
             if let result = benchmark.result {
+                // Result is shown via navigation to BenchmarkResultView
                 Section {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(result.deviceName)
-                                .font(.headline)
-                            Text(result.chipName)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        tierBadge(result)
-                    }
-                }
-
-                Section("Hardware") {
-                    HStack(spacing: 0) {
-                        statItem("Memory", value: String(format: "%.1f GB", result.ramGB), icon: "memorychip")
-                        Spacer()
-                        statItem("GPU Cores", value: result.hasGPU ? "\(result.gpuCoreCount)" : "—", icon: "gpu")
-                        Spacer()
-                        statItem("Storage", value: String(format: "%.1f GB free", result.storageFreeGB), icon: "internaldrive")
-                    }
-                }
-
-                Section("Performance") {
-                    HStack {
-                        Label("CPU", systemImage: "cpu")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 60, alignment: .leading)
-                        ProgressView(value: min(result.cpuScore / 3.0, 1.0))
-                            .tint(scoreColor(result.cpuScore))
-                        Spacer(minLength: 8)
-                        Text(String(format: "%.2f GFLOPS", result.cpuScore))
-                            .font(.subheadline.monospacedDigit())
-                        Text(scoreLabel(result.cpuScore))
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(scoreColor(result.cpuScore).opacity(0.15))
-                            .foregroundStyle(scoreColor(result.cpuScore))
-                            .clipShape(Capsule())
-                    }
-
-                    if result.hasGPU {
-                        HStack {
-                            Label("GPU", systemImage: "gpu")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 60, alignment: .leading)
-                            ProgressView(value: min(result.gpuScore / 5.0, 1.0))
-                                .tint(scoreColor(result.gpuScore))
-                            Spacer(minLength: 8)
-                            Text(String(format: "%.2f GFLOPS", result.gpuScore))
-                                .font(.subheadline.monospacedDigit())
-                            Text(scoreLabel(result.gpuScore))
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(scoreColor(result.gpuScore).opacity(0.15))
-                                .foregroundStyle(scoreColor(result.gpuScore))
-                                .clipShape(Capsule())
-                        }
-                    }
-
-                    Divider()
-
-                    HStack {
-                        Text("AI Score")
-                            .font(.headline)
-                        Spacer()
-                        Text(String(format: "%.2f GFLOPS", result.combinedScore))
-                            .font(.headline.monospacedDigit())
-                            .foregroundStyle(LamoTheme.Colors.accent)
-                    }
-                }
-
-                if !result.recommendations.isEmpty {
-                    Section("Recommendations") {
-                        ForEach(result.recommendations) { rec in
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: rec.icon)
-                                    .font(.subheadline)
-                                    .foregroundStyle(LamoTheme.Colors.accent)
-                                    .frame(width: 20)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(rec.title)
-                                        .font(.subheadline.weight(.medium))
-                                    Text(rec.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                    NavigationLink {
+                        BenchmarkResultView(result: result)
+                            .navigationTitle("Benchmark Results")
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        HStack(spacing: 12) {
+                            // Mini tier icon
+                            ZStack {
+                                Circle()
+                                    .fill(tierColor(result.aiTierColor).opacity(0.15))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: result.aiTierIcon)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(tierColor(result.aiTierColor))
                             }
-                            .padding(.vertical, 2)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("View Results")
+                                    .font(.subheadline.weight(.medium))
+                                Text("\(result.deviceName) — \(result.aiTierLabel)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.quaternary)
                         }
+                    }
+                }
+
+                Section("Quick Stats") {
+                    HStack(spacing: 12) {
+                        quickStat(icon: "cpu.fill", label: "CPU", value: String(format: "%.2f", result.cpuScore), unit: "GFLOPS", color: scoreColor(result.cpuScore))
+                        quickStat(icon: "gpu", label: "GPU", value: result.hasGPU ? String(format: "%.2f", result.gpuScore) : "—", unit: "GFLOPS", color: scoreColor(result.gpuScore))
+                        quickStat(icon: "gauge.with.dots.needle.33percent", label: "AI", value: String(format: "%.2f", result.combinedScore), unit: "GFLOPS", color: tierColor(result.aiTierColor))
                     }
                 }
             } else if benchmark.isRunning {
                 Section {
-                    VStack(spacing: 16) {
-                        ProgressView(value: benchmark.progress)
-                            .tint(LamoTheme.Colors.accent)
-                        Text(benchmarkProgressLabel(benchmark.progress))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 20) {
+                        // Phase indicator
+                        HStack(spacing: 8) {
+                            ForEach(DeviceBenchmark.BenchmarkPhase.allCases.filter { $0 != .idle }, id: \.self) { phase in
+                                phaseIndicator(phase, current: benchmark.currentPhase)
+                            }
+                        }
+
+                        // Progress bar
+                        VStack(spacing: 8) {
+                            ProgressView(value: benchmark.progress)
+                                .tint(LamoTheme.Colors.accent)
+                            Text(benchmarkProgressLabel(benchmark.progress))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .padding(.vertical, 8)
                 }
@@ -928,6 +883,69 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    // MARK: - Quick Stat
+
+    private func quickStat(icon: String, label: String, value: String, unit: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(color)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                Text(unit)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    // MARK: - Phase Indicator
+
+    private func phaseIndicator(_ phase: DeviceBenchmark.BenchmarkPhase, current: DeviceBenchmark.BenchmarkPhase) -> some View {
+        let phases = DeviceBenchmark.BenchmarkPhase.allCases.filter { $0 != .idle }
+        guard let currentIndex = phases.firstIndex(where: { $0 == current }),
+              let phaseIndex = phases.firstIndex(where: { $0 == phase }) else {
+            return AnyView(EmptyView())
+        }
+
+        let isComplete = phaseIndex < currentIndex
+        let isCurrent = phaseIndex == currentIndex
+
+        return AnyView(
+            VStack(spacing: 4) {
+                ZStack {
+                    Circle()
+                        .fill(isComplete ? LamoTheme.Colors.accent : (isCurrent ? LamoTheme.Colors.accent.opacity(0.2) : Color(.tertiarySystemFill)))
+                        .frame(width: 28, height: 28)
+                    if isComplete {
+                        Image(systemName: "checkmark")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                    } else if isCurrent {
+                        ProgressView()
+                            .tint(LamoTheme.Colors.accent)
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: phase.icon)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Text(phase.rawValue)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(isCurrent ? LamoTheme.Colors.accent : Color(.tertiaryLabel))
+            }
+        )
+    }
+
     // MARK: - Helpers
 
     private var appVersion: String {
@@ -948,14 +966,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func tierBadge(_ result: DeviceBenchmark.BenchmarkResult) -> some View {
-        let color: Color = {
-            switch result.aiTierColor {
-            case "green": return .green
-            case "blue": return .blue
-            case "orange": return .orange
-            default: return .red
-            }
-        }()
+        let color = tierColor(result.aiTierColor)
 
         HStack(spacing: 4) {
             Image(systemName: result.aiTierIcon)
@@ -983,6 +994,15 @@ struct SettingsView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func tierColor(_ colorString: String) -> Color {
+        switch colorString {
+        case "green": return .green
+        case "blue": return .blue
+        case "orange": return .orange
+        default: return .red
+        }
     }
 
     private func scoreLabel(_ gflops: Double) -> String {

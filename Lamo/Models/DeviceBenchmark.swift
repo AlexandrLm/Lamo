@@ -9,7 +9,26 @@ final class DeviceBenchmark: ObservableObject {
     @Published var result: BenchmarkResult?
     @Published var isRunning = false
     @Published var progress: Double = 0
+    @Published var currentPhase: BenchmarkPhase = .idle
     @Published var errorMessage: String?
+
+    enum BenchmarkPhase: String, CaseIterable, Hashable {
+        case idle
+        case deviceInfo = "Device Info"
+        case cpuTest = "CPU Test"
+        case gpuTest = "GPU Test"
+        case analyzing = "Analyzing"
+
+        var icon: String {
+            switch self {
+            case .idle: return "circle.dashed"
+            case .deviceInfo: return "info.circle.fill"
+            case .cpuTest: return "cpu.fill"
+            case .gpuTest: return "gpu.fill"
+            case .analyzing: return "sparkle.magnifyingglass"
+            }
+        }
+    }
 
     struct BenchmarkResult {
         let deviceName: String
@@ -23,6 +42,9 @@ final class DeviceBenchmark: ObservableObject {
         let combinedScore: Double
         let aiTier: AITier
         let recommendations: [Recommendation]
+        let cpuTime: Double
+        let gpuTime: Double
+        let totalTime: Double
 
         var aiTierLabel: String {
             switch aiTier {
@@ -50,6 +72,60 @@ final class DeviceBenchmark: ObservableObject {
             case .limited: return "red"
             }
         }
+
+        var scoreNormalized: Double {
+            // Normalize to 0...1 range based on max expected GFLOPS (~5.0)
+            min(combinedScore / 5.0, 1.0)
+        }
+
+        var cpuNormalized: Double { min(cpuScore / 3.0, 1.0) }
+        var gpuNormalized: Double { min(gpuScore / 6.0, 1.0) }
+
+        var modelCompatibility: [ModelCompat] {
+            var compat: [ModelCompat] = []
+            if ramGB >= 6 && combinedScore >= 1.5 {
+                compat.append(ModelCompat(name: "Gemma 4 E4B", size: "3.3 GB", status: .optimal, icon: "checkmark.circle.fill"))
+            } else if ramGB >= 4 {
+                compat.append(ModelCompat(name: "Gemma 4 E4B", size: "3.3 GB", status: .slow, icon: "exclamationmark.circle.fill"))
+            }
+            if ramGB >= 3 && combinedScore >= 0.3 {
+                compat.append(ModelCompat(name: "Gemma 4 E2B", size: "1.7 GB", status: .optimal, icon: "checkmark.circle.fill"))
+            }
+            return compat
+        }
+
+        var maxConcurrentTokens: Int {
+            if ramGB >= 8 { return 4096 }
+            if ramGB >= 6 { return 2048 }
+            if ramGB >= 4 { return 1024 }
+            return 512
+        }
+    }
+
+    struct ModelCompat: Identifiable {
+        let id = UUID()
+        let name: String
+        let size: String
+        let status: CompatStatus
+        let icon: String
+
+        enum CompatStatus {
+            case optimal, slow, incompatible
+            var color: String {
+                switch self {
+                case .optimal: return "green"
+                case .slow: return "orange"
+                case .incompatible: return "red"
+                }
+            }
+            var label: String {
+                switch self {
+                case .optimal: return "Optimal"
+                case .slow: return "Usable"
+                case .incompatible: return "Not Supported"
+                }
+            }
+        }
     }
 
     enum AITier {
@@ -69,6 +145,7 @@ final class DeviceBenchmark: ObservableObject {
         progress = 0
         result = nil
         errorMessage = nil
+        currentPhase = .deviceInfo
 
         // Phase 1: Device info
         progress = 0.05
@@ -79,24 +156,28 @@ final class DeviceBenchmark: ObservableObject {
         let gpuInfo = getGPUInfo()
         let hasGPU = gpuInfo.hasGPU
         let gpuCores = gpuInfo.coreCount
+        progress = 0.15
 
         // Phase 2: CPU benchmark
-        progress = 0.15
+        currentPhase = .cpuTest
+        let cpuStart = CFAbsoluteTimeGetCurrent()
         let cpuScore = runCPUBenchmark()
+        let cpuTime = CFAbsoluteTimeGetCurrent() - cpuStart
+        progress = 0.55
 
         // Phase 3: GPU benchmark
-        progress = 0.55
+        currentPhase = hasGPU ? .gpuTest : .analyzing
+        let gpuStart = CFAbsoluteTimeGetCurrent()
         let gpuScore = hasGPU ? runGPUBenchmark() : 0
-
-        // Phase 4: Combined score (weighted: 40% CPU, 60% GPU for AI workloads)
-        let combinedScore = hasGPU ? (cpuScore * 0.4 + gpuScore * 0.6) : cpuScore
-
-        // Phase 5: Rate the device
+        let gpuTime = hasGPU ? CFAbsoluteTimeGetCurrent() - gpuStart : 0
         progress = 0.85
-        let tier = rateDevice(ramGB: ramGB, combinedScore: combinedScore, gpuCores: gpuCores, hasGPU: hasGPU)
 
-        // Phase 6: Recommendations
+        // Phase 4: Analysis
+        currentPhase = .analyzing
+        let combinedScore = hasGPU ? (cpuScore * 0.4 + gpuScore * 0.6) : cpuScore
+        let tier = rateDevice(ramGB: ramGB, combinedScore: combinedScore, gpuCores: gpuCores, hasGPU: hasGPU)
         let recs = buildRecommendations(tier: tier, ramGB: ramGB, hasGPU: hasGPU, storageFree: storageFree)
+        let totalTime = cpuTime + gpuTime
 
         progress = 1.0
 
@@ -111,10 +192,17 @@ final class DeviceBenchmark: ObservableObject {
             gpuScore: gpuScore,
             combinedScore: combinedScore,
             aiTier: tier,
-            recommendations: recs
+            recommendations: recs,
+            cpuTime: cpuTime,
+            gpuTime: gpuTime,
+            totalTime: totalTime
         )
 
+        // Haptic on completion
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
         isRunning = false
+        currentPhase = .idle
     }
 
     // MARK: - Device Info
@@ -161,7 +249,6 @@ final class DeviceBenchmark: ObservableObject {
 
     // MARK: - CPU Benchmark
 
-    /// Matrix multiplication benchmark. Returns GFLOPS (higher = better).
     private func runCPUBenchmark() -> Double {
         let size = 256
         let iterations = 3
@@ -194,7 +281,6 @@ final class DeviceBenchmark: ObservableObject {
         }
 
         let avgTime = totalTime / Double(iterations)
-        // GFLOPS = 2 * size^3 / time_in_seconds / 1e9
         let flops = 2.0 * Double(size) * Double(size) * Double(size)
         let gflops = flops / avgTime / 1_000_000_000
 
@@ -203,7 +289,6 @@ final class DeviceBenchmark: ObservableObject {
 
     // MARK: - GPU Benchmark
 
-    /// Metal GPU benchmark using vector add compute shader. Returns GFLOPS.
     private func runGPUBenchmark() -> Double {
         guard let device = MTLCreateSystemDefaultDevice() else { return 0 }
         guard let commandQueue = device.makeCommandQueue() else { return 0 }
@@ -211,14 +296,12 @@ final class DeviceBenchmark: ObservableObject {
         let count = 1_000_000
         let iterations = 10
 
-        // Create buffers
         guard let bufferA = device.makeBuffer(length: count * MemoryLayout<Float>.size, options: .storageModeShared),
               let bufferB = device.makeBuffer(length: count * MemoryLayout<Float>.size, options: .storageModeShared),
               let bufferC = device.makeBuffer(length: count * MemoryLayout<Float>.size, options: .storageModeShared) else {
             return 0
         }
 
-        // Fill with random values
         let ptrA = bufferA.contents().bindMemory(to: Float.self, capacity: count)
         let ptrB = bufferB.contents().bindMemory(to: Float.self, capacity: count)
         for i in 0..<count {
@@ -226,7 +309,6 @@ final class DeviceBenchmark: ObservableObject {
             ptrB[i] = Float.random(in: -1...1)
         }
 
-        // Simple compute shader for vector addition (C = A + B)
         let shaderSource = """
         #include <metal_stdlib>
         using namespace metal;
@@ -259,7 +341,6 @@ final class DeviceBenchmark: ObservableObject {
             commandBuffer.waitUntilCompleted()
         }
 
-        // Benchmark
         var totalTime: CFAbsoluteTime = 0
         for _ in 0..<iterations {
             guard let commandBuffer = commandQueue.makeCommandBuffer(),
@@ -279,7 +360,6 @@ final class DeviceBenchmark: ObservableObject {
         }
 
         let avgTime = totalTime / Double(iterations)
-        // GFLOPS = 2 * count / time / 1e9 (add is 2 FLOPS per element)
         let flops = 2.0 * Double(count)
         let gflops = flops / avgTime / 1_000_000_000
 
@@ -291,17 +371,14 @@ final class DeviceBenchmark: ObservableObject {
     private func rateDevice(ramGB: Double, combinedScore: Double, gpuCores: Int, hasGPU: Bool) -> AITier {
         var score = 0
 
-        // RAM scoring
         if ramGB >= 7 { score += 3 }
         else if ramGB >= 5 { score += 2 }
         else if ramGB >= 3 { score += 1 }
 
-        // GPU scoring
         if hasGPU {
             score += gpuCores >= 5 ? 2 : 1
         }
 
-        // Compute scoring (GFLOPS thresholds)
         if combinedScore >= 2.0 { score += 3 }
         else if combinedScore >= 1.0 { score += 2 }
         else if combinedScore >= 0.5 { score += 1 }
