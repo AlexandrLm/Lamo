@@ -12,41 +12,38 @@ struct ContextBarView: View {
             Button {
                 onTap?()
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     // Mini ring
                     ZStack {
                         Circle()
-                            .stroke(Color.white.opacity(0.12), lineWidth: 2.5)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 2)
                         Circle()
                             .trim(from: 0, to: tracker.fillRatio)
-                            .stroke(ringColor(tracker), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .stroke(ringColor(tracker), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                             .rotationEffect(.degrees(-90))
 
                         Text("\(Int(tracker.fillRatio * 100))")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 7, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
-                    .frame(width: 22, height: 22)
+                    .frame(width: 20, height: 20)
 
                     // Token text
-                    Text("~\(ContextTracker.formatTokens(tracker.usedTokens)) / \(ContextTracker.formatTokens(tracker.totalLimit))")
+                    Text("\(ContextTracker.formatTokens(tracker.usedTokens))")
                         .font(.caption2.monospacedDigit().weight(.medium))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.6))
 
                     if tracker.hasDroppedMessages {
                         Image(systemName: "exclamationmark")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 7, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(width: 14, height: 14)
-                            .background(Circle().fill(Color.white.opacity(0.3)))
-                    } else {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .background(Circle().fill(.orange.opacity(0.8)))
                     }
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.white.opacity(0.04), in: Capsule())
             }
             .buttonStyle(.plain)
             .transition(.opacity)
@@ -56,7 +53,7 @@ struct ContextBarView: View {
     private func ringColor(_ tracker: ContextTracker) -> Color {
         if tracker.fillRatio > 0.9 { return .white }
         if tracker.fillRatio > 0.7 { return .white.opacity(0.7) }
-        return .white.opacity(0.5)
+        return .white.opacity(0.4)
     }
 }
 

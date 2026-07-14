@@ -99,28 +99,39 @@ struct ChatView: View {
 
     private var emptyChatView: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 60)
-            VStack(spacing: 20) {
-                // Gradient logo
+            Spacer(minLength: 80)
+
+            VStack(spacing: 24) {
+                // Animated logo
                 ZStack {
                     Circle()
                         .fill(Color.white)
-                        .frame(width: 72, height: 72)
+                        .frame(width: 80, height: 80)
 
                     Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.system(size: 30, weight: .medium))
                         .foregroundStyle(.black)
                 }
+                .shadow(color: .white.opacity(0.08), radius: 20, y: 8)
 
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     Text("How can I help you today?")
                         .font(.title2.weight(.semibold))
-                    Text("Ask anything — I'm running 100% on your device.")
+                    Text("Running 100% on your device. No data leaves your phone.")
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
                 }
 
-                // Empty state CTA: Download a Model button
+                // Suggestion chips
+                VStack(spacing: 10) {
+                    suggestionChip(icon: "lightbulb", text: "Explain quantum computing simply")
+                    suggestionChip(icon: "text.badge.checkmark", text: "Write a professional email")
+                    suggestionChip(icon: "swift", text: "Debug a Swift concurrency issue")
+                }
+                .padding(.top, 8)
+
+                // Download CTA
                 NavigationLink {
                     SettingsView()
                 } label: {
@@ -129,13 +140,46 @@ struct ChatView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.1))
+                        .background(Color.white.opacity(0.08))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 12)
             }
+            .padding(.horizontal, 32)
+
             Spacer()
         }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+    }
+
+    private func suggestionChip(icon: String, text: String) -> some View {
+        Button {
+            viewModel.inputText = text
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "arrow.up.left")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func scrollToBottom() {
@@ -179,7 +223,7 @@ struct StreamingIndicator: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Color(uiColor: .secondarySystemBackground))
+            .background(Color.white.opacity(0.06))
             .clipShape(
                 UnevenRoundedRectangle(
                     topLeadingRadius: 4,

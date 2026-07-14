@@ -26,33 +26,34 @@ struct MessageBubble: View {
 
             // Info bar (assistant only — always visible)
             if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     // Left: benchmark stats
-                    if let b = message.benchmark {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 7))
-                        Text("\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
-                        Text("·")
-                        Text("\(String(format: "%.1f", b.timeToFirstToken))s")
-                    } else {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 7))
-                            .foregroundStyle(.white.opacity(0.2))
-                        Text("— tok/s")
-                        Text("·")
-                        Text("— s")
+                    HStack(spacing: 4) {
+                        if let b = message.benchmark {
+                            statPill(icon: "bolt.fill", text: "\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
+                            Text("·")
+                                .foregroundStyle(.white.opacity(0.15))
+                            statPill(icon: "timer", text: "\(String(format: "%.1f", b.timeToFirstToken))s")
+                        } else {
+                            statPill(icon: "bolt.fill", text: "— tok/s")
+                            Text("·")
+                                .foregroundStyle(.white.opacity(0.15))
+                            statPill(icon: "timer", text: "— s")
+                        }
+                        if let tokenCount {
+                            Text("·")
+                                .foregroundStyle(.white.opacity(0.15))
+                            statPill(icon: "textformat.size", text: "\(ContextTracker.formatTokens(tokenCount)) t")
+                        }
                     }
-                    if let tokenCount {
-                        Text("·")
-                        Text("\(ContextTracker.formatTokens(tokenCount)) t")
-                    }
+                    .font(.caption2.monospacedDigit())
 
                     Spacer()
 
                     // Right: model + actions
                     Text(modelName)
                         .font(.system(.caption2, design: .rounded).weight(.medium))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.white.opacity(0.35))
 
                     actionButton(
                         icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
@@ -72,10 +73,13 @@ struct MessageBubble: View {
                         showShareSheet = true
                     }
                 }
-                .font(.caption2.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.4))
                 .padding(.horizontal, 18)
-                .padding(.top, 2)
+                .padding(.top, 4)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 14)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
@@ -134,10 +138,21 @@ struct MessageBubble: View {
             Image(systemName: icon)
                 .font(.caption2)
                 .foregroundStyle(color)
-                .frame(width: 20, height: 20)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+
+    // MARK: - Stat Pill
+
+    private func statPill(icon: String, text: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 7))
+            Text(text)
+        }
     }
 
     // MARK: - User Content
@@ -159,13 +174,14 @@ struct MessageBubble: View {
                     .background(Color.white)
                     .clipShape(
                         UnevenRoundedRectangle(
-                            topLeadingRadius: 16,
-                            bottomLeadingRadius: message.hasImages ? 4 : 16,
-                            bottomTrailingRadius: 16,
+                            topLeadingRadius: 18,
+                            bottomLeadingRadius: message.hasImages ? 4 : 18,
+                            bottomTrailingRadius: 18,
                             topTrailingRadius: 4,
                             style: .continuous
                         )
                     )
+                    .shadow(color: .white.opacity(0.06), radius: 8, y: 2)
             }
         }
     }
@@ -298,19 +314,24 @@ struct ThinkingView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header — tap to expand/collapse
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: "brain")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(Color.white.opacity(0.8))
 
                     if isStreaming && !isExpanded {
-                        ProgressView()
-                            .tint(Color.white)
-                            .controlSize(.small)
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .tint(Color.white.opacity(0.6))
+                                .controlSize(.mini)
+                            Text("Thinking…")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         Text("Thinking")
                             .font(.caption.weight(.medium))
@@ -324,8 +345,8 @@ struct ThinkingView: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -334,7 +355,7 @@ struct ThinkingView: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {
                     Divider()
-                        .overlay(Color(.separator).opacity(0.15))
+                        .overlay(Color(.separator).opacity(0.1))
 
                     ScrollView(.vertical, showsIndicators: false) {
                         MarkdownRenderer(
@@ -345,12 +366,12 @@ struct ThinkingView: View {
                         .font(.footnote)
                     }
                     .frame(maxHeight: 300)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: .rect(cornerRadius: 10))
+        .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: .rect(cornerRadius: 12))
     }
 }

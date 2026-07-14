@@ -161,15 +161,15 @@ struct MainView: View {
                                 }
                         }
                     } header: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             if group.title == "Pinned" {
                                 Image(systemName: "pin.fill")
                                     .font(.system(size: 8))
                                     .foregroundStyle(.orange)
                             }
                             Text(group.title)
-                                .font(.caption2)
-                                .foregroundStyle(.quaternary)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
                                 .textCase(nil)
                         }
                     }
@@ -223,7 +223,7 @@ struct MainView: View {
 
             // Startup gate: show loading overlay until engine is ready
             if !providerManager.isEngineReady {
-                VStack(spacing: 16) {
+                VStack(spacing: 20) {
                     if let error = providerManager.engineError {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.largeTitle)
@@ -234,13 +234,17 @@ struct MainView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
+                            .padding(.horizontal, 40)
                     } else {
                         ProgressView()
-                            .scaleEffect(1.2)
-                        Text("Loading model...")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .scaleEffect(1.3)
+                        VStack(spacing: 4) {
+                            Text("Loading model…")
+                                .font(.subheadline.weight(.medium))
+                            Text("This may take a moment")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -337,19 +341,27 @@ struct ConversationRow: View {
     private var previewText: String? {
         // Prefer first user message as preview (like ChatGPT)
         if let first = firstUserMessage, !first.isEmpty {
-            return String(first.prefix(60))
+            return String(first.prefix(80))
         }
-        return lastMessagePreview.map { String($0.prefix(60)) }
+        return lastMessagePreview.map { String($0.prefix(80)) }
+    }
+
+    private var messageCount: Int {
+        conversation.messages.count
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             // Chat icon with pin indicator
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "bubble.left.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Image(systemName: "bubble.left.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    )
 
                 if conversation.isPinned {
                     Image(systemName: "pin.fill")
@@ -362,26 +374,33 @@ struct ConversationRow: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .top) {
                     Text(conversation.title)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
-                    Spacer(minLength: 4)
+                    Spacer(minLength: 8)
                     Text(relativeTime)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
                 if let preview = previewText {
-                    Text(preview)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(preview)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                        if messageCount > 0 {
+                            Text("· \(messageCount)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.quaternary)
+                        }
+                    }
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .accessibilityLabel("\(conversation.title), \(relativeTime)")
     }
 }

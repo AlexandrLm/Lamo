@@ -127,28 +127,28 @@ struct SettingsView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.6)],
+                                colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.7)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 48, height: 48)
+                        .frame(width: 52, height: 52)
 
                     Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 22, weight: .medium))
                         .foregroundStyle(.white)
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Lamo")
-                        .font(.headline)
+                        .font(.title3.bold())
                     Text(appVersion)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 .padding(.leading, 2)
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
         }
     }
 
@@ -315,10 +315,10 @@ struct SettingsView: View {
     private var privacyBadge: some View {
         Section {
             Label {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Fully Private")
-                        .fontWeight(.medium)
-                    Text("All processing happens on your device.")
+                        .font(.subheadline.weight(.medium))
+                    Text("All processing happens on your device. No data sent to servers.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -326,6 +326,7 @@ struct SettingsView: View {
                 Image(systemName: "lock.shield.fill")
                     .foregroundStyle(.green)
             }
+            .padding(.vertical, 2)
         }
     }
 

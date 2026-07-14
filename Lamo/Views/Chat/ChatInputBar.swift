@@ -95,23 +95,17 @@ struct ChatInputBar: View {
                     showModelPicker = true
                 } label: {
                     HStack(spacing: 6) {
+                        Circle()
+                            .fill(provider.isEngineReady ? LamoTheme.Colors.accent : .orange)
+                            .frame(width: 6, height: 6)
                         Text(modelDisplayName)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.7))
                             .lineLimit(1)
-                        if provider.isEngineReady {
-                            Text("Ready")
-                                .font(.caption)
-                                .foregroundStyle(LamoTheme.Colors.accent)
-                        } else {
-                            Text("Loading")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.1), in: Capsule())
+                    .background(Color.white.opacity(0.06), in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(modelDisplayName)
@@ -325,23 +319,43 @@ struct ModelPickerSheet: View {
         NavigationStack {
             List {
                 if !availableModels.isEmpty {
-                    Section("On-Device Models") {
+                    Section {
                         ForEach(availableModels, id: \.path) { model in
                             Button {
                                 provider.switchModel(modelPath: model.path)
                                 isPresented = false
                             } label: {
-                                HStack {
-                                    Label(model.displayName, systemImage: "cpu")
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.white.opacity(0.06))
+                                            .frame(width: 36, height: 36)
+                                        Image(systemName: "cpu")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(model.displayName)
+                                            .font(.subheadline.weight(.medium))
+                                        Text("On-device")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+
                                     Spacer()
+
                                     if provider.litertLMModelPath == model.path {
-                                        Image(systemName: "checkmark")
+                                        Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(LamoTheme.Colors.accent)
+                                            .font(.title3)
                                     }
                                 }
                             }
                             .tint(.primary)
                         }
+                    } header: {
+                        Text("Available Models")
                     }
                 }
 
@@ -386,6 +400,7 @@ struct ModelPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { isPresented = false }
+                        .fontWeight(.semibold)
                 }
             }
         }
