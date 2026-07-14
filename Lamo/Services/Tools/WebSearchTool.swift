@@ -61,10 +61,11 @@ struct WebSearchTool: Tool {
 
 // MARK: - Fetch URL Tool
 
-/// Tool that allows the model to fetch content from a specific URL.
+/// Tool that allows the model to fetch and read content from a specific URL.
+/// Returns structured data: metadata (title, description) + page content.
 struct FetchUrlTool: Tool {
     static let name = "fetch_url"
-    static let description = "Fetch and read the content of a specific URL. Use this to get detailed information from a webpage."
+    static let description = "Fetch and read the content of a specific URL. Returns page title, description, and main content. Use to read articles, documentation, or any specific webpage."
 
     @ToolParam(description: "The URL to fetch content from.")
     var url: String
@@ -73,8 +74,23 @@ struct FetchUrlTool: Tool {
         guard let fetchURL = URL(string: url) else {
             throw FetchError.invalidURL
         }
-        let content = try await WebFetcher.fetch(url: fetchURL)
-        return content
+
+        let result = try await WebFetcher.fetchStructured(url: fetchURL)
+
+        var output: [String: Any] = [:]
+        if let title = result.title, !title.isEmpty {
+            output["title"] = title
+        }
+        if let description = result.description, !description.isEmpty {
+            output["description"] = description
+        }
+        if let contentType = result.contentType {
+            output["type"] = contentType
+        }
+        output["content"] = result.content
+        output["url"] = url
+
+        return output
     }
 }
 
@@ -309,14 +325,27 @@ enum SearchError: LocalizedError {
 
 // MARK: - Web Fetcher
 
+struct PageMetadata {
+    let title: String?
+    let description: String?
+    let contentType: String?
+    let content: String
+}
+
 actor WebFetcher {
     static let shared = WebFetcher()
     private static let maxConcurrent = 3
     private static var activeTasks = 0
     private static var waiters: [CheckedContinuation<Void, Never>] = []
 
+    /// Fetch a URL and return plain text content.
     static func fetch(url: URL) async throws -> String {
-        // Wait for a slot
+        let result = try await fetchStructured(url: url)
+        return result.content
+    }
+
+    /// Fetch a URL and return structured metadata + content.
+    static func fetchStructured(url: URL) async throws -> PageMetadata {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             Task {
                 await WebFetcher.shared.enqueue(continuation)
@@ -335,7 +364,7 @@ actor WebFetcher {
                 try await Task.sleep(for: .seconds(1))
             }
             do {
-                return try await fetchOnce(url: url)
+                return try await fetchOnceStructured(url: url)
             } catch {
                 lastError = error
             }
@@ -360,7 +389,7 @@ actor WebFetcher {
         }
     }
 
-    private static func fetchOnce(url: URL) async throws -> String {
+    private static func fetchOnceStructured(url: URL) async throws -> PageMetadata {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 12
@@ -370,13 +399,95 @@ actor WebFetcher {
             throw FetchError.invalidEncoding
         }
 
-        let text = extractText(from: html)
+        let metadata = extractMetadata(from: html)
+        let content = extractText(from: html)
 
         let maxLength = 4000
-        if text.count > maxLength {
-            return String(text.prefix(maxLength)) + "\n\n[Content truncated at \(maxLength) chars]"
+        let truncatedContent: String
+        if content.count > maxLength {
+            truncatedContent = String(content.prefix(maxLength)) + "\n\n[Content truncated at \(maxLength) chars]"
+        } else {
+            truncatedContent = content
         }
-        return text
+
+        return PageMetadata(
+            title: metadata.title,
+            description: metadata.description,
+            contentType: metadata.contentType,
+            content: truncatedContent
+        )
+    }
+
+    // MARK: - Metadata Extraction
+
+    private struct RawMetadata {
+        var title: String?
+        var description: String?
+        var contentType: String?
+    }
+
+    private static func extractMetadata(from html: String) -> RawMetadata {
+        var meta = RawMetadata()
+
+        // Extract <title>
+        if let titleRange = html.range(of: "<title[^>]*>([\\s\\S]*?)</title>", options: .regularExpression) {
+            let titleHTML = String(html[titleRange])
+            meta.title = stripTags(titleHTML)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Extract meta description (og:description first, then standard)
+        meta.description = extractMetaContent(from: html, property: "og:description")
+            ?? extractMetaContent(from: html, property: "description")
+
+        // Override title with og:title if available
+        if let ogTitle = extractMetaContent(from: html, property: "og:title") {
+            meta.title = ogTitle
+        }
+
+        // Detect content type from og:type or page structure
+        if let ogType = extractMetaContent(from: html, property: "og:type") {
+            meta.contentType = ogType
+        } else if html.contains("<article") {
+            meta.contentType = "article"
+        } else if html.contains("<pre") || html.contains("<code") {
+            meta.contentType = "code"
+        } else if html.contains("api") || html.contains("endpoint") {
+            meta.contentType = "documentation"
+        }
+
+        return meta
+    }
+
+    private static func extractMetaContent(from html: String, property: String) -> String? {
+        let patterns = [
+            #"<meta[^>]*property="\#(property)"[^>]*content="([^"]*)""#,
+            #"<meta[^>]*content="([^"]*)"[^>]*property="\#(property)""#,
+            #"<meta[^>]*name="\#(property)"[^>]*content="([^"]*)""#,
+            #"<meta[^>]*content="([^"]*)"[^>]*name="\#(property)""#,
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(html.startIndex..., in: html)
+                if let match = regex.firstMatch(in: html, options: [], range: range),
+                   match.numberOfRanges > 2,
+                   let contentRange = Range(match.range(at: 2), in: html) {
+                    let value = String(html[contentRange])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !value.isEmpty { return value }
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func stripTags(_ html: String) -> String {
+        html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#x27;", with: "'")
     }
 
     private static func extractText(from html: String) -> String {

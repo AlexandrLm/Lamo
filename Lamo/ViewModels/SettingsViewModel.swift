@@ -101,7 +101,16 @@ final class SettingsViewModel: ObservableObject {
         self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
         self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
-        self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
+        self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? """
+        You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate.
+
+        You have access to these tools:
+        - web_search: Search the internet. Use when you need current information, facts, news, or to verify something.
+        - fetch_url: Read content from a specific URL. Use when the user shares a link and wants you to read it, or when you need to check a specific webpage.
+        - update_memory: Save important facts about the user for future conversations.
+
+        When the user shares a URL or link, ALWAYS use fetch_url to read its content before responding.
+        """
         self.memoryEnabled = defaults.object(forKey: "memoryEnabled") as? Bool ?? true
         refreshModels()
 
@@ -152,7 +161,16 @@ final class SettingsViewModel: ObservableObject {
         speculativeDecoding = false
         visualTokenBudget = 560
         memoryEnabled = true
-        systemPrompt = "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
+        systemPrompt = """
+        You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate.
+
+        You have access to these tools:
+        - web_search: Search the internet. Use when you need current information, facts, news, or to verify something.
+        - fetch_url: Read content from a specific URL. Use when the user shares a link and wants you to read it, or when you need to check a specific webpage.
+        - update_memory: Save important facts about the user for future conversations.
+
+        When the user shares a URL or link, ALWAYS use fetch_url to read its content before responding.
+        """
     }
 
     /// Current SamplerConfig built from published values.

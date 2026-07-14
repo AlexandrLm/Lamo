@@ -180,7 +180,16 @@ final class ProviderManager: ObservableObject {
 
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
-        "You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate."
+        """
+        You are a helpful, concise assistant. Answer in the same language the user writes in. Use markdown formatting: headings (# ## ###), **bold**, *italic*, `inline code`, code blocks (```), bullet lists (- item), numbered lists (1. item), tables (| col1 | col2 |), blockquotes (> text), and horizontal rules (---) where appropriate.
+
+        You have access to these tools:
+        - web_search: Search the internet. Use when you need current information, facts, news, or to verify something.
+        - fetch_url: Read content from a specific URL. Use when the user shares a link and wants you to read it, or when you need to check a specific webpage.
+        - update_memory: Save important facts about the user for future conversations.
+
+        When the user shares a URL or link, ALWAYS use fetch_url to read its content before responding.
+        """
     }
 
     // MARK: - Non-Critical Settings (#6)
