@@ -196,6 +196,25 @@ final class ProviderManager: ObservableObject {
     /// The provider wrapping the cached engine.
     private var cachedProvider: (any LLMProvider)?
 
+    /// Tokenize text using the engine's tokenizer. Returns token count.
+    func tokenizeCount(_ text: String) async -> Int? {
+        guard let engine = cachedEngine else { return nil }
+        return (try? await engine.tokenize(text))?.count
+    }
+
+    /// Tokenize multiple messages and return per-message token counts.
+    func tokenizeMessages(_ messages: [ChatMessage]) async -> [UUID: Int] {
+        guard let engine = cachedEngine else { return [:] }
+        var counts: [UUID: Int] = [:]
+        for msg in messages {
+            if let tokens = try? await engine.tokenize(msg.content) {
+                counts[msg.id] = tokens.count
+            }
+        }
+        return counts
+    }
+
+
     /// Debounce: prevents rapid re-initialization when settings change quickly.
     private var invalidateTask: Task<Void, Never>?
 

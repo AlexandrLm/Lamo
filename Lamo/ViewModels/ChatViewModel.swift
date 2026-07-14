@@ -10,6 +10,8 @@ final class ChatViewModel {
     var messages: [Message] = []
     var inputText: String = ""
     var isStreaming: Bool = false
+    /// Current context window usage breakdown.
+    var contextTracker: ContextTracker?
     /// Images attached to the current input, waiting to be sent.
     var pendingImages: [UIImage] = []
 
@@ -33,9 +35,13 @@ final class ChatViewModel {
 
         // Wire up memory service with the SwiftData context
         MemoryService.shared.setModelContext(modelContext)
+
+        // Build initial context tracker
+        Task { await refreshContextTracker() }
     }
 
     func send() {
+        Task { await refreshContextTracker() }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingImages.isEmpty else { return }
 
@@ -67,7 +73,7 @@ final class ChatViewModel {
         // 5) Build chat history for the provider (only non-empty messages)
         let chatMessages = messages
             .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
-            .map { ChatMessage(role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
 
         // 6) Stream response
         MemoryService.shared.currentConversationID = conversation.id
@@ -75,6 +81,7 @@ final class ChatViewModel {
     }
 
     func retryLastMessage() {
+        Task { await refreshContextTracker() }
         guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
 
         // Remove the last assistant message
@@ -89,7 +96,7 @@ final class ChatViewModel {
 
         let chatMessages = messages
             .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
-            .map { ChatMessage(role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
 
         startStreaming(chatMessages: chatMessages)
     }
@@ -165,6 +172,32 @@ final class ChatViewModel {
         messages.append(message)
         conversation.updatedAt = .now
         save()
+        Task { await refreshContextTracker() }
+    }
+
+    /// Rebuild the context tracker from current messages + settings.
+    private func refreshContextTracker() async {
+        let pm = ProviderManager.shared
+        let chatMessages = messages
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
+            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+
+        // Fetch conversation summary
+        var summary: String?
+        if let ctx = MemoryService.shared.modelContext {
+            let id = conversation.id
+            let descriptor = FetchDescriptor<Conversation>(predicate: #Predicate { $0.id == id })
+            summary = (try? ctx.fetch(descriptor).first?.summary)
+        }
+
+        contextTracker = ContextTracker.build(
+            messages: chatMessages,
+            systemPrompt: pm.systemPrompt,
+            memoryContext: MemoryService.shared.buildMemoryContext(),
+            conversationSummary: summary,
+            maxNumTokens: pm.maxNumTokens,
+            kvCacheAuto: pm.kvCacheAuto
+        )
     }
 
     private func save() {

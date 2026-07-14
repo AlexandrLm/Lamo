@@ -26,10 +26,14 @@ struct MessageBubble: View {
             // Actions bar (assistant only)
             if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
                 HStack(spacing: 12) {
-                    // Timestamp
+                    // Timestamp + token count
                     Text(message.timestamp, style: .time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+
+                    Text("~\(message.content.count / 4)tok")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.gray.opacity(0.5))
 
                     Spacer()
 
@@ -40,7 +44,7 @@ struct MessageBubble: View {
                     actionButton(
                         icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
                         label: "Copy",
-                        color: showCopyConfirmation ? LamoTheme.Colors.accent : Color(.tertiaryLabel)
+                        color: showCopyConfirmation ? Color.white : Color(.tertiaryLabel)
                     ) {
                         copyContent()
                     }
@@ -62,13 +66,16 @@ struct MessageBubble: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // User timestamp (simpler)
+            // User timestamp + token count
             if message.role == .user {
                 HStack {
                     Spacer()
                     Text(message.timestamp, style: .time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                    Text("· ~\(message.content.count / 4)tok")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.gray.opacity(0.5))
                 }
                 .padding(.trailing, 16)
             }
@@ -88,10 +95,10 @@ struct MessageBubble: View {
             Text(modelName)
                 .font(.system(.caption2, design: .rounded).weight(.medium))
         }
-        .foregroundStyle(LamoTheme.Colors.accent)
+        .foregroundStyle(Color.white)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(LamoTheme.Colors.accent.opacity(0.1))
+        .background(Color.white.opacity(0.1))
         .clipShape(Capsule())
     }
 
@@ -131,10 +138,10 @@ struct MessageBubble: View {
             if !message.content.isEmpty {
                 Text(message.content)
                     .font(.body)
-                    .foregroundStyle(LamoTheme.Colors.bubbleTextUser)
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(LamoTheme.Colors.accent)
+                    .background(Color.white)
                     .clipShape(
                         UnevenRoundedRectangle(
                             topLeadingRadius: 16,
@@ -283,11 +290,11 @@ struct ThinkingView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "brain")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .foregroundStyle(Color.white)
 
                     if isStreaming && !isExpanded {
                         ProgressView()
-                            .tint(LamoTheme.Colors.accent)
+                            .tint(Color.white)
                             .controlSize(.small)
                     } else {
                         Text("Thinking")
@@ -329,6 +336,6 @@ struct ThinkingView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassEffect(.regular.tint(LamoTheme.Colors.accent.opacity(0.08)), in: .rect(cornerRadius: 10))
+        .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: .rect(cornerRadius: 10))
     }
 }

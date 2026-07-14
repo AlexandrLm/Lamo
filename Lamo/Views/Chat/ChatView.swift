@@ -6,6 +6,7 @@ struct ChatView: View {
     @State private var isUserNearBottom = true
     @Environment(\.modelContext) private var modelContext
     @State private var scrollPosition = ScrollPosition()
+    @State private var showContextDetail = false
     var onNewChat: (() -> Void)?
 
     init(
@@ -59,6 +60,11 @@ struct ChatView: View {
                 scrollToBottom()
             }
         }
+                .safeAreaInset(edge: .top) {
+            ContextBarView(tracker: viewModel.contextTracker) {
+                showContextDetail = true
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             ChatInputBar(
                 text: $viewModel.inputText,
@@ -81,6 +87,9 @@ struct ChatView: View {
         .background(LamoTheme.Colors.background)
         .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showContextDetail) {
+            ContextDetailView(tracker: viewModel.contextTracker)
+        }
     }
 
     // MARK: - Empty State
@@ -92,20 +101,13 @@ struct ChatView: View {
                 // Gradient logo
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.6)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color.white)
                         .frame(width: 72, height: 72)
 
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .font(.system(size: 28, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.black)
                 }
-                .shadow(color: LamoTheme.Colors.accent.opacity(0.3), radius: 12, y: 4)
 
                 VStack(spacing: 6) {
                     Text("How can I help you today?")
@@ -121,10 +123,10 @@ struct ChatView: View {
                 } label: {
                     Label("Download a Model", systemImage: "arrow.down.circle")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(LamoTheme.Colors.accent.opacity(0.1))
+                        .background(Color.white.opacity(0.1))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -155,25 +157,19 @@ struct StreamingIndicator: View {
             // Model avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.white)
                     .frame(width: 28, height: 28)
 
                 Image(systemName: "sparkle")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.black)
             }
 
             // Bubble with dots
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
-                        .fill(LamoTheme.Colors.accent)
+                        .fill(Color.white)
                         .frame(width: 7, height: 7)
                         .offset(y: dotOffsets[index])
                 }
