@@ -22,14 +22,11 @@ struct ModelCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row
             HStack(alignment: .top, spacing: 12) {
-                // Icon
                 Image(systemName: model.systemImage)
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 36, height: 36)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
 
-                // Info
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(model.displayName)
@@ -40,7 +37,7 @@ struct ModelCardView: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.15), in: Capsule())
+                                .glassEffect(.regular, in: .rect(cornerRadius: 6))
                         }
                     }
                     Text(model.description)
@@ -51,7 +48,6 @@ struct ModelCardView: View {
 
                 Spacer(minLength: 0)
 
-                // Status
                 if isDownloaded && !isActiveModel {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
@@ -151,12 +147,7 @@ struct ModelCardView: View {
             }
         }
         .padding(14)
-        .background(Color.white.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
         .confirmationDialog("Delete \(model.displayName)?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 downloadManager.deleteModel(model)

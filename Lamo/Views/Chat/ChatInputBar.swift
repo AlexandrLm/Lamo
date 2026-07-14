@@ -326,18 +326,15 @@ struct ModelPickerSheet: View {
                                 isPresented = false
                             } label: {
                                 HStack(spacing: 12) {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.white.opacity(0.06))
-                                            .frame(width: 36, height: 36)
-                                        Image(systemName: "cpu")
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(.secondary)
-                                    }
+                                    Image(systemName: "cpu")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 32, height: 32)
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(model.displayName)
                                             .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(.primary)
                                         Text("On-device")
                                             .font(.caption2)
                                             .foregroundStyle(.tertiary)
@@ -346,9 +343,9 @@ struct ModelPickerSheet: View {
                                     Spacer()
 
                                     if provider.litertLMModelPath == model.path {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(LamoTheme.Colors.accent)
-                                            .font(.title3)
+                                        Image(systemName: "checkmark")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -373,10 +370,10 @@ struct ModelPickerSheet: View {
                             }
                         } icon: {
                             Image(systemName: "brain")
-                                .foregroundStyle(provider.thinkingMode ? LamoTheme.Colors.accent : .secondary)
+                                .foregroundStyle(provider.thinkingMode ? .white.opacity(0.7) : .secondary)
                         }
                     }
-                    .tint(LamoTheme.Colors.accent)
+                    .tint(.white.opacity(0.5))
                 }
 
                 Section {

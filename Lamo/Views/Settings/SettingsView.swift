@@ -403,6 +403,7 @@ struct SettingsView: View {
                         downloadManager: downloadManager,
                         isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
                     )
+                    .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
             }
