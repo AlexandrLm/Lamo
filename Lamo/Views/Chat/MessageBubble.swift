@@ -24,6 +24,25 @@ struct MessageBubble: View {
                 assistantContent
             }
 
+            // Benchmark line (subtle, assistant only)
+            if message.role == .assistant && !message.isStreaming, let b = message.benchmark {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 8))
+                    Text("\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
+                    Text("·")
+                    Text("\(String(format: "%.1f", b.timeToFirstToken))s")
+                    if b.decodeTokenCount > 0 {
+                        Text("·")
+                        Text("\(b.decodeTokenCount) tokens")
+                    }
+                    Spacer()
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.4))
+                .padding(.horizontal, 18)
+            }
+
             // Actions bar (assistant only)
             if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
                 HStack(spacing: 12) {

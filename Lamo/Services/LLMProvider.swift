@@ -1,8 +1,18 @@
 import Foundation
 
+/// Benchmark stats captured after each inference response.
+struct BenchmarkData: Codable, Sendable {
+    let timeToFirstToken: Double   // seconds
+    let decodeTokensPerSec: Double // tok/s
+    let decodeTokenCount: Int      // total decoded tokens
+    let prefillTokensPerSec: Double // tok/s (for context)
+    let prefillTokenCount: Int
+}
+
 enum StreamingToken: @unchecked Sendable {
     case delta(String)
     case thinkingDelta(String)
+    case benchmark(BenchmarkData)
     case done
     case error(any Error & Sendable)
 }

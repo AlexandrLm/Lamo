@@ -189,6 +189,19 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
 
         guard !Task.isCancelled else { return }
+
+        // Capture benchmark data from the conversation
+        if let benchmarkInfo = try? conversation.getBenchmarkInfo() {
+            let data = BenchmarkData(
+                timeToFirstToken: benchmarkInfo.timeToFirstTokenInSecond,
+                decodeTokensPerSec: benchmarkInfo.lastDecodeTokensPerSecond,
+                decodeTokenCount: benchmarkInfo.lastDecodeTokenCount,
+                prefillTokensPerSec: benchmarkInfo.lastPrefillTokensPerSecond,
+                prefillTokenCount: benchmarkInfo.lastPrefillTokenCount
+            )
+            continuation.yield(.benchmark(data))
+        }
+
         continuation.yield(.done)
         continuation.finish()
     }

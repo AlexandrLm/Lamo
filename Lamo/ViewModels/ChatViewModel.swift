@@ -14,6 +14,8 @@ final class ChatViewModel {
     var contextTracker: ContextTracker?
     /// Images attached to the current input, waiting to be sent.
     var pendingImages: [UIImage] = []
+    /// Benchmark data captured from the last inference response.
+    private var pendingBenchmark: BenchmarkData?
 
     var conversationTitle: String { conversation.title }
 
@@ -132,6 +134,8 @@ final class ChatViewModel {
                     guard let id = self.streamingMessageID,
                           let index = self.messages.firstIndex(where: { $0.id == id }) else { continue }
                     self.messages[index].thinkingContent += thought
+                case .benchmark(let data):
+                    self.pendingBenchmark = data
                 case .done:
                     self.finalizeStreaming(success: true)
                     return
@@ -157,6 +161,11 @@ final class ChatViewModel {
         }
         if success == false, let error {
             messages[index].content = "Error: \(error.localizedDescription)"
+        }
+        // Attach benchmark data to the response message
+        if let benchmark = pendingBenchmark {
+            messages[index].benchmark = benchmark
+            pendingBenchmark = nil
         }
         messages[index].isStreaming = false
         streamingMessageID = nil

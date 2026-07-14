@@ -11,6 +11,8 @@ final class Message {
     var isStreaming: Bool
     /// Paths to attached images (stored in app's tmp directory).
     var imagePaths: [String] = []
+    /// JSON-encoded BenchmarkData for this response.
+    var benchmarkJSON: String?
 
     @Relationship(inverse: \Conversation.messages)
     var conversation: Conversation?
@@ -21,6 +23,21 @@ final class Message {
     }
 
     var hasImages: Bool { !imagePaths.isEmpty }
+    var benchmark: BenchmarkData? {
+        get {
+            guard let json = benchmarkJSON,
+                  let data = json.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(BenchmarkData.self, from: data)
+        }
+        set {
+            guard let newValue,
+                  let data = try? JSONEncoder().encode(newValue) else {
+                benchmarkJSON = nil
+                return
+            }
+            benchmarkJSON = String(data: data, encoding: .utf8)
+        }
+    }
 
     init(
         id: UUID = UUID(),
@@ -30,7 +47,8 @@ final class Message {
         timestamp: Date = .now,
         isStreaming: Bool = false,
         imagePaths: [String] = [],
-        conversation: Conversation? = nil
+        conversation: Conversation? = nil,
+        benchmarkJSON: String? = nil
     ) {
         self.id = id
         self.content = content
@@ -40,6 +58,7 @@ final class Message {
         self.isStreaming = isStreaming
         self.imagePaths = imagePaths
         self.conversation = conversation
+        self.benchmarkJSON = benchmarkJSON
     }
 }
 
