@@ -181,6 +181,23 @@ final class DownloadManager: ObservableObject {
         }
     }
 
+    /// Compute SHA256 of a file using streaming (never loads entire file into memory).
+    private func computeFileSHA256(at url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { handle.closeFile() }
+
+        var hasher = SHA256()
+        while autoreleasepool(invoking: {
+            let data = handle.readData(ofLength: 64 * 1024) // 64KB chunks
+            guard !data.isEmpty else { return false }
+            hasher.update(data: data)
+            return true
+        }) {}
+
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
     func handleCompletion(filename: String, tempURL: URL?, error: Error?) {
         Task { @MainActor in
             // Prevent double-handling (race condition between didFinishDownloadingTo and didCompleteWithError)
@@ -222,31 +239,33 @@ final class DownloadManager: ObservableObject {
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destination)
 
-                // #10: SHA256 verification after download
+                // SHA256 verification after download
                 if let model = DownloadSessionDelegate.shared.pendingModels[filename],
                    let modelURL = model.downloadURL {
                     let sha256URL = URL(string: modelURL.absoluteString + ".sha256")
                     if let sha256URL = sha256URL {
                         do {
-                            let (sha256Data, _) = try await URLSession.shared.data(from: sha256URL)
-                            let expectedHash = String(data: sha256Data, encoding: .utf8)?
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                            if let expectedHash = expectedHash, !expectedHash.isEmpty {
-                                // Compute SHA256 of the downloaded model file
-                                let fileData = try Data(contentsOf: destination)
-                                let computedHash = SHA256.hash(data: fileData)
-                                    .map { String(format: "%02x", $0) }
-                                    .joined()
-                                if computedHash != expectedHash {
-                                    LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
-                                    try FileManager.default.removeItem(at: destination)
-                                    self.activeDownloads[filename]?.error = "File integrity check failed (SHA256 mismatch). Please re-download."
-                                    self.activeDownloads[filename]?.isDownloading = false
-                                    self.observations.removeValue(forKey: filename)
-                                    self.tasks.removeValue(forKey: filename)
-                                    return
+                            let (sha256Data, response) = try await URLSession.shared.data(from: sha256URL)
+                            // Only verify if we got a small text file (not an HTML error page)
+                            let httpResponse = response as? HTTPURLResponse
+                            if httpResponse?.statusCode == 200 {
+                                let expectedHash = String(data: sha256Data, encoding: .utf8)?
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .split(separator: " ").first.map(String.init)
+                                if let expectedHash = expectedHash, expectedHash.count == 64 {
+                                    // Stream-based SHA256 — never load entire file into memory
+                                    let computedHash = try computeFileSHA256(at: destination)
+                                    if computedHash != expectedHash {
+                                        LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
+                                        try FileManager.default.removeItem(at: destination)
+                                        self.activeDownloads[filename]?.error = "File integrity check failed. Please re-download."
+                                        self.activeDownloads[filename]?.isDownloading = false
+                                        self.observations.removeValue(forKey: filename)
+                                        self.tasks.removeValue(forKey: filename)
+                                        return
+                                    }
+                                    LamoLogger.download.info("SHA256 verified for \(filename)")
                                 }
-                                LamoLogger.download.info("SHA256 verified for \(filename)")
                             }
                         } catch {
                             // .sha256 file doesn't exist or network error — skip verification

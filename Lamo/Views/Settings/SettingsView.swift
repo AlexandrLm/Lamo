@@ -403,8 +403,7 @@ struct SettingsView: View {
                         downloadManager: downloadManager,
                         isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
                     )
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
             }
 
@@ -422,6 +421,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .foregroundStyle(.white.opacity(0.7))
                 .disabled(isCopyingFile)
             } footer: {
                 Text(".litertlm, .bin, or .tflite model files.")
@@ -450,6 +450,9 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            // Storage info
+            storageSection
 
             if let info = vm.modelInfo {
                 Section("Model Info") {
@@ -1060,5 +1063,64 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Storage Section
+
+    private var storageSection: some View {
+        Section {
+            LabeledContent("Location", value: "On My iPhone → Lamo → models")
+
+            let totalSize = calculateModelsSize()
+            if totalSize > 0 {
+                LabeledContent("Used Space", value: ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
+            }
+
+            if let freeSpace = getFreeSpace() {
+                LabeledContent("Available", value: ByteCountFormatter.string(fromByteCount: freeSpace, countStyle: .file))
+            }
+
+            Button {
+                openModelsFolder()
+            } label: {
+                Label("Open in Files", systemImage: "folder")
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        } header: {
+            Text("Storage")
+        } footer: {
+            Text("Models are stored in the Files app under On My iPhone → Lamo → models. You can also add .litertlm files there manually.")
+        }
+    }
+
+    // MARK: - Storage Helpers
+
+    private func calculateModelsSize() -> Int64 {
+        let modelsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("models")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: modelsDir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for file in files where file.pathExtension == "litertlm" || file.pathExtension == "bin" || file.pathExtension == "tflite" {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+               let size = attrs[.size] as? Int64 {
+                total += size
+            }
+        }
+        return total
+    }
+
+    private func getFreeSpace() -> Int64? {
+        let modelsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        if let values = try? modelsDir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]) {
+            return values.volumeAvailableCapacityForImportantUsage
+        }
+        return nil
+    }
+
+    private func openModelsFolder() {
+        let modelsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("models")
+        // Ensure directory exists
+        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+        // Open in Files app using the folder URL
+        UIApplication.shared.open(modelsDir)
     }
 }
