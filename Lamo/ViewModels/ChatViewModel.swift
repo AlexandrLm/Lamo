@@ -135,7 +135,6 @@ final class ChatViewModel {
                           let index = self.messages.firstIndex(where: { $0.id == id }) else { continue }
                     self.messages[index].thinkingContent += thought
                 case .benchmark(let data):
-                    print("[VM] Benchmark received: \(data.decodeTokensPerSec) tok/s")
                     self.pendingBenchmark = data
                 case .done:
                     self.finalizeStreaming(success: true)
@@ -165,7 +164,6 @@ final class ChatViewModel {
         }
         // Attach benchmark data to the response message
         if let benchmark = pendingBenchmark {
-            print("[VM] Saving benchmark to message")
             messages[index].benchmark = benchmark
             pendingBenchmark = nil
         }

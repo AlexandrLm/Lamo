@@ -129,7 +129,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var topK: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMTopK") as? Int ?? 40 }
+        get { UserDefaults.standard.object(forKey: "litertLMTopK") as? Int ?? 64 }
         set { UserDefaults.standard.set(newValue, forKey: "litertLMTopK") }
     }
 
@@ -139,7 +139,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var temperature: Double {
-        get { UserDefaults.standard.object(forKey: "litertLMTemperature") as? Double ?? 0.7 }
+        get { UserDefaults.standard.object(forKey: "litertLMTemperature") as? Double ?? 1.0 }
         set { UserDefaults.standard.set(newValue, forKey: "litertLMTemperature") }
     }
 
@@ -160,7 +160,7 @@ final class ProviderManager: ObservableObject {
     }
 
     var speculativeDecoding: Bool {
-        get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false }
+        get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? true }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMSpeculativeDecoding")
             updateNonCriticalSettings()

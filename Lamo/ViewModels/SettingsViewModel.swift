@@ -99,7 +99,7 @@ final class SettingsViewModel: ObservableObject {
         self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 1.0
         self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096
         self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
-        self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
+        self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? true
         self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
         self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
         self.memoryEnabled = defaults.object(forKey: "memoryEnabled") as? Bool ?? true
@@ -149,7 +149,7 @@ final class SettingsViewModel: ObservableObject {
         topP = 0.95
         temperature = 1.0
         maxNumTokens = 4096
-        speculativeDecoding = false
+        speculativeDecoding = true
         visualTokenBudget = 560
         memoryEnabled = true
         systemPrompt = "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
