@@ -24,41 +24,53 @@ struct ChatView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                if viewModel.messages.isEmpty {
-                    emptyChatView
-                        .id("empty")
-                }
+        ZStack(alignment: .bottomTrailing) {
+            chatScrollView
 
-                ForEach(viewModel.messages) { message in
-                    let tokenCount = viewModel.contextTracker?.messageUsages.first(where: { $0.id == message.id })?.tokenCount
-                    MessageBubble(message: message, tokenCount: tokenCount, onRetry: {
-                        viewModel.retryLastMessage()
-                    })
-                    .id(message.id)
-                }
-
-                // Streaming indicator
-                if viewModel.isStreaming && (viewModel.messages.last?.content.isEmpty ?? true) {
-                    StreamingIndicator()
-                        .id("streaming")
+            // "Scroll to bottom" floating button
+            if !isUserNearBottom && !viewModel.messages.isEmpty {
+                scrollToBottomButton
+            }
+        }
+        .background(LamoTheme.Colors.background)
+        .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ContextBarView(tracker: viewModel.contextTracker) {
+                    showContextDetail = true
                 }
             }
-            .padding(.vertical, 20)
-            .padding(.bottom, 8)
+        }
+        .sheet(isPresented: $showContextDetail) {
+            ContextDetailView(tracker: viewModel.contextTracker)
+        }
+    }
+
+    // MARK: - Chat Scroll View
+
+    private var chatScrollView: some View {
+        ScrollView {
+            chatMessageList
         }
         .scrollPosition($scrollPosition)
         .scrollDismissesKeyboard(.interactively)
         .onTapGesture {
             hideKeyboard()
         }
+        .onScrollGeometryChange(for: Bool.self) { (geo: ScrollGeometry) -> Bool in
+            let bottomEdge = geo.contentOffset.y + geo.containerSize.height
+            return bottomEdge >= geo.contentSize.height - 150
+        } action: { (_: Bool, nearBottom: Bool) in
+            isUserNearBottom = nearBottom
+        }
         .onChange(of: viewModel.messages.count) {
+            isUserNearBottom = true
             scrollToBottom()
         }
         .onChange(of: viewModel.messages.last?.content) {
             if isUserNearBottom {
-                scrollToBottom()
+                scrollToBottom(animated: false)
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -80,19 +92,49 @@ struct ChatView: View {
                 .hidden()
             }
         }
-        .background(LamoTheme.Colors.background)
-        .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                ContextBarView(tracker: viewModel.contextTracker) {
-                    showContextDetail = true
-                }
+    }
+
+    private var chatMessageList: some View {
+        LazyVStack(spacing: 16) {
+            if viewModel.messages.isEmpty {
+                emptyChatView
+                    .id("empty")
+            }
+
+            ForEach(viewModel.messages) { message in
+                let tokenCount = viewModel.contextTracker?.messageUsages.first(where: { $0.id == message.id })?.tokenCount
+                MessageBubble(message: message, tokenCount: tokenCount, onRetry: {
+                    viewModel.retryLastMessage()
+                })
+                .id(message.id)
+            }
+
+            if viewModel.isStreaming && (viewModel.messages.last?.content.isEmpty ?? true) {
+                StreamingIndicator()
+                    .id("streaming")
             }
         }
-        .sheet(isPresented: $showContextDetail) {
-            ContextDetailView(tracker: viewModel.contextTracker)
+        .padding(.vertical, 20)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Scroll to Bottom Button
+
+    private var scrollToBottomButton: some View {
+        Button {
+            isUserNearBottom = true
+            scrollToBottom()
+        } label: {
+            Image(systemName: "arrow.down")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 32, height: 32)
+                .background(.ultraThinMaterial, in: Circle())
         }
+        .buttonStyle(.plain)
+        .padding(.trailing, 16)
+        .padding(.bottom, 80)
+        .transition(.opacity.combined(with: .scale))
     }
 
     // MARK: - Empty State
@@ -141,8 +183,12 @@ struct ChatView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }
 
-    private func scrollToBottom() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+    private func scrollToBottom(animated: Bool = true) {
+        if animated {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                scrollPosition.scrollTo(edge: .bottom)
+            }
+        } else {
             scrollPosition.scrollTo(edge: .bottom)
         }
     }
