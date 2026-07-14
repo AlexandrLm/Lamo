@@ -5,6 +5,7 @@ struct ModelCardView: View {
     @ObservedObject var downloadManager: DownloadManager
     var isActiveModel: Bool = false
     @State private var showDeleteConfirmation = false
+    @State private var showCellularConfirmation = false
 
     private var downloadState: DownloadManager.DownloadState? {
         downloadManager.activeDownloads[model.filename]
@@ -74,6 +75,16 @@ struct ModelCardView: View {
                         Text("\(state.downloadedSizeString) / \(state.totalSizeString)")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                        if !state.speedString.isEmpty {
+                            Text("· \(state.speedString)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
+                        if !state.etaString.isEmpty {
+                            Text("· \(state.etaString)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
                         Spacer()
                         Text("\(state.progressPercentage)%")
                             .font(.caption2.monospacedDigit())
@@ -155,6 +166,22 @@ struct ModelCardView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will remove the model from your device.")
+        }
+        .confirmationDialog(
+            "Download over cellular?",
+            isPresented: Binding(
+                get: { downloadManager.pendingCellularDownload?.id == model.id },
+                set: { if !$0 { downloadManager.cancelCellularDownload() } }
+            )
+        ) {
+            Button("Download (\(model.fileSizeString))") {
+                downloadManager.confirmCellularDownload()
+            }
+            Button("Cancel", role: .cancel) {
+                downloadManager.cancelCellularDownload()
+            }
+        } message: {
+            Text("\(model.displayName) is \(model.fileSizeString). This may use significant cellular data.")
         }
     }
 

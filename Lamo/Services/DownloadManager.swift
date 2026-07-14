@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import CryptoKit
+import Network
 import os
 
 /// Manages downloading LiteRT-LM models from HuggingFace.
@@ -10,11 +11,18 @@ final class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
 
     @Published var activeDownloads: [String: DownloadState] = [:]
+    /// Set when a large download is attempted on cellular — UI shows confirmation.
+    @Published var pendingCellularDownload: PresetModel? = nil
     private var tasks: [String: URLSessionDownloadTask] = [:]
     private var observations: [String: NSKeyValueObservation] = [:]
     private var resumeData: [String: Data] = [:]
     private let session: URLSession
     private let backgroundSessionID = "com.lamo.download"
+
+    // MARK: - Network Monitor
+    private let networkMonitor = NWPathMonitor()
+    private let networkQueue = DispatchQueue(label: "com.lamo.network")
+    private(set) var isExpensive = false  // true = cellular or hotspot
 
     /// Directory for persisting resume data across app launches.
     private var resumeDataURL: URL {
@@ -33,6 +41,11 @@ final class DownloadManager: ObservableObject {
         var retryCount: Int = 0
         var lastError: String? = nil
 
+        // Speed tracking
+        var speedBytesPerSec: Double = 0
+        var lastSpeedUpdateTime: Date = Date()
+        var lastSpeedUpdateBytes: Int64 = 0
+
         var progressPercentage: Int {
             guard totalBytes > 0 else { return Int(progress * 100) }
             return Int(progress * 100)
@@ -44,6 +57,31 @@ final class DownloadManager: ObservableObject {
 
         var totalSizeString: String {
             ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+        }
+
+        var speedString: String {
+            guard speedBytesPerSec > 0 else { return "" }
+            let mbps = speedBytesPerSec / 1_048_576
+            if mbps >= 1.0 {
+                return String(format: "%.1f MB/s", mbps)
+            } else {
+                return String(format: "%.0f KB/s", speedBytesPerSec / 1024)
+            }
+        }
+
+        var etaString: String {
+            guard speedBytesPerSec > 0, totalBytes > bytesWritten else { return "" }
+            let remainingBytes = Double(totalBytes - bytesWritten)
+            let seconds = remainingBytes / speedBytesPerSec
+            if seconds < 60 {
+                return String(format: "~%.0fs", seconds)
+            } else if seconds < 3600 {
+                return String(format: "~%.0f min", seconds / 60)
+            } else {
+                let hours = Int(seconds / 3600)
+                let mins = Int(seconds.truncatingRemainder(dividingBy: 3600)) / 60
+                return "~\(hours)h \(mins)m"
+            }
         }
     }
 
@@ -58,6 +96,14 @@ final class DownloadManager: ObservableObject {
         loadPersistedResumeData()
         // #7: Clean up old resume data (> 7 days)
         cleanupOldResumeData()
+
+        // Monitor network — track expensive (cellular) connections
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                self?.isExpensive = path.isExpensive
+            }
+        }
+        networkMonitor.start(queue: networkQueue)
     }
 
     // MARK: - Resume Data Persistence (#7)
@@ -120,6 +166,30 @@ final class DownloadManager: ObservableObject {
             return
         }
 
+        // Cellular warning for large files (> 500 MB)
+        if isExpensive && model.fileSizeGB > 0.5 {
+            pendingCellularDownload = model
+            return
+        }
+
+        startDownload(model: model, url: url)
+    }
+
+    /// Called after user confirms cellular download.
+    func confirmCellularDownload() {
+        guard let model = pendingCellularDownload else { return }
+        pendingCellularDownload = nil
+        guard let url = model.downloadURL else { return }
+        startDownload(model: model, url: url)
+    }
+
+    /// Called if user cancels cellular download.
+    func cancelCellularDownload() {
+        pendingCellularDownload = nil
+    }
+
+    private func startDownload(model: PresetModel, url: URL) {
+
         // Create models directory
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
@@ -137,13 +207,32 @@ final class DownloadManager: ObservableObject {
         // Store metadata for delegate
         DownloadSessionDelegate.shared.pendingModels[model.filename] = model
 
-        // Track progress
+        // Track progress + speed
         let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
             guard let self else { return }
             Task { @MainActor in
-                self.activeDownloads[model.filename]?.progress = progress.fractionCompleted
-                self.activeDownloads[model.filename]?.bytesWritten = progress.completedUnitCount
-                self.activeDownloads[model.filename]?.totalBytes = progress.totalUnitCount
+                let now = Date()
+                var state = self.activeDownloads[model.filename] ?? DownloadState()
+                let newBytes = progress.completedUnitCount
+                state.progress = progress.fractionCompleted
+                state.bytesWritten = newBytes
+                state.totalBytes = progress.totalUnitCount
+
+                // Calculate speed from delta (throttle to ~2 updates/sec)
+                let elapsed = now.timeIntervalSince(state.lastSpeedUpdateTime)
+                if elapsed >= 0.5 {
+                    let deltaBytes = newBytes - state.lastSpeedUpdateBytes
+                    if deltaBytes > 0 && elapsed > 0 {
+                        // EMA smoothing (70% old + 30% new) for stable display
+                        let instantSpeed = Double(deltaBytes) / elapsed
+                        state.speedBytesPerSec = state.speedBytesPerSec > 0
+                            ? state.speedBytesPerSec * 0.7 + instantSpeed * 0.3
+                            : instantSpeed
+                    }
+                    state.lastSpeedUpdateTime = now
+                    state.lastSpeedUpdateBytes = newBytes
+                }
+                self.activeDownloads[model.filename] = state
             }
         }
 

@@ -59,7 +59,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
             return "Compact multimodal model. Fast inference, supports images."
         }
     }
-
     var highlights: [String] {
         switch self {
         case .gemma4E4B:

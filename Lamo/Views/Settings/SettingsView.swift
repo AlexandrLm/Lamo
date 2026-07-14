@@ -381,18 +381,15 @@ struct SettingsView: View {
             if !vm.availableModels.isEmpty {
                 Section {
                     Picker(selection: Binding(
-                        get: { vm.selectedModel ?? "" },
-                        set: { vm.selectedModel = $0.isEmpty ? nil : $0; vm.loadModelInfo() }
+                        get: { vm.selectedModel ?? vm.availableModels.first ?? "" },
+                        set: { vm.selectedModel = $0; vm.loadModelInfo() }
                     )) {
-                        Text("Auto-detect").tag("")
                         ForEach(vm.availableModels, id: \.self) { model in
                             Text(vm.displayName(for: model)).tag(model)
                         }
                     } label: {
                         Label("Active Model", systemImage: "bolt.circle.fill")
                     }
-                } footer: {
-                    Text("Auto-detect picks the best available model.")
                 }
             }
 
