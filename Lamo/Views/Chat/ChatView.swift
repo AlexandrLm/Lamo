@@ -144,16 +144,8 @@ struct ChatView: View {
             Spacer(minLength: 100)
 
             VStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 72, height: 72)
-
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 28, weight: .medium))
-                        .foregroundStyle(.black)
-                }
-                .shadow(color: .white.opacity(0.06), radius: 24, y: 10)
+                LogoAnimationView(size: 100)
+                    .shadow(color: .white.opacity(0.04), radius: 30, y: 8)
 
                 VStack(spacing: 6) {
                     Text("How can I help you today?")
