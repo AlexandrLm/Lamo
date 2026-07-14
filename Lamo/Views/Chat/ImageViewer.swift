@@ -53,7 +53,7 @@ struct ImageViewer: View {
                     .frame(width: 32, height: 32)
                     .background(Color.black.opacity(0.5), in: Circle())
             }
-            .padding(.top, 16)
+            .padding(.top, 60)
             .padding(.trailing, 16)
 
             // Image counter

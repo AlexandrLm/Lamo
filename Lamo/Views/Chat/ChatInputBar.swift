@@ -1,10 +1,12 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+import os
 
 struct ChatInputBar: View {
     @Binding var text: String
     @Binding var pendingImages: [UIImage]
+    @Binding var pendingFiles: [PendingFile]
     let isStreaming: Bool
     let onSend: () -> Void
     let onStop: () -> Void
@@ -13,6 +15,7 @@ struct ChatInputBar: View {
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
     @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
     @State private var sendTrigger = false
     @ObservedObject private var provider = ProviderManager.shared
 
@@ -21,6 +24,11 @@ struct ChatInputBar: View {
             // Pending images preview
             if !pendingImages.isEmpty {
                 pendingImagesRow
+            }
+
+            // Pending files preview
+            if !pendingFiles.isEmpty {
+                pendingFilesRow
             }
 
             // Top: text field area
@@ -41,7 +49,7 @@ struct ChatInputBar: View {
 
             // Bottom: toolbar row
             HStack(spacing: 10) {
-                // Plus button — menu with Camera + Photo Library
+                // Plus button — menu with Camera + Photo Library + Files
                 Menu {
                     Button {
                         showCamera = true
@@ -56,6 +64,13 @@ struct ChatInputBar: View {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
                         .accessibilityLabel("Attach image")
+
+                    Button {
+                        showFileImporter = true
+                    } label: {
+                        Label("Files", systemImage: "doc")
+                    }
+                        .accessibilityLabel("Attach file")
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "plus")
@@ -64,9 +79,10 @@ struct ChatInputBar: View {
                             .frame(width: 32, height: 32)
                             .background(Color.white.opacity(0.1), in: Circle())
 
-                        // Badge: image count
-                        if !pendingImages.isEmpty {
-                            Text("\(pendingImages.count)")
+                        // Badge: attachment count
+                        let attachCount = pendingImages.count + pendingFiles.count
+                        if attachCount > 0 {
+                            Text("\(attachCount)")
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(.black)
                                 .frame(width: 16, height: 16)
@@ -76,7 +92,7 @@ struct ChatInputBar: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Attach image")
+                .accessibilityLabel("Attach")
                 .onChange(of: photoPickerItems) {
                     guard !photoPickerItems.isEmpty else { return }
                     Task {
@@ -112,7 +128,7 @@ struct ChatInputBar: View {
 
                 Spacer()
 
-                // Send / Stop button (white circle like the reference)
+                // Send / Stop button
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")
@@ -141,7 +157,6 @@ struct ChatInputBar: View {
                     .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
                     .transition(.scale.combined(with: .opacity))
                 } else {
-                    // Dimmed send when empty
                     Image(systemName: "arrow.up")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.3))
@@ -156,7 +171,7 @@ struct ChatInputBar: View {
         .frame(maxWidth: LamoTheme.maxContentWidth)
         .padding(.bottom, 6)
         .padding(.horizontal, 5)
-        .onDrop(of: [.image], delegate: ImageDropDelegate(pendingImages: $pendingImages))
+        .onDrop(of: [.image, .fileURL], delegate: ChatDropDelegate(pendingImages: $pendingImages, pendingFiles: $pendingFiles))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: canSend)
         .sheet(isPresented: $showModelPicker) {
@@ -181,6 +196,21 @@ struct ChatInputBar: View {
             maxSelectionCount: 5,
             matching: .images
         )
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                for url in urls {
+                    let pending = PendingFile(url: url)
+                    pendingFiles.append(pending)
+                }
+            case .failure(let error):
+                LamoLogger.ui.error("File import failed: \(error)")
+            }
+        }
     }
 
     private var modelDisplayName: String {
@@ -189,7 +219,7 @@ struct ChatInputBar: View {
     }
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty
     }
 
     // MARK: - Pending Images Preview
@@ -213,6 +243,70 @@ struct ChatInputBar: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
             .padding(.bottom, 4)
+        }
+    }
+
+    // MARK: - Pending Files Preview
+
+    private var pendingFilesRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(pendingFiles) { file in
+                    PendingFileThumb(file: file) {
+                        withAnimation(.spring(response: 0.2)) {
+                            pendingFiles.removeAll { $0.id == file.id }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, pendingImages.isEmpty ? 10 : 4)
+            .padding(.bottom, 4)
+        }
+    }
+}
+
+// MARK: - Pending File Thumbnail
+
+private struct PendingFileThumb: View {
+    let file: PendingFile
+    let onRemove: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            HStack(spacing: 8) {
+                Image(systemName: file.iconName)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(file.name)
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text(file.formattedSize)
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+            )
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.black.opacity(0.55))
+            }
+            .offset(x: 4, y: -4)
         }
     }
 }
@@ -246,16 +340,16 @@ private struct PendingImageThumb: View {
     }
 }
 
-// MARK: - Image Drop Delegate (iPad Drag & Drop)
+// MARK: - Drop Delegate (iPad Drag & Drop — images + files)
 
-struct ImageDropDelegate: DropDelegate {
+struct ChatDropDelegate: DropDelegate {
     @Binding var pendingImages: [UIImage]
+    @Binding var pendingFiles: [PendingFile]
 
     func performDrop(info: DropInfo) -> Bool {
-        let providers = info.itemProviders(for: [.image])
-        guard !providers.isEmpty else { return false }
-
-        for provider in providers {
+        // Try images first
+        let imageProviders = info.itemProviders(for: [.image])
+        for provider in imageProviders {
             _ = provider.loadObject(ofClass: UIImage.self) { image, error in
                 guard let uiImage = image as? UIImage, error == nil else { return }
                 let resized = uiImage.resizedForModel(maxDimension: 1024)
@@ -264,16 +358,24 @@ struct ImageDropDelegate: DropDelegate {
                 }
             }
         }
-        return true
+
+        // Try file URLs
+        let fileProviders = info.itemProviders(for: [.fileURL])
+        for provider in fileProviders {
+            _ = provider.loadObject(ofClass: URL.self) { url, error in
+                guard let url, error == nil else { return }
+                DispatchQueue.main.async {
+                    pendingFiles.append(PendingFile(url: url))
+                }
+            }
+        }
+
+        return !imageProviders.isEmpty || !fileProviders.isEmpty
     }
 
-    func dropEntered(info: DropInfo) {
-        // Visual feedback could be added here
-    }
+    func dropEntered(info: DropInfo) {}
 
-    func dropExited(info: DropInfo) {
-        // Reset visual feedback if added
-    }
+    func dropExited(info: DropInfo) {}
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         DropProposal(operation: .copy)

@@ -92,7 +92,11 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         for msg in messages {
             hasher.combine(msg.role.rawValue)
             hasher.combine(msg.content)
+            hasher.combine(msg.fileContent)
             for path in msg.imagePaths {
+                hasher.combine(path)
+            }
+            for path in msg.attachedFilePaths {
                 hasher.combine(path)
             }
         }
@@ -157,10 +161,23 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                 for path in lastUserMessage.imagePaths {
                     contents.append(.imageFile(path))
                 }
+                // Prepend file context before user text
+                if !lastUserMessage.fileContent.isEmpty {
+                    contents.append(.text("Содержимое прикреплённых файлов:\n\n\(lastUserMessage.fileContent)"))
+                }
                 if !lastUserMessage.content.isEmpty {
                     contents.append(.text(lastUserMessage.content))
                 }
                 message = LiteRTLM.Message(contents: contents)
+            } else if !lastUserMessage.fileContent.isEmpty {
+                // File attached but no image — send file context + user text as single message
+                let fullText: String
+                if lastUserMessage.content.isEmpty {
+                    fullText = "Проанализируй содержимое прикреплённых файлов:\n\n\(lastUserMessage.fileContent)"
+                } else {
+                    fullText = "Содержимое прикреплённых файлов:\n\n\(lastUserMessage.fileContent)\n\n---\n\n\(lastUserMessage.content)"
+                }
+                message = LiteRTLM.Message(fullText)
             } else {
                 message = LiteRTLM.Message(lastUserMessage.content)
             }
@@ -263,6 +280,15 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         var historyMessages: [LiteRTLM.Message] = []
         for msg in messages.dropLast().reversed() {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            // If user message has file content, inject it as preceding context
+            if msg.role == .user && !msg.fileContent.isEmpty {
+                let fileContext = "Содержимое прикреплённых файлов:\n\n\(msg.fileContent)"
+                let fileChars = fileContext.count
+                if usedChars + fileChars <= budgetChars {
+                    historyMessages.insert(LiteRTLM.Message(fileContext, role: .user), at: 0)
+                    usedChars += fileChars
+                }
+            }
             let msgChars = msg.content.count
             if usedChars + msgChars > budgetChars {
                 break  // Budget exceeded — skip older messages

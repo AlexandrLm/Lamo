@@ -11,6 +11,14 @@ final class Message {
     var isStreaming: Bool
     /// Paths to attached images (stored in app's tmp directory).
     var imagePaths: [String] = []
+    /// Paths to attached non-image files (PDF, DOCX, etc.).
+    var attachedFilePaths: [String] = []
+    /// Names of attached non-image files (for display).
+    var attachedFileNames: [String] = []
+    /// Sizes of attached files (formatted strings for display).
+    var attachedFileSizes: [String] = []
+    /// Extracted text content from attached files (sent to model separately, not shown in UI).
+    var fileContent: String = ""
     /// JSON-encoded BenchmarkData for this response.
     var benchmarkJSON: String?
 
@@ -23,6 +31,8 @@ final class Message {
     }
 
     var hasImages: Bool { !imagePaths.isEmpty }
+    var hasAttachedFiles: Bool { !attachedFilePaths.isEmpty }
+
     var benchmark: BenchmarkData? {
         get {
             guard let json = benchmarkJSON,
@@ -47,6 +57,10 @@ final class Message {
         timestamp: Date = .now,
         isStreaming: Bool = false,
         imagePaths: [String] = [],
+        attachedFilePaths: [String] = [],
+        attachedFileNames: [String] = [],
+        attachedFileSizes: [String] = [],
+        fileContent: String = "",
         conversation: Conversation? = nil,
         benchmarkJSON: String? = nil
     ) {
@@ -57,6 +71,10 @@ final class Message {
         self.timestamp = timestamp
         self.isStreaming = isStreaming
         self.imagePaths = imagePaths
+        self.attachedFilePaths = attachedFilePaths
+        self.attachedFileNames = attachedFileNames
+        self.attachedFileSizes = attachedFileSizes
+        self.fileContent = fileContent
         self.conversation = conversation
         self.benchmarkJSON = benchmarkJSON
     }

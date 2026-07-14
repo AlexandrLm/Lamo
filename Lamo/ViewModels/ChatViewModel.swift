@@ -14,6 +14,8 @@ final class ChatViewModel {
     var contextTracker: ContextTracker?
     /// Images attached to the current input, waiting to be sent.
     var pendingImages: [UIImage] = []
+    /// Non-image files attached to the current input, waiting to be sent.
+    var pendingFiles: [PendingFile] = []
     /// Benchmark data captured from the last inference response.
     private var pendingBenchmark: BenchmarkData?
 
@@ -45,41 +47,135 @@ final class ChatViewModel {
     func send() {
         Task { await refreshContextTracker() }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingImages.isEmpty else { return }
+        guard !text.isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty else { return }
 
         // 1) Save pending images to tmp directory
-        let imagePaths = saveImagesToTmp(pendingImages)
+        var imagePaths = saveImagesToTmp(pendingImages)
         pendingImages = []
 
-        // 2) Add user message
-        let userMessage = Message(
-            content: text,
-            role: .user,
-            imagePaths: imagePaths,
-            conversation: conversation
-        )
-        addMessage(userMessage)
-        inputText = ""
+        // 2) Process attached files
+        let filesToProcess = pendingFiles
+        pendingFiles = []
 
-        // 3) Add empty assistant message (streaming placeholder)
-        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
-        addMessage(assistantMessage)
-        streamingMessageID = assistantMessage.id
-        isStreaming = true
+        Task { @MainActor in
+            var fileTextParts: [String] = []
+            var filePaths: [String] = []
+            var fileNames: [String] = []
+            var fileSizes: [String] = []
 
-        // 4) Update title from first message
-        if conversation.title == "New Chat" {
-            conversation.title = String(text.prefix(40))
+            for file in filesToProcess {
+                if file.isImage {
+                    if let data = try? Data(contentsOf: file.url),
+                       let image = UIImage(data: data) {
+                        let paths = saveImagesToTmp([image])
+                        imagePaths.append(contentsOf: paths)
+                    }
+                } else if file.isAudio {
+                    let tmpURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("audio_\(UUID().uuidString).\(file.url.pathExtension)")
+                    do {
+                        try FileManager.default.copyItem(at: file.url, to: tmpURL)
+                        filePaths.append(tmpURL.path)
+                        fileNames.append(file.name)
+                        fileSizes.append(file.formattedSize)
+                        fileTextParts.append("[Аудиофайл: \(file.name)]")
+                    } catch {
+                        LamoLogger.ui.error("Failed to copy audio file: \(error)")
+                    }
+                } else if file.type.conforms(to: .pdf) {
+                    // PDF: text layer → extract text, scanned → render as images
+                    let accessing = file.url.startAccessingSecurityScopedResource()
+                    if FileContentExtractor.pdfHasTextLayer(file.url) {
+                        do {
+                            let extracted = try await FileContentExtractor.extract(from: file.url)
+                            fileTextParts.append(extracted)
+                            let tmpURL = FileManager.default.temporaryDirectory
+                                .appendingPathComponent("file_\(UUID().uuidString).pdf")
+                            try? FileManager.default.copyItem(at: file.url, to: tmpURL)
+                            filePaths.append(tmpURL.path)
+                            fileNames.append(file.name)
+                            fileSizes.append(file.formattedSize)
+                        } catch {
+                            fileNames.append(file.name)
+                            fileSizes.append(file.formattedSize)
+                            LamoLogger.ui.error("Failed to extract PDF text: \(error)")
+                        }
+                    } else {
+                        // Scanned PDF — render pages as images for the multimodal model
+                        let pageImages = FileContentExtractor.extractPDFImages(from: file.url)
+                        let tmpPaths = saveImagesToTmp(pageImages)
+                        imagePaths.append(contentsOf: tmpPaths)
+                        fileNames.append(file.name)
+                        fileSizes.append(file.formattedSize)
+                        fileTextParts.append("[Сканированный PDF: \(file.name) — \(pageImages.count) стр. отправлены как изображения]")
+                    }
+                    if accessing { file.url.stopAccessingSecurityScopedResource() }
+                } else {
+                    do {
+                        let extracted = try await FileContentExtractor.extract(from: file.url)
+                        fileTextParts.append(extracted)
+                        let tmpURL = FileManager.default.temporaryDirectory
+                            .appendingPathComponent("file_\(UUID().uuidString).\(file.url.pathExtension)")
+                        try? FileManager.default.copyItem(at: file.url, to: tmpURL)
+                        filePaths.append(tmpURL.path)
+                        fileNames.append(file.name)
+                        fileSizes.append(file.formattedSize)
+                    } catch {
+                        fileTextParts.append("[Ошибка чтения файла \(file.name): \(error.localizedDescription)]")
+                        fileNames.append(file.name)
+                        fileSizes.append(file.formattedSize)
+                        LamoLogger.ui.error("Failed to extract file content: \(error)")
+                    }
+                }
+            }
+
+            // File content goes to separate field — NOT into message text
+            let extractedFileContent = fileTextParts.joined(separator: "\n\n")
+
+            // User message — clean text only
+            let userMessage = Message(
+                content: text,
+                role: .user,
+                imagePaths: imagePaths,
+                attachedFilePaths: filePaths,
+                attachedFileNames: fileNames,
+                attachedFileSizes: fileSizes,
+                fileContent: extractedFileContent,
+                conversation: conversation
+            )
+            addMessage(userMessage)
+            inputText = ""
+
+            // Add empty assistant placeholder
+            let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
+            addMessage(assistantMessage)
+            streamingMessageID = assistantMessage.id
+            isStreaming = true
+
+            // Update title
+            let titleText = text.isEmpty
+                ? (fileNames.first.map { "📎 \($0)" } ?? "New Chat")
+                : String(text.prefix(40))
+            if conversation.title == "New Chat" {
+                conversation.title = titleText
+            }
+
+            // Build chat history
+            let chatMessages = messages
+                .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
+                .map { ChatMessage(
+                    id: $0.id, role: $0.role, content: $0.content,
+                    imagePaths: $0.imagePaths,
+                    attachedFilePaths: $0.attachedFilePaths,
+                    attachedFileNames: $0.attachedFileNames,
+                    attachedFileSizes: $0.attachedFileSizes,
+                    fileContent: $0.fileContent
+                ) }
+
+            // Stream response
+            MemoryService.shared.currentConversationID = conversation.id
+            startStreaming(chatMessages: chatMessages)
         }
-
-        // 5) Build chat history for the provider (only non-empty messages)
-        let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
-            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
-
-        // 6) Stream response
-        MemoryService.shared.currentConversationID = conversation.id
-        startStreaming(chatMessages: chatMessages)
     }
 
     func retryLastMessage() {
@@ -97,8 +193,15 @@ final class ChatViewModel {
         isStreaming = true
 
         let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
-            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
+            .map { ChatMessage(
+                id: $0.id, role: $0.role, content: $0.content,
+                imagePaths: $0.imagePaths,
+                attachedFilePaths: $0.attachedFilePaths,
+                attachedFileNames: $0.attachedFileNames,
+                attachedFileSizes: $0.attachedFileSizes,
+                fileContent: $0.fileContent
+            ) }
 
         startStreaming(chatMessages: chatMessages)
     }
@@ -199,8 +302,15 @@ final class ChatViewModel {
     private func refreshContextTracker() async {
         let pm = ProviderManager.shared
         let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
-            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
+            .map { ChatMessage(
+                id: $0.id, role: $0.role, content: $0.content,
+                imagePaths: $0.imagePaths,
+                attachedFilePaths: $0.attachedFilePaths,
+                attachedFileNames: $0.attachedFileNames,
+                attachedFileSizes: $0.attachedFileSizes,
+                fileContent: $0.fileContent
+            ) }
 
         // Build full system prompt (mirrors LiteRTLMProvider)
         var fullSystem = pm.systemPrompt
@@ -341,8 +451,15 @@ final class ChatViewModel {
 
         // Re-trigger streaming with updated history
         let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
-            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
+            .map { ChatMessage(
+                id: $0.id, role: $0.role, content: $0.content,
+                imagePaths: $0.imagePaths,
+                attachedFilePaths: $0.attachedFilePaths,
+                attachedFileNames: $0.attachedFileNames,
+                attachedFileSizes: $0.attachedFileSizes,
+                fileContent: $0.fileContent
+            ) }
 
         // Add empty assistant placeholder
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)

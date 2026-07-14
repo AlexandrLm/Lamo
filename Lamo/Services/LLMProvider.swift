@@ -22,12 +22,30 @@ struct ChatMessage: Sendable {
     let role: MessageRole
     let content: String
     let imagePaths: [String]
+    let attachedFilePaths: [String]
+    let attachedFileNames: [String]
+    let attachedFileSizes: [String]
+    /// Extracted text from attached files, sent as separate context to the model.
+    let fileContent: String
 
-    init(id: UUID = UUID(), role: MessageRole, content: String, imagePaths: [String] = []) {
+    init(
+        id: UUID = UUID(),
+        role: MessageRole,
+        content: String,
+        imagePaths: [String] = [],
+        attachedFilePaths: [String] = [],
+        attachedFileNames: [String] = [],
+        attachedFileSizes: [String] = [],
+        fileContent: String = ""
+    ) {
         self.id = id
         self.role = role
         self.content = content
         self.imagePaths = imagePaths
+        self.attachedFilePaths = attachedFilePaths
+        self.attachedFileNames = attachedFileNames
+        self.attachedFileSizes = attachedFileSizes
+        self.fileContent = fileContent
     }
 }
 

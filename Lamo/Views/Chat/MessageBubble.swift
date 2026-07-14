@@ -125,6 +125,11 @@ struct MessageBubble: View {
                 userImagesView
             }
 
+            // Attached files indicator
+            if message.hasAttachedFiles {
+                userFilesView
+            }
+
             // Text content (only if non-empty)
             if !message.content.isEmpty {
                 Text(message.content)
@@ -144,6 +149,60 @@ struct MessageBubble: View {
                     )
                     .shadow(color: .white.opacity(0.06), radius: 8, y: 2)
             }
+        }
+    }
+
+    // MARK: - User Files
+
+    private var userFilesView: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            ForEach(message.attachedFileNames.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    // File icon
+                    Image(systemName: fileIcon(for: index))
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .frame(width: 20)
+
+                    // File info
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(message.attachedFileNames[index])
+                            .font(.subheadline)
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        if index < message.attachedFileSizes.count {
+                            Text(message.attachedFileSizes[index])
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .frame(maxWidth: 260)
+            }
+        }
+    }
+
+    private func fileIcon(for index: Int) -> String {
+        guard index < message.attachedFileNames.count else { return "doc" }
+        let name = message.attachedFileNames[index]
+        let ext = (name as NSString).pathExtension.lowercased()
+        switch ext {
+        case "pdf": return "doc.richtext"
+        case "docx", "doc": return "doc.text"
+        case "xlsx", "xls", "csv": return "tablecells"
+        case "pptx", "ppt": return "rectangle.on.rectangle"
+        case "swift", "py", "js", "ts", "java", "kt", "go", "rs", "c", "cpp", "h":
+            return "chevron.left.forwardslash.chevron.right"
+        case "mp3", "wav", "m4a", "aac": return "waveform"
+        case "mp4", "mov": return "film"
+        default: return "doc"
         }
     }
 

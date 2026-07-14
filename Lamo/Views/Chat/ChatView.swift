@@ -77,6 +77,7 @@ struct ChatView: View {
             ChatInputBar(
                 text: $viewModel.inputText,
                 pendingImages: $viewModel.pendingImages,
+                pendingFiles: $viewModel.pendingFiles,
                 isStreaming: viewModel.isStreaming,
                 onSend: { viewModel.send() },
                 onStop: { viewModel.stopGeneration() }
