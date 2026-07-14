@@ -94,9 +94,9 @@ final class SettingsViewModel: ObservableObject {
         self.useGPU = defaults.object(forKey: "litertLMUseGPU") as? Bool ?? true
         self.cpuThreadCount = defaults.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4
         self.selectedModel = providerManager.litertLMModelPath
-        self.topK = defaults.object(forKey: "litertLMTopK") as? Int ?? 40
+        self.topK = defaults.object(forKey: "litertLMTopK") as? Int ?? 64
         self.topP = defaults.object(forKey: "litertLMTopP") as? Double ?? 0.95
-        self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 0.7
+        self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 1.0
         self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096
         self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
         self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? false
@@ -136,18 +136,18 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func resetSamplerDefaults() {
-        topK = 40
+        topK = 64
         topP = 0.95
-        temperature = 0.7
+        temperature = 1.0
     }
 
     func resetAllDefaults() {
         useGPU = true
         cpuThreadCount = 4
         kvCacheAuto = true
-        topK = 40
+        topK = 64
         topP = 0.95
-        temperature = 0.7
+        temperature = 1.0
         maxNumTokens = 4096
         speculativeDecoding = false
         visualTokenBudget = 560
