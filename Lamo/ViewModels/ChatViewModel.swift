@@ -183,6 +183,10 @@ final class ChatViewModel {
                 && conversation.summary.isEmpty && messages.count > 15 {
                 Task { await generateConversationSummary() }
             }
+            // Auto-fetch URLs that the model mentioned but didn't actually fetch
+            // (common with small models like E2B that generate text about tools
+            // instead of actually calling them)
+            Task { await autoFetchUnfetchedURLs(from: messages[index].content) }
         }
     }
 
@@ -256,6 +260,99 @@ final class ChatViewModel {
         let summary = "Earlier in this conversation:\n\(droppedMessages)"
         conversation.summary = String(summary.prefix(500))
         save()
+    }
+
+    // MARK: - Auto-Fetch Unfetched URLs
+
+    /// Heuristic words indicating the model intended to fetch but didn't.
+    private static let fetchIntentPatterns = [
+        "проверь", "проверю", "посмотрю", "прочитаю", "извлеку", "подождите", "подожди",
+        "let me check", "let me read", "let me fetch", "please wait", "i'll check",
+        "i will check", "i'll read", "i will read", "i'll fetch", "give me a moment",
+        "just a moment", "one moment"
+    ]
+
+    /// After streaming completes, detect URLs the model mentioned but didn't actually fetch.
+    /// If found, fetch them automatically and send a follow-up so the model can answer.
+    private func autoFetchUnfetchedURLs(from response: String) async {
+        // Extract all URLs from the response
+        let urlPattern = #"https?://[^\s<>"'\)\],;:!?"#
+        guard let regex = try? NSRegularExpression(pattern: urlPattern) else { return }
+        let range = NSRange(response.startIndex..., in: response)
+        let matches = regex.matches(in: response, range: range)
+
+        guard !matches.isEmpty else { return }
+
+        let urls = matches.compactMap { match -> URL? in
+            guard let r = Range(match.range, in: response) else { return nil }
+            let urlString = String(response[r]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?\\"))
+            return URL(string: urlString)
+        }.filter { $0.scheme == "http" || $0.scheme == "https" }
+
+        guard !urls.isEmpty else { return }
+
+        // Check if the response looks like a "failed tool call" — model mentioned
+        // a URL and expressed intent to fetch but didn't actually do it
+        let lowerResponse = response.lowercased()
+        let hasFetchIntent = Self.fetchIntentPatterns.contains { lowerResponse.contains($0) }
+
+        // Also check if the response is short (< 300 chars) and contains a URL
+        // — likely the model stopped before fetching
+        let looksUnfinished = response.count < 500 && hasFetchIntent
+
+        guard hasFetchIntent else { return }
+
+        // De-duplicate: skip URLs that appear in very short snippets (< 20 chars around them)
+        // which usually means the model already fetched and quoted them
+        let unfetchedURLs = urls.filter { url in
+            // Check if there's substantial content near the URL (> 100 chars of text around it)
+            if let urlRange = response.range(of: url.absoluteString) {
+                let beforeStart = response.index(urlRange.lowerBound, offsetBy: -100, limitedBy: response.startIndex) ?? response.startIndex
+                let afterEnd = response.index(urlRange.upperBound, offsetBy: 100, limitedBy: response.endIndex) ?? response.endIndex
+                let nearbyText = String(response[beforeStart..<afterEnd])
+                // If there's a lot of text around the URL, it was probably fetched
+                return nearbyText.count < 150
+            }
+            return true
+        }
+
+        guard !unfetchedURLs.isEmpty else { return }
+
+        LamoLogger.ui.info("Auto-fetching \(unfetchedURLs.count) unfetched URLs")
+
+        // Fetch the URLs
+        var fetchedContent = ""
+        for url in unfetchedURLs.prefix(2) { // Max 2 URLs to avoid token overflow
+            do {
+                let content = try await WebFetcher.fetch(url: url)
+                fetchedContent += "\n\n[Содержимое страницы \(url.absoluteString)]:\n\(content.prefix(3000))"
+            } catch {
+                fetchedContent += "\n\n[Не удалось загрузить \(url.absoluteString): \(error.localizedDescription)]"
+            }
+        }
+
+        guard !fetchedContent.isEmpty else { return }
+
+        // Send fetched content as a follow-up user message and re-trigger the model
+        let followUp = Message(
+            content: "Вот содержимое страниц, которые вы хотели проверить:\(fetchedContent)\n\nТеперь, основываясь на этой информации, ответьте на вопрос пользователя.",
+            role: .user,
+            conversation: conversation
+        )
+        addMessage(followUp)
+
+        // Re-trigger streaming with updated history
+        let chatMessages = messages
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
+            .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
+
+        // Add empty assistant placeholder
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
+        addMessage(assistantMessage)
+        streamingMessageID = assistantMessage.id
+        isStreaming = true
+
+        startStreaming(chatMessages: chatMessages)
     }
 
     /// Save UIImages to tmp directory as JPEG (resized to max 1024px), return file paths.
