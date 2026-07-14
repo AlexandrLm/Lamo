@@ -341,10 +341,12 @@ final class ProviderManager: ObservableObject {
         }
 
         // Enable speculative decoding experimental flag if requested
+        // Enable experimental flags
+        LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
         if speculativeDecoding {
-            LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
             LiteRTLM.ExperimentalFlags.enableSpeculativeDecoding = true
         }
+        LiteRTLM.ExperimentalFlags.enableBenchmark = true
 
         let backend: LiteRTLM.Backend
         if litertLMUseGPU {

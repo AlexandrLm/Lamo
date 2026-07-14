@@ -24,45 +24,36 @@ struct MessageBubble: View {
                 assistantContent
             }
 
-            // Benchmark line (subtle, assistant only)
-            if message.role == .assistant && !message.isStreaming, let b = message.benchmark {
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 8))
-                    Text("\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
-                    Text("·")
-                    Text("\(String(format: "%.1f", b.timeToFirstToken))s")
-                    if b.decodeTokenCount > 0 {
-                        Text("·")
-                        Text("\(b.decodeTokenCount) tokens")
-                    }
-                    Spacer()
-                }
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.4))
-                .padding(.horizontal, 18)
-            }
-
-            // Actions bar (assistant only)
+            // Info bar (assistant only — always visible)
             if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
-                HStack(spacing: 12) {
-                    // Timestamp + token count
-                    Text(message.timestamp, style: .time)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-
+                HStack(spacing: 6) {
+                    // Left: benchmark stats
+                    if let b = message.benchmark {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 7))
+                        Text("\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
+                        Text("·")
+                        Text("\(String(format: "%.1f", b.timeToFirstToken))s")
+                    } else {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(.white.opacity(0.2))
+                        Text("— tok/s")
+                        Text("·")
+                        Text("— s")
+                    }
                     if let tokenCount {
-                        Text("~\(ContextTracker.formatTokens(tokenCount))")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.gray.opacity(0.5))
+                        Text("·")
+                        Text("\(ContextTracker.formatTokens(tokenCount)) t")
                     }
 
                     Spacer()
 
-                    // Model badge
-                    modelBadge
+                    // Right: model + actions
+                    Text(modelName)
+                        .font(.system(.caption2, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.4))
 
-                    // Copy
                     actionButton(
                         icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
                         label: "Copy",
@@ -71,18 +62,18 @@ struct MessageBubble: View {
                         copyContent()
                     }
 
-                    // Retry
                     if let onRetry {
                         actionButton(icon: "arrow.clockwise", label: "Retry", color: Color(.tertiaryLabel)) {
                             onRetry()
                         }
                     }
 
-                    // Share
                     actionButton(icon: "square.and.arrow.up", label: "Share", color: Color(.tertiaryLabel)) {
                         showShareSheet = true
                     }
                 }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.4))
                 .padding(.horizontal, 18)
                 .padding(.top, 2)
                 .transition(.opacity.combined(with: .move(edge: .top)))

@@ -192,6 +192,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         // Capture benchmark data from the conversation
         if let benchmarkInfo = try? conversation.getBenchmarkInfo() {
+                print("[Benchmark] OK: TTFT=\(benchmarkInfo.timeToFirstTokenInSecond)s decode=\(benchmarkInfo.lastDecodeTokensPerSecond)t/s")
             let data = BenchmarkData(
                 timeToFirstToken: benchmarkInfo.timeToFirstTokenInSecond,
                 decodeTokensPerSec: benchmarkInfo.lastDecodeTokensPerSecond,
@@ -199,6 +200,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                 prefillTokensPerSec: benchmarkInfo.lastPrefillTokensPerSecond,
                 prefillTokenCount: benchmarkInfo.lastPrefillTokenCount
             )
+            print("[Benchmark] Yielding benchmark data")
             continuation.yield(.benchmark(data))
         }
 
