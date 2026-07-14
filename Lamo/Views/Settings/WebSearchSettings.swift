@@ -14,20 +14,20 @@ struct WebSearchSettings: View {
                     Label("Search Engine", systemImage: "magnifyingglass")
                     Spacer()
                     if !apiKey.isEmpty {
-                        Text("Brave")
+                        Text("SearXNG + Brave")
                             .font(.caption)
                             .foregroundStyle(.green)
                     } else {
-                        Text("DuckDuckGo")
+                        Text("SearXNG")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             } footer: {
-                Text("Brave Search provides better results with URL support. Free at brave.com/search/api.")
+                Text("SearXNG is the primary search engine (free, no key needed). Brave adds extra results when configured.")
             }
 
-            Section("Brave API Key (Optional)") {
+            Section("Brave API Key (Optional - for extra results)") {
                 HStack {
                     if showAPIKey {
                         TextField("BRAVE_API_KEY", text: $apiKey)

@@ -253,7 +253,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Web Search")
                         Spacer()
-                        Text(ProviderManager.shared.braveAPIKey != nil ? "Brave" : "DuckDuckGo")
+                         Text(ProviderManager.shared.braveAPIKey != nil ? "Brave + SearXNG" : "SearXNG")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -1,10 +1,11 @@
 import Foundation
 import LiteRTLM
+import os
 
 // MARK: - Web Search Tool
 
 /// Tool that allows the model to search the web.
-/// Supports Brave Search API (if key configured) or DuckDuckGo fallback.
+/// Supports SearXNG (primary), Brave Search API (if key configured), DuckDuckGo fallback.
 struct WebSearchTool: Tool {
     static let name = "web_search"
     static let description = "Search the internet for current information. Returns titles, snippets, and URLs. Use when you need to find facts, news, or verify information."
@@ -19,11 +20,10 @@ struct WebSearchTool: Tool {
     var fetchTopResults: Bool = true
 
     func run() async throws -> Any {
-        // 1. Search
         let searchResults = try await SearchProvider.shared.search(query: query, maxResults: maxResults)
+        let shouldFetch = UserDefaults.standard.object(forKey: "web_auto_fetch") as? Bool ?? true
 
-        // 2. Optionally fetch full content from top results
-        if fetchTopResults && !searchResults.isEmpty {
+        if shouldFetch && !searchResults.isEmpty {
             let topResults = Array(searchResults.prefix(3))
             var enrichedResults: [[String: Any]] = []
 
@@ -34,7 +34,6 @@ struct WebSearchTool: Tool {
                     "url": result["url"] ?? "",
                 ]
 
-                // Fetch full page content
                 if let urlString = result["url"], let url = URL(string: urlString) {
                     do {
                         let content = try await WebFetcher.fetch(url: url)
@@ -47,7 +46,6 @@ struct WebSearchTool: Tool {
                 enrichedResults.append(enriched)
             }
 
-            // Add remaining results without content
             if searchResults.count > 3 {
                 for result in searchResults.dropFirst(3) {
                     enrichedResults.append(result)
@@ -80,33 +78,93 @@ struct FetchUrlTool: Tool {
     }
 }
 
-// MARK: - Search Provider (Brave API + DuckDuckGo fallback)
+// MARK: - Search Provider
 
 actor SearchProvider {
     static let shared = SearchProvider()
 
-    private var braveAPIKey: String? { UserDefaults.standard.string(forKey: "brave_search_api_key") }
     private var cache: [String: (results: [[String: String]], timestamp: Date)] = [:]
-    private let cacheTTL: TimeInterval = 3600 // 1 hour
+    private let cacheTTL: TimeInterval = 3600
+
+    // SearXNG public instances (rotated on failure)
+    private let searxngInstances = [
+        "https://searx.be",
+        "https://search.ononoki.org",
+        "https://searxng.site",
+    ]
+    private var currentInstanceIndex = 0
+
+    var braveAPIKey: String? { UserDefaults.standard.string(forKey: "brave_search_api_key") }
 
     func search(query: String, maxResults: Int) async throws -> [[String: String]] {
-        // Check cache
         if let cached = cache[query], Date().timeIntervalSince(cached.timestamp) < cacheTTL {
             return Array(cached.results.prefix(maxResults))
         }
 
-        let results: [[String: String]]
+        var results: [[String: String]] = []
 
-        if let apiKey = braveAPIKey, !apiKey.isEmpty {
-            results = try await searchBrave(query: query, maxResults: maxResults, apiKey: apiKey)
-        } else {
-            results = try await searchDuckDuckGo(query: query, maxResults: maxResults)
+        // 1. SearXNG (primary)
+        do {
+            results = try await searchSearxng(query: query, maxResults: maxResults)
+        } catch {
+            LamoLogger.general.warning("SearXNG failed: \(error.localizedDescription), trying Brave/DuckDuckGo")
         }
 
-        // Cache results
-        cache[query] = (results: results, timestamp: Date())
+        // 2. Brave (fallback if SearXNG failed and key is set)
+        if results.isEmpty, let apiKey = braveAPIKey, !apiKey.isEmpty {
+            do {
+                results = try await searchBrave(query: query, maxResults: maxResults, apiKey: apiKey)
+            } catch {
+                LamoLogger.general.warning("Brave failed: \(error.localizedDescription)")
+            }
+        }
 
+        // 3. DuckDuckGo (last resort)
+        if results.isEmpty {
+            do {
+                results = try await searchDuckDuckGo(query: query, maxResults: maxResults)
+            } catch {
+                LamoLogger.general.error("All search providers failed")
+                throw error
+            }
+        }
+
+        cache[query] = (results: results, timestamp: Date())
         return results
+    }
+
+    // MARK: - SearXNG
+
+    private func searchSearxng(query: String, maxResults: Int) async throws -> [[String: String]] {
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        let instance = searxngInstances[currentInstanceIndex % searxngInstances.count]
+        let urlString = "\(instance)/search?q=\(encoded)&format=json&categories=general"
+
+        guard let url = URL(string: urlString) else {
+            throw SearchError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Lamo/1.0 (iOS AI Chat)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 8
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let resultsArray = json["results"] as? [[String: Any]] else {
+            // Rotate instance on invalid response
+            currentInstanceIndex += 1
+            throw SearchError.invalidResponse
+        }
+
+        return resultsArray.prefix(maxResults).compactMap { result in
+            guard let title = result["title"] as? String,
+                  let url = result["url"] as? String else { return nil }
+            return [
+                "title": title,
+                "snippet": result["content"] as? String ?? "",
+                "url": url,
+            ]
+        }
     }
 
     // MARK: - Brave Search API
@@ -158,6 +216,7 @@ actor SearchProvider {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 8
 
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let html = String(data: data, encoding: .utf8) else {
@@ -170,7 +229,6 @@ actor SearchProvider {
     private func parseDuckDuckGoResults(html: String, maxResults: Int) -> [[String: String]] {
         var results: [[String: String]] = []
 
-        // Extract result links with URLs
         let linkPattern = #"<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)</a>"#
         let snippetPattern = #"<a class="result__snippet"[^>]*>(.*?)</a>"#
 
@@ -180,7 +238,6 @@ actor SearchProvider {
         for (index, match) in linkMatches.prefix(maxResults).enumerated() {
             var result: [String: String] = [:]
 
-            // Extract URL from DuckDuckGo redirect
             if let redirectURL = extractDuckDuckGoURL(from: match.0) {
                 result["url"] = redirectURL
             }
@@ -197,9 +254,7 @@ actor SearchProvider {
         return results
     }
 
-    /// Extract actual URL from DuckDuckGo's redirect URL
     private func extractDuckDuckGoURL(from redirectURL: String) -> String? {
-        // DuckDuckGo format: //duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com&rut=...
         if let uddgRange = redirectURL.range(of: "uddg=") {
             let afterUddg = String(redirectURL[uddgRange.upperBound...])
             if let ampRange = afterUddg.range(of: "&") {
@@ -208,7 +263,6 @@ actor SearchProvider {
             }
             return afterUddg.removingPercentEncoding
         }
-        // Direct URL
         if redirectURL.hasPrefix("http") {
             return redirectURL
         }
@@ -256,10 +310,60 @@ enum SearchError: LocalizedError {
 // MARK: - Web Fetcher
 
 actor WebFetcher {
+    static let shared = WebFetcher()
+    private static let maxConcurrent = 3
+    private static var activeTasks = 0
+    private static var waiters: [CheckedContinuation<Void, Never>] = []
+
     static func fetch(url: URL) async throws -> String {
+        // Wait for a slot
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            Task {
+                await WebFetcher.shared.enqueue(continuation)
+            }
+        }
+
+        defer {
+            Task {
+                await WebFetcher.shared.releaseSlot()
+            }
+        }
+
+        var lastError: Error?
+        for attempt in 0..<2 {
+            if attempt > 0 {
+                try await Task.sleep(for: .seconds(1))
+            }
+            do {
+                return try await fetchOnce(url: url)
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError ?? FetchError.invalidEncoding
+    }
+
+    private func enqueue(_ continuation: CheckedContinuation<Void, Never>) {
+        if Self.activeTasks < Self.maxConcurrent {
+            Self.activeTasks += 1
+            continuation.resume()
+        } else {
+            Self.waiters.append(continuation)
+        }
+    }
+
+    private func releaseSlot() {
+        Self.activeTasks -= 1
+        if !Self.waiters.isEmpty {
+            Self.activeTasks += 1
+            Self.waiters.removeFirst().resume()
+        }
+    }
+
+    private static func fetchOnce(url: URL) async throws -> String {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 15
+        request.timeoutInterval = 12
 
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let html = String(data: data, encoding: .utf8) else {
@@ -268,7 +372,6 @@ actor WebFetcher {
 
         let text = extractText(from: html)
 
-        // Truncate to reasonable length for the model
         let maxLength = 4000
         if text.count > maxLength {
             return String(text.prefix(maxLength)) + "\n\n[Content truncated at \(maxLength) chars]"
@@ -277,10 +380,23 @@ actor WebFetcher {
     }
 
     private static func extractText(from html: String) -> String {
+        // Remove non-content elements before stripping tags
         var text = html
             .replacingOccurrences(of: "<script[^>]*>[\\s\\S]*?</script>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "<style[^>]*>[\\s\\S]*?</style>", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "<nav[^>]*>[\\s\\S]*?</nav>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "<footer[^>]*>[\\s\\S]*?</footer>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "<header[^>]*>[\\s\\S]*?</header>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "<aside[^>]*>[\\s\\S]*?</aside>", with: "", options: .regularExpression)
+
+        // Try to extract article/main content first
+        if let articleRange = text.range(of: "<article[^>]*>([\\s\\S]*?)</article>", options: .regularExpression) {
+            text = String(text[articleRange])
+        } else if let mainRange = text.range(of: "<main[^>]*>([\\s\\S]*?)</main>", options: .regularExpression) {
+            text = String(text[mainRange])
+        }
+
+        text = text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
 
         text = text
             .replacingOccurrences(of: "&amp;", with: "&")
