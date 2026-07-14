@@ -61,11 +61,6 @@ struct ChatView: View {
                 scrollToBottom()
             }
         }
-                .safeAreaInset(edge: .top) {
-            ContextBarView(tracker: viewModel.contextTracker) {
-                showContextDetail = true
-            }
-        }
         .safeAreaInset(edge: .bottom) {
             ChatInputBar(
                 text: $viewModel.inputText,
@@ -88,6 +83,13 @@ struct ChatView: View {
         .background(LamoTheme.Colors.background)
         .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ContextBarView(tracker: viewModel.contextTracker) {
+                    showContextDetail = true
+                }
+            }
+        }
         .sheet(isPresented: $showContextDetail) {
             ContextDetailView(tracker: viewModel.contextTracker)
         }

@@ -45,16 +45,11 @@ struct ContextBarView: View {
                             .foregroundStyle(.white.opacity(0.4))
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-            .padding(.bottom, 2)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .transition(.opacity)
         }
     }
 
