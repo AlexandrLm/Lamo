@@ -51,9 +51,11 @@ struct MessageBubble: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
 
-                    Text("~\(message.content.count / 4)tok")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.gray.opacity(0.5))
+                    if let tokenCount {
+                        Text("~\(ContextTracker.formatTokens(tokenCount))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.gray.opacity(0.5))
+                    }
 
                     Spacer()
 
@@ -93,9 +95,11 @@ struct MessageBubble: View {
                     Text(message.timestamp, style: .time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                    Text("· ~\(message.content.count / 4)tok")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.gray.opacity(0.5))
+                    if let tokenCount {
+                        Text("· ~\(ContextTracker.formatTokens(tokenCount))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.gray.opacity(0.5))
+                    }
                 }
                 .padding(.trailing, 16)
             }
