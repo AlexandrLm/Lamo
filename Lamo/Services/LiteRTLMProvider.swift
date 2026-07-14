@@ -282,12 +282,13 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             // automatically during streaming.
             config = LiteRTLM.ConversationConfig(
                 initialMessages: allMessages,
-                tools: [UpdateMemoryTool()],
+                tools: [UpdateMemoryTool(), WebSearchTool(), FetchUrlTool()],
                 samplerConfig: samplerConfig
             )
         } else {
             config = LiteRTLM.ConversationConfig(
                 initialMessages: allMessages,
+                tools: [WebSearchTool(), FetchUrlTool()],
                 samplerConfig: samplerConfig
             )
         }
