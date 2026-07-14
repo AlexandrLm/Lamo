@@ -27,6 +27,10 @@ final class ProviderManager: ObservableObject {
     /// Whether the device is under memory pressure.
     @Published var isMemoryPressure: Bool = false
 
+    /// The actual safeMaxTokens value used for the current engine.
+    /// Tracks the real KV-cache budget (not UserDefaults which may be 0 in auto mode).
+    private(set) var currentMaxTokens: Int?
+
     // MARK: - Memory Pressure
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
@@ -371,6 +375,7 @@ final class ProviderManager: ObservableObject {
 
         // Use safe token limit to prevent OOM on larger models
         let maxTokens = safeMaxTokens(modelPath: resolvedPath)
+        currentMaxTokens = maxTokens
 
         // #2: Auto-retry engine creation + initialization (max 3 attempts)
         let maxAttempts = 3
@@ -453,6 +458,7 @@ final class ProviderManager: ObservableObject {
         cachedEngine = nil
         cachedProvider = nil
         isEngineReady = false
+        currentMaxTokens = nil
         // Cancel any pending re-initialization
         invalidateTask?.cancel()
         // Re-initialize after 300ms debounce

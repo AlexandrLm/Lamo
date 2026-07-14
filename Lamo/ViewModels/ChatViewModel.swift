@@ -177,6 +177,12 @@ final class ChatViewModel {
         Task { await refreshContextTracker() }
         if success == true {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // Auto-generate summary if old messages were dropped from context
+            // and the model hasn't created one via update_memory tool yet
+            if (contextTracker?.hasDroppedMessages ?? false)
+                && conversation.summary.isEmpty && messages.count > 15 {
+                Task { await generateConversationSummary() }
+            }
         }
     }
 
@@ -222,8 +228,7 @@ final class ChatViewModel {
             tokenCounts: tokenCounts,
             systemPromptTokens: sysTokens,
             memoryTokens: memTokens,
-            maxNumTokens: pm.maxNumTokens,
-            kvCacheAuto: pm.kvCacheAuto
+            maxNumTokens: pm.currentMaxTokens ?? pm.maxNumTokens
         )
     }
 
@@ -233,6 +238,24 @@ final class ChatViewModel {
         } catch {
             LamoLogger.general.error("SwiftData save error: \(error)")
         }
+    }
+
+    /// Generate a basic summary from dropped messages as a fallback.
+    /// The model can override this with a better summary via update_memory(summary:) tool.
+    private func generateConversationSummary() async {
+        guard let tracker = contextTracker else { return }
+        let droppedIDs = Set(tracker.messageUsages.filter { !$0.isInContext }.map(\.id))
+        guard !droppedIDs.isEmpty else { return }
+
+        let droppedMessages = messages
+            .filter { droppedIDs.contains($0.id) }
+            .prefix(10)
+            .map { "[\($0.role == .user ? "User" : "Assistant")]: \($0.content.prefix(150))" }
+            .joined(separator: "\n")
+
+        let summary = "Earlier in this conversation:\n\(droppedMessages)"
+        conversation.summary = String(summary.prefix(500))
+        save()
     }
 
     /// Save UIImages to tmp directory as JPEG (resized to max 1024px), return file paths.

@@ -18,36 +18,6 @@
             endingLineNumber = "186"
             landmarkName = "createConversation(with:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "486E483A-A838-43EC-A8E9-86AEB9CBC914 - b6fd3531f5c2fe40"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "$defer() -&gt; ()"
-                  moduleName = "Lamo.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/aleksandr/Desktop/Lamo/Packages/LiteRT-LM/swift/Engine.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "186"
-                  endingLineNumber = "186">
-               </Location>
-               <Location
-                  uuid = "486E483A-A838-43EC-A8E9-86AEB9CBC914 - cc802d6ea84414cd"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "LiteRTLM.Engine.createConversation(with: Swift.Optional&lt;LiteRTLM.ConversationConfig&gt;) throws -&gt; LiteRTLM.Conversation"
-                  moduleName = "Lamo.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/aleksandr/Desktop/Lamo/Packages/LiteRT-LM/swift/Engine.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "186"
-                  endingLineNumber = "186">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

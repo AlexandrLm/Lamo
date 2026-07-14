@@ -136,7 +136,6 @@ final class MemoryService: ObservableObject {
             if totalChars + line.count > maxMemoryChars { break }
             context += line
             totalChars += line.count
-            fact.usageCount += 1
         }
 
         context += "</memory>"

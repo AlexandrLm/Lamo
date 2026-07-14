@@ -251,7 +251,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
 
         let systemPromptChars = systemPrompt.count
-        let budgetChars = (effectiveMaxTokens * maxCharsPerToken) - systemPromptChars - 512
+        let budgetChars = max(0, (effectiveMaxTokens * maxCharsPerToken) - systemPromptChars - 512)
         
         var allMessages: [LiteRTLM.Message] = []
         
@@ -295,7 +295,25 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         // Use DispatchSemaphore + async to catch SIGABRT
         // If engine aborts, we restart with minimal history
-        return try await engine.createConversation(with: config)
+        do {
+            return try await engine.createConversation(with: config)
+        } catch {
+            // Fallback: minimal history (system prompt + last user message only)
+            // This prevents SIGABRT when full history exceeds KV-cache capacity
+            LamoLogger.engine.warning("Conversation creation failed, falling back to minimal history: \(error.localizedDescription)")
+            let systemMessage = allMessages.prefix(1)
+            let lastUserMessage = allMessages.last
+            var minimal: [LiteRTLM.Message] = Array(systemMessage)
+            if let last = lastUserMessage, last.role == .user {
+                minimal.append(last)
+            }
+
+            let fallbackConfig = LiteRTLM.ConversationConfig(
+                initialMessages: minimal,
+                samplerConfig: samplerConfig
+            )
+            return try await engine.createConversation(with: fallbackConfig)
+        }
     }
 
     /// Fetch conversation summary from SwiftData.

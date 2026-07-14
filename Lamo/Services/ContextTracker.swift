@@ -50,24 +50,19 @@ struct ContextTracker {
     ///   - tokenCounts: Real token counts per message ID (from engine.tokenize).
     ///   - systemPromptTokens: Real token count of the system prompt.
     ///   - memoryTokens: Real token count of the memory context.
-    ///   - maxNumTokens: Configured KV-cache budget.
-    ///   - kvCacheAuto: Whether auto-budget is enabled.
+    ///   - maxNumTokens: Configured KV-cache budget (real value from safeMaxTokens, not UserDefaults).
     static func build(
         messages: [ChatMessage],
         tokenCounts: [UUID: Int],
         systemPromptTokens: Int,
         memoryTokens: Int,
-        maxNumTokens: Int,
-        kvCacheAuto: Bool
+        maxNumTokens: Int
     ) -> ContextTracker {
         let reservedTokens = 512
 
-        let effective: Int
-        if kvCacheAuto {
-            effective = max(maxNumTokens, 4096)
-        } else {
-            effective = max(maxNumTokens, 1024)
-        }
+        // Use the real KV-cache budget from ProviderManager (passed as maxNumTokens).
+        // Minimum 512 tokens to ensure meaningful tracking even on low-memory devices.
+        let effective = max(maxNumTokens, 512)
 
         let budget = effective - systemPromptTokens - memoryTokens - reservedTokens
 
