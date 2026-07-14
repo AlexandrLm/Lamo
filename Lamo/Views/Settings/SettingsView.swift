@@ -245,6 +245,23 @@ struct SettingsView: View {
                         .foregroundStyle(.orange)
                 }
             }
+
+            NavigationLink {
+                WebSearchSettings()
+            } label: {
+                Label {
+                    HStack {
+                        Text("Web Search")
+                        Spacer()
+                        Text(ProviderManager.shared.braveAPIKey != nil ? "Brave" : "DuckDuckGo")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "globe")
+                        .foregroundStyle(.cyan)
+                }
+            }
         }
     }
 

@@ -17,8 +17,13 @@ final class ProviderManager: ObservableObject {
     // MARK: - Published State
     /// Whether the engine is currently loaded and ready.
     @Published var isEngineReady: Bool = false
-    /// Error message if engine initialization failed.
+    /// Current engine error (set after failed init).
     @Published var engineError: String?
+
+    /// Brave Search API key (optional, falls back to DuckDuckGo).
+    var braveAPIKey: String? {
+        UserDefaults.standard.string(forKey: "brave_search_api_key")
+    }
     /// Whether the device is under memory pressure.
     @Published var isMemoryPressure: Bool = false
 
