@@ -12,48 +12,21 @@ struct ContextBarView: View {
             Button {
                 onTap?()
             } label: {
-                HStack(spacing: 6) {
-                    // Mini ring
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 2)
-                        Circle()
-                            .trim(from: 0, to: tracker.fillRatio)
-                            .stroke(ringColor(tracker), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-
-                        Text("\(Int(tracker.fillRatio * 100))")
-                            .font(.system(size: 7, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .frame(width: 20, height: 20)
-
-                    // Token text
-                    Text("\(ContextTracker.formatTokens(tracker.usedTokens))")
+                HStack(spacing: 4) {
+                    Text("\(Int(tracker.fillRatio * 100))%")
                         .font(.caption2.monospacedDigit().weight(.medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.white.opacity(0.5))
 
                     if tracker.hasDroppedMessages {
                         Image(systemName: "exclamationmark")
                             .font(.system(size: 7, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 14, height: 14)
-                            .background(Circle().fill(.orange.opacity(0.8)))
+                            .foregroundStyle(.orange)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(Color.white.opacity(0.04), in: Capsule())
             }
             .buttonStyle(.plain)
             .transition(.opacity)
         }
-    }
-
-    private func ringColor(_ tracker: ContextTracker) -> Color {
-        if tracker.fillRatio > 0.9 { return .white }
-        if tracker.fillRatio > 0.7 { return .white.opacity(0.7) }
-        return .white.opacity(0.4)
     }
 }
 

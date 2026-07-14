@@ -99,87 +99,46 @@ struct ChatView: View {
 
     private var emptyChatView: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 80)
+            Spacer(minLength: 100)
 
-            VStack(spacing: 24) {
-                // Animated logo
+            VStack(spacing: 20) {
                 ZStack {
                     Circle()
                         .fill(Color.white)
-                        .frame(width: 80, height: 80)
+                        .frame(width: 72, height: 72)
 
                     Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 30, weight: .medium))
+                        .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(.black)
                 }
-                .shadow(color: .white.opacity(0.08), radius: 20, y: 8)
+                .shadow(color: .white.opacity(0.06), radius: 24, y: 10)
 
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     Text("How can I help you today?")
                         .font(.title2.weight(.semibold))
-                    Text("Running 100% on your device. No data leaves your phone.")
+                    Text("Running 100% on your device")
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
                 }
 
-                // Suggestion chips
-                VStack(spacing: 10) {
-                    suggestionChip(icon: "lightbulb", text: "Explain quantum computing simply")
-                    suggestionChip(icon: "text.badge.checkmark", text: "Write a professional email")
-                    suggestionChip(icon: "swift", text: "Debug a Swift concurrency issue")
-                }
-                .padding(.top, 8)
-
-                // Download CTA
                 NavigationLink {
                     SettingsView()
                 } label: {
                     Label("Download a Model", systemImage: "arrow.down.circle")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.white.opacity(0.6))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.08))
+                        .background(Color.white.opacity(0.06))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 12)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 32)
 
             Spacer()
         }
         .transition(.opacity.combined(with: .scale(scale: 0.96)))
-    }
-
-    private func suggestionChip(icon: String, text: String) -> some View {
-        Button {
-            viewModel.inputText = text
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 18)
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Image(systemName: "arrow.up.left")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(Color.white.opacity(0.04))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     private func scrollToBottom() {
@@ -201,38 +160,17 @@ struct StreamingIndicator: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
-            // Model avatar
-            ZStack {
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 28, height: 28)
-
-                Image(systemName: "sparkle")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.black)
-            }
-
-            // Bubble with dots
+            // Dots only — no avatar
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
-                        .fill(Color.white)
-                        .frame(width: 7, height: 7)
+                        .fill(Color.white.opacity(0.6))
+                        .frame(width: 6, height: 6)
                         .offset(y: dotOffsets[index])
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color.white.opacity(0.06))
-            .clipShape(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 4,
-                    bottomLeadingRadius: 16,
-                    bottomTrailingRadius: 16,
-                    topTrailingRadius: 16,
-                    style: .continuous
-                )
-            )
 
             Spacer()
         }
@@ -250,7 +188,7 @@ struct StreamingIndicator: View {
                 .repeatForever(autoreverses: true)
                 .delay(Double(index) * 0.15)
             ) {
-                dotOffsets[index] = -6
+                dotOffsets[index] = -5
             }
         }
     }

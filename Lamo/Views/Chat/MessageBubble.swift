@@ -26,60 +26,47 @@ struct MessageBubble: View {
 
             // Info bar (assistant only — always visible)
             if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     // Left: benchmark stats
-                    HStack(spacing: 4) {
-                        if let b = message.benchmark {
-                            statPill(icon: "bolt.fill", text: "\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
-                            Text("·")
-                                .foregroundStyle(.white.opacity(0.15))
-                            statPill(icon: "timer", text: "\(String(format: "%.1f", b.timeToFirstToken))s")
-                        } else {
-                            statPill(icon: "bolt.fill", text: "— tok/s")
-                            Text("·")
-                                .foregroundStyle(.white.opacity(0.15))
-                            statPill(icon: "timer", text: "— s")
-                        }
-                        if let tokenCount {
-                            Text("·")
-                                .foregroundStyle(.white.opacity(0.15))
-                            statPill(icon: "textformat.size", text: "\(ContextTracker.formatTokens(tokenCount)) t")
-                        }
+                    if let b = message.benchmark {
+                        Text("\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
+                        Text("·")
+                            .foregroundStyle(.white.opacity(0.15))
+                        Text("\(String(format: "%.1f", b.timeToFirstToken))s")
                     }
-                    .font(.caption2.monospacedDigit())
+                    if let tokenCount {
+                        Text("·")
+                            .foregroundStyle(.white.opacity(0.15))
+                        Text("\(ContextTracker.formatTokens(tokenCount)) t")
+                    }
 
                     Spacer()
 
-                    // Right: model + actions
-                    Text(modelName)
-                        .font(.system(.caption2, design: .rounded).weight(.medium))
-                        .foregroundStyle(.white.opacity(0.35))
+                    // Right: actions
+                    HStack(spacing: 8) {
+                        actionButton(
+                            icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
+                            label: "Copy",
+                            color: showCopyConfirmation ? .white : .white.opacity(0.3)
+                        ) {
+                            copyContent()
+                        }
 
-                    actionButton(
-                        icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
-                        label: "Copy",
-                        color: showCopyConfirmation ? Color.white : Color(.tertiaryLabel)
-                    ) {
-                        copyContent()
-                    }
+                        if let onRetry {
+                            actionButton(icon: "arrow.clockwise", label: "Retry", color: .white.opacity(0.3)) {
+                                onRetry()
+                            }
+                        }
 
-                    if let onRetry {
-                        actionButton(icon: "arrow.clockwise", label: "Retry", color: Color(.tertiaryLabel)) {
-                            onRetry()
+                        actionButton(icon: "square.and.arrow.up", label: "Share", color: .white.opacity(0.3)) {
+                            showShareSheet = true
                         }
                     }
-
-                    actionButton(icon: "square.and.arrow.up", label: "Share", color: Color(.tertiaryLabel)) {
-                        showShareSheet = true
-                    }
                 }
-                .foregroundStyle(.white.opacity(0.4))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.3))
                 .padding(.horizontal, 18)
-                .padding(.top, 4)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.03))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(.horizontal, 14)
+                .padding(.top, 2)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
@@ -105,22 +92,6 @@ struct MessageBubble: View {
         }
     }
 
-    // MARK: - Model Badge
-
-    private var modelBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "cpu")
-                .font(.system(size: 8))
-            Text(modelName)
-                .font(.system(.caption2, design: .rounded).weight(.medium))
-        }
-        .foregroundStyle(Color.white)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(Color.white.opacity(0.1))
-        .clipShape(Capsule())
-    }
-
     private var modelName: String {
         let name = ProviderManager.shared.currentModelDisplayName
         return name.isEmpty ? "AI" : name
@@ -143,16 +114,6 @@ struct MessageBubble: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
-    }
-
-    // MARK: - Stat Pill
-
-    private func statPill(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 7))
-            Text(text)
-        }
     }
 
     // MARK: - User Content
@@ -237,7 +198,7 @@ struct MessageBubble: View {
     // MARK: - Assistant Content
 
     private var assistantContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             // Thinking content (collapsible)
             if !message.thinkingContent.isEmpty {
                 ThinkingView(content: message.thinkingContent, isStreaming: message.isStreaming)
@@ -248,7 +209,7 @@ struct MessageBubble: View {
         }
         .textSelection(.enabled)
         .padding(.horizontal, 18)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

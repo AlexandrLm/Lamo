@@ -25,20 +25,20 @@ struct MarkdownRenderer: View {
                     switch block {
                     case .code(let code, let language):
                         CodeBlock(code: code, language: language)
-                            .padding(.vertical, 6)
+                            .padding(.vertical, 8)
                     case .header(let text, let level):
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 4) {
                             InlineMarkdown(text: text, textColor: textColor, font: headerFont(level))
                             if level <= 2 {
                                 Rectangle()
-                                    .fill(LamoTheme.Colors.accent.opacity(0.15))
-                                    .frame(height: 1)
+                                    .fill(Color.white.opacity(0.06))
+                                    .frame(height: 0.5)
                             }
                         }
-                        .padding(.top, level <= 2 ? 12 : 8)
-                        .padding(.bottom, level <= 2 ? 6 : 3)
+                        .padding(.top, level == 1 ? 16 : (level == 2 ? 14 : 10))
+                        .padding(.bottom, level <= 2 ? 6 : 4)
                     case .listItem(let text, let indent, let number):
-                        HStack(alignment: .top, spacing: 6) {
+                        HStack(alignment: .top, spacing: 8) {
                             if let number {
                                 Text("\(number).")
                                     .font(.subheadline)
@@ -46,48 +46,50 @@ struct MarkdownRenderer: View {
                                     .frame(width: 18, alignment: .trailing)
                             } else {
                                 Text(bulletForIndent(indent))
-                                    .font(.subheadline)
-                                    .foregroundStyle(indent == 0 ? LamoTheme.Colors.accent : LamoTheme.Colors.accent.opacity(0.5))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(indent == 0 ? .white.opacity(0.5) : .white.opacity(0.3))
                                     .frame(width: 18, alignment: .center)
+                                    .padding(.top, 4)
                             }
                             InlineMarkdown(text: text, textColor: textColor)
                         }
                         .padding(.leading, CGFloat(indent) * 18)
-                        .padding(.vertical, 1)
+                        .padding(.vertical, 2)
                     case .taskItem(let text, let checked):
-                        HStack(alignment: .top, spacing: 6) {
+                        HStack(alignment: .top, spacing: 8) {
                             Image(systemName: checked ? "checkmark.circle.fill" : "circle")
                                 .font(.subheadline)
-                                .foregroundStyle(checked ? LamoTheme.Colors.accent : .secondary)
+                                .foregroundStyle(checked ? .white.opacity(0.5) : .secondary)
                                 .frame(width: 18, alignment: .center)
                             InlineMarkdown(text: text, textColor: textColor)
                                 .foregroundStyle(checked ? .secondary : textColor)
                                 .strikethrough(checked)
                         }
                         .padding(.leading, 4)
-                        .padding(.vertical, 1)
+                        .padding(.vertical, 2)
                     case .blockquote(let text):
-                        HStack(alignment: .top, spacing: 8) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(LamoTheme.Colors.accent.opacity(0.4))
-                                .frame(width: 3)
+                        HStack(alignment: .top, spacing: 10) {
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(Color.white.opacity(0.2))
+                                .frame(width: 2.5)
                             InlineMarkdown(text: text, textColor: textColor)
                                 .foregroundStyle(.secondary)
                                 .italic()
                         }
                         .padding(.leading, 4)
-                        .padding(.vertical, 3)
+                        .padding(.vertical, 4)
                     case .hr:
-                        Divider()
-                            .padding(.vertical, 10)
-                            .overlay(Color(.separator).opacity(0.3))
+                        Rectangle()
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 0.5)
+                            .padding(.vertical, 12)
                     case .table(let headers, let rows):
                         MarkdownTable(headers: headers, rows: rows)
                             .padding(.vertical, 8)
                     case .text(let content):
                         if !content.trimmingCharacters(in: .whitespaces).isEmpty {
                             InlineMarkdown(text: content, textColor: textColor)
-                                .padding(.bottom, 4)
+                                .padding(.bottom, 6)
                         }
                     }
                 }
@@ -275,12 +277,12 @@ struct MarkdownRenderer: View {
 
     private func headerFont(_ level: Int) -> Font {
         switch level {
-        case 1: return .title2.bold()
-        case 2: return .title3.bold()
-        case 3: return .headline.bold()
-        case 4: return .subheadline.bold()
-        case 5: return .footnote.bold()
-        default: return .caption.bold()
+        case 1: return .title3.bold()
+        case 2: return .headline.bold()
+        case 3: return .subheadline.bold()
+        case 4: return .footnote.bold()
+        case 5: return .caption.bold()
+        default: return .caption2.bold()
         }
     }
 
@@ -329,13 +331,13 @@ private struct InlineMarkdown: View {
             Text(attributed)
                 .font(font)
                 .foregroundStyle(textColor)
-                .lineSpacing(5)
+                .lineSpacing(4)
                 .textSelection(.enabled)
         } else {
             Text(text)
                 .font(font)
                 .foregroundStyle(textColor)
-                .lineSpacing(5)
+                .lineSpacing(4)
                 .textSelection(.enabled)
         }
     }
@@ -347,9 +349,9 @@ private struct InlineMarkdown: View {
         // Style inline code spans with background
         for run in attributed.runs {
             if let intent = run.inlinePresentationIntent, intent.contains(.code) {
-                attributed[run.range].backgroundColor = Color(.tertiarySystemFill).opacity(0.5)
+                attributed[run.range].backgroundColor = Color.white.opacity(0.06)
                 attributed[run.range].font = .system(.footnote, design: .monospaced)
-                attributed[run.range].foregroundColor = LamoTheme.Colors.accent
+                attributed[run.range].foregroundColor = .white.opacity(0.8)
             }
         }
         return attributed
@@ -363,8 +365,8 @@ struct StreamingCursor: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: 1)
-            .fill(LamoTheme.Colors.accent)
-            .frame(width: 8, height: 14)
+            .fill(Color.white.opacity(0.5))
+            .frame(width: 2, height: 14)
             .opacity(visible ? 1 : 0)
             .onAppear {
                 withAnimation(.easeInOut(duration: 0.5).repeatForever()) {
@@ -386,8 +388,8 @@ struct CodeBlock: View {
             HStack {
                 if !language.isEmpty {
                     Text(language.uppercased())
-                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                        .foregroundStyle(LamoTheme.Colors.accent)
+                        .font(.system(.caption2, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
                 Spacer()
                 Button {
@@ -404,7 +406,7 @@ struct CodeBlock: View {
                         Text(isCopied ? "Copied" : "Copy")
                             .font(.caption2.weight(.medium))
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isCopied ? .white.opacity(0.6) : .white.opacity(0.3))
                 }
                 .buttonStyle(.plain)
             }
@@ -414,12 +416,13 @@ struct CodeBlock: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(.system(.footnote, design: .monospaced))
-                    .foregroundStyle(LamoTheme.Colors.textPrimary)
+                    .foregroundStyle(.white.opacity(0.8))
                     .textSelection(.enabled)
                     .padding(12)
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -446,11 +449,12 @@ struct MarkdownTable: View {
                             .gridColumnAlignment(col == 0 ? .leading : .leading)
                     }
                 }
-                .background(LamoTheme.Colors.accent.opacity(0.1))
+                .background(Color.white.opacity(0.04))
 
                 // Header separator
-                Divider()
-                    .overlay(LamoTheme.Colors.accent.opacity(0.3))
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 0.5)
 
                 // Data rows
                 ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
@@ -465,12 +469,13 @@ struct MarkdownTable: View {
                     .background(
                         rowIndex % 2 == 0
                             ? Color.clear
-                            : Color(.tertiarySystemFill).opacity(0.08)
+                            : Color.white.opacity(0.02)
                     )
 
                     if rowIndex < rows.count - 1 {
-                        Divider()
-                            .overlay(Color(.separator).opacity(0.1))
+                        Rectangle()
+                            .fill(Color.white.opacity(0.04))
+                            .frame(height: 0.5)
                             .padding(.horizontal, 10)
                     }
                 }
@@ -480,7 +485,7 @@ struct MarkdownTable: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color(.separator).opacity(0.18), lineWidth: 0.5)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
         )
     }
 }
