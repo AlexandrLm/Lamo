@@ -32,7 +32,8 @@ struct ChatView: View {
                 }
 
                 ForEach(viewModel.messages) { message in
-                    MessageBubble(message: message, onRetry: {
+                    let tokenCount = viewModel.contextTracker?.messageUsages.first(where: { $0.id == message.id })?.tokenCount
+                    MessageBubble(message: message, tokenCount: tokenCount, onRetry: {
                         viewModel.retryLastMessage()
                     })
                     .id(message.id)

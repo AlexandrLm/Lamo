@@ -182,19 +182,34 @@ final class ChatViewModel {
             .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty }
             .map { ChatMessage(id: $0.id, role: $0.role, content: $0.content, imagePaths: $0.imagePaths) }
 
-        // Fetch conversation summary
-        var summary: String?
-        if let ctx = MemoryService.shared.modelContext {
-            let id = conversation.id
-            let descriptor = FetchDescriptor<Conversation>(predicate: #Predicate { $0.id == id })
-            summary = (try? ctx.fetch(descriptor).first?.summary)
+        // Build full system prompt (mirrors LiteRTLMProvider)
+        var fullSystem = pm.systemPrompt
+        var memTokens = 0
+        if MemoryService.shared.isEnabled {
+            fullSystem += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
+            if let ctx = MemoryService.shared.modelContext {
+                let id = conversation.id
+                let descriptor = FetchDescriptor<Conversation>(predicate: #Predicate { $0.id == id })
+                if let summary = (try? ctx.fetch(descriptor).first?.summary), !summary.isEmpty {
+                    fullSystem += "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
+                }
+            }
+            let memCtx = MemoryService.shared.buildMemoryContext()
+            if !memCtx.isEmpty {
+                fullSystem += "\n\n" + memCtx
+                memTokens = await pm.tokenizeCount(memCtx)
+            }
         }
+        let sysTokens = await pm.tokenizeCount(fullSystem)
+
+        // Tokenize all messages with real tokenizer
+        let tokenCounts = await pm.tokenizeMessages(chatMessages)
 
         contextTracker = ContextTracker.build(
             messages: chatMessages,
-            systemPrompt: pm.systemPrompt,
-            memoryContext: MemoryService.shared.buildMemoryContext(),
-            conversationSummary: summary,
+            tokenCounts: tokenCounts,
+            systemPromptTokens: sysTokens,
+            memoryTokens: memTokens,
             maxNumTokens: pm.maxNumTokens,
             kvCacheAuto: pm.kvCacheAuto
         )

@@ -1,16 +1,16 @@
 import Foundation
 
 /// Tracks how the context window is filled during a conversation.
-/// Approximates token counts (1 token ≈ 4 chars) without calling the tokenizer.
+/// Uses the model's real tokenizer for all counts — no char/4 approximation.
 struct ContextTracker {
 
     struct MessageUsage: Identifiable {
         let id: UUID
         let role: String          // "user" / "assistant" / "system"
         let charCount: Int
-        let tokenEstimate: Int    // charCount / 4
+        let tokenCount: Int       // real tokenizer count
         let isInContext: Bool     // false = dropped (too old)
-        let charOffset: Int       // running char offset from start of context
+        let tokenOffset: Int      // running token offset from start
     }
 
     let systemPromptTokens: Int
@@ -22,7 +22,7 @@ struct ContextTracker {
 
     /// Tokens used by system prompt + memory + history that fit.
     var usedTokens: Int {
-        systemPromptTokens + memoryTokens + messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenEstimate }
+        systemPromptTokens + memoryTokens + messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenCount }
     }
 
     /// Tokens reserved for the model's reply (always at least 512).
@@ -43,19 +43,23 @@ struct ContextTracker {
     /// Whether any message was dropped because the budget was exceeded.
     var hasDroppedMessages: Bool { messageUsages.contains { !$0.isInContext } }
 
-    // MARK: - Build from settings + messages
+    // MARK: - Build from settings + messages (requires real token counts)
 
+    /// - Parameters:
+    ///   - messages: All messages in the conversation.
+    ///   - tokenCounts: Real token counts per message ID (from engine.tokenize).
+    ///   - systemPromptTokens: Real token count of the system prompt.
+    ///   - memoryTokens: Real token count of the memory context.
+    ///   - maxNumTokens: Configured KV-cache budget.
+    ///   - kvCacheAuto: Whether auto-budget is enabled.
     static func build(
         messages: [ChatMessage],
-        systemPrompt: String,
-        memoryContext: String,
-        conversationSummary: String?,
+        tokenCounts: [UUID: Int],
+        systemPromptTokens: Int,
+        memoryTokens: Int,
         maxNumTokens: Int,
-        kvCacheAuto: Bool,
-        realTokenCounts: [UUID: Int]? = nil,
-        kvCacheTotalTokens: Int? = nil
+        kvCacheAuto: Bool
     ) -> ContextTracker {
-        let charLimit = 4
         let reservedTokens = 512
 
         let effective: Int
@@ -65,52 +69,37 @@ struct ContextTracker {
             effective = max(maxNumTokens, 1024)
         }
 
-        var fullSystem = systemPrompt
-        var memTokens = 0
-        if MemoryService.shared.isEnabled {
-            fullSystem += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
-            if let summary = conversationSummary, !summary.isEmpty {
-                fullSystem += "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
-            }
-            if !memoryContext.isEmpty {
-                fullSystem += "\n\n" + memoryContext
-                memTokens = memoryContext.count / charLimit
-            }
-        }
-        let sysTokens = fullSystem.count / charLimit
-        let budgetChars = (effective * charLimit) - fullSystem.count - (reservedTokens * charLimit)
+        let budget = effective - systemPromptTokens - memoryTokens - reservedTokens
 
-        var usedChars = 0
+        // Walk messages most-recent-first to determine which fit by token count
+        var usedTokens = 0
         var includedIDs = Set<UUID>()
-        var offsets: [UUID: Int] = [:]
+        for msg in messages.dropLast().reversed() {
+            let tokens = tokenCounts[msg.id] ?? 0
+            if usedTokens + tokens > budget { break }
+            includedIDs.insert(msg.id)
+            usedTokens += tokens
+        }
+
+        // Build final list in chronological order
         var usages: [MessageUsage] = []
         var runningOffset = 0
-
-        // Walk messages most-recent-first to determine which fit
-        for msg in messages.dropLast().reversed() {
-            let chars = msg.content.count
-            if usedChars + chars > budgetChars { break }
-            includedIDs.insert(msg.id)
-            usedChars += chars
-        }
-
-        // Build final list in chronological order with offsets
         for msg in messages {
-            let chars = msg.content.count
+            let tokens = tokenCounts[msg.id] ?? 0
             usages.append(MessageUsage(
                 id: msg.id,
                 role: msg.role == .user ? "user" : "assistant",
-                charCount: chars,
-                tokenEstimate: realTokenCounts?[msg.id] ?? (chars / charLimit),
+                charCount: msg.content.count,
+                tokenCount: tokens,
                 isInContext: includedIDs.contains(msg.id),
-                charOffset: runningOffset
+                tokenOffset: runningOffset
             ))
-            runningOffset += chars
+            runningOffset += tokens
         }
 
         return ContextTracker(
-            systemPromptTokens: sysTokens,
-            memoryTokens: memTokens,
+            systemPromptTokens: systemPromptTokens,
+            memoryTokens: memoryTokens,
             totalLimit: effective,
             messageUsages: usages
         )

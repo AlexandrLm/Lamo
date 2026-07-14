@@ -3,6 +3,7 @@ import UIKit
 
 struct MessageBubble: View {
     let message: Message
+    let tokenCount: Int?
     let onRetry: (() -> Void)?
     @State private var showCopyConfirmation = false
     @State private var showImageViewer = false

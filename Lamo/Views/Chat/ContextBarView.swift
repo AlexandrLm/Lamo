@@ -193,7 +193,7 @@ struct ContextDetailView: View {
                         )
                     }
                     barSegment(
-                        width: geo.size.width * (Double(tracker.messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenEstimate }) / Double(total)),
+                        width: geo.size.width * (Double(tracker.messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenCount }) / Double(total)),
                         color: .white.opacity(0.35)
                     )
                     barSegment(
@@ -238,7 +238,7 @@ struct ContextDetailView: View {
             if tracker.memoryTokens > 0 {
                 breakdownRow(icon: "brain", label: "Memory facts", tokens: tracker.memoryTokens)
             }
-            breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", tokens: tracker.messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenEstimate })
+            breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", tokens: tracker.messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenCount })
             breakdownRow(icon: "arrowshape.down", label: "Reply buffer", tokens: 512)
         }
         .padding(.vertical, 4)
@@ -302,7 +302,7 @@ struct ContextDetailView: View {
                     Spacer()
 
                     // Token count
-                    Text("~\(ContextTracker.formatTokens(msg.tokenEstimate))")
+                    Text("~\(ContextTracker.formatTokens(msg.tokenCount))")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(msg.isInContext ? .gray : .gray.opacity(0.3))
 
