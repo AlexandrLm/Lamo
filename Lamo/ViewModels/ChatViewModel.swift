@@ -216,10 +216,12 @@ final class ChatViewModel {
 
     // MARK: - Private
 
-    private func startStreaming(chatMessages: [ChatMessage]) {
+    private func startStreaming(chatMessages: [ChatMessage], retryCount: Int = 0) {
         // Cancel any in-flight streaming
         streamingTask?.cancel()
         streamingTask = nil
+
+        let maxRetries = 2
 
         // Always resolve fresh provider from ProviderManager — if the user
         // switched models in Settings, the old provider wraps a stale engine.
@@ -239,6 +241,28 @@ final class ChatViewModel {
                     self.messages[index].thinkingContent += thought
                 case .benchmark(let data):
                     self.pendingBenchmark = data
+                case .loopDetected:
+                    if retryCount < maxRetries {
+                        // Auto-retry: clear generated text, invalidate cache for new seed
+                        LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
+                        if let id = self.streamingMessageID,
+                           let index = self.messages.firstIndex(where: { $0.id == id }) {
+                            self.messages[index].content = ""
+                            self.messages[index].thinkingContent = ""
+                        }
+                        // Invalidate conversation cache for fresh seed (breaks the loop)
+                        (ProviderManager.shared.currentProvider as? LiteRTLMProvider)?.invalidateConversationCache()
+                        self.startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
+                        return
+                    } else {
+                        // All retries exhausted
+                        if let id = self.streamingMessageID,
+                           let index = self.messages.firstIndex(where: { $0.id == id }) {
+                            self.messages[index].content += "\n\n⚠️ Генерация остановлена — зацикливание не удалось устранить"
+                        }
+                        self.finalizeStreaming(success: true)
+                        return
+                    }
                 case .done:
                     self.finalizeStreaming(success: true)
                     return

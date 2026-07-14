@@ -187,6 +187,9 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                 ? ["enable_thinking": "true"]
                 : nil
 
+            // Repetition detector — catches generation loops
+            let repDetector = RepetitionDetector()
+
             for try await chunk in conversation.sendMessageStream(message, extraContext: extraContext) {
                 guard !Task.isCancelled else {
                     // Cancel native stream to stop C++ callback loop
@@ -201,6 +204,13 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                 let text = chunk.toString
                 if !text.isEmpty {
                     continuation.yield(.delta(text))
+
+                    // Feed chunk to repetition detector
+                    if repDetector.feed(text) {
+                        try? conversation.cancel()
+                        continuation.yield(.loopDetected)
+                        break
+                    }
                 }
             }
         }

@@ -13,6 +13,7 @@ enum StreamingToken: @unchecked Sendable {
     case delta(String)
     case thinkingDelta(String)
     case benchmark(BenchmarkData)
+    case loopDetected
     case done
     case error(any Error & Sendable)
 }
