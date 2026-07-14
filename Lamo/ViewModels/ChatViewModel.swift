@@ -174,6 +174,7 @@ final class ChatViewModel {
         isStreaming = false
         conversation.updatedAt = .now
         save()
+        Task { await refreshContextTracker() }
         if success == true {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
