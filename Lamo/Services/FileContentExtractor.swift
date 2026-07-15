@@ -178,11 +178,13 @@ enum FileContentExtractor {
 
     // MARK: - XML Helpers
 
+    /// Cached regex for extracting text between XML tags.
+    private static let xmlTextPattern = try! NSRegularExpression(pattern: ">([^<]+)<", options: [])
+
     private static func extractTextFromOOXML(_ data: Data) -> String {
         guard let xml = String(data: data, encoding: .utf8) else { return "" }
-        let pattern = try! NSRegularExpression(pattern: ">([^<]+)<", options: [])
         let range = NSRange(xml.startIndex..., in: xml)
-        let matches = pattern.matches(in: xml, range: range)
+        let matches = xmlTextPattern.matches(in: xml, range: range)
         let texts = matches.compactMap { match -> String? in
             guard let r = Range(match.range(at: 1), in: xml) else { return nil }
             let text = String(xml[r]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -196,17 +198,21 @@ enum FileContentExtractor {
         return xml.components(separatedBy: " ").filter { !$0.isEmpty }
     }
 
+    // MARK: - XLSX Helpers
+
+    /// Cached regex patterns for XLSX parsing.
+    private static let xlsxRowPattern = try! NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])
+    private static let xlsxCellPattern = try! NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])
+
     private static func parseXLSXSheet(_ data: Data, sharedStrings: [String]) -> String {
         guard let xml = String(data: data, encoding: .utf8) else { return "" }
         var rows: [String] = []
-        let rowPattern = try! NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])
-        let cellPattern = try! NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])
         let range = NSRange(xml.startIndex..., in: xml)
-        for rowMatch in rowPattern.matches(in: xml, range: range) {
+        for rowMatch in xlsxRowPattern.matches(in: xml, range: range) {
             guard let rowRange = Range(rowMatch.range(at: 1), in: xml) else { continue }
             let rowXml = String(xml[rowRange])
             let rowRange2 = NSRange(rowXml.startIndex..., in: rowXml)
-            let cells = cellPattern.matches(in: rowXml, range: rowRange2).compactMap { match -> String? in
+            let cells = xlsxCellPattern.matches(in: rowXml, range: rowRange2).compactMap { match -> String? in
                 guard let r = Range(match.range(at: 1), in: rowXml) else { return nil }
                 let val = String(rowXml[r]).trimmingCharacters(in: .whitespacesAndNewlines)
                 return val.isEmpty ? nil : val

@@ -45,7 +45,6 @@ final class ChatViewModel {
     }
 
     func send() {
-        Task { await refreshContextTracker() }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty else { return }
 
@@ -160,26 +159,16 @@ final class ChatViewModel {
                 conversation.title = titleText
             }
 
-            // Build chat history
-            let chatMessages = messages
-                .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
-                .map { ChatMessage(
-                    id: $0.id, role: $0.role, content: $0.content,
-                    imagePaths: $0.imagePaths,
-                    attachedFilePaths: $0.attachedFilePaths,
-                    attachedFileNames: $0.attachedFileNames,
-                    attachedFileSizes: $0.attachedFileSizes,
-                    fileContent: $0.fileContent
-                ) }
+            // Build chat history from current messages
+            let history = self.chatMessages
 
             // Stream response
             MemoryService.shared.currentConversationID = conversation.id
-            startStreaming(chatMessages: chatMessages)
+            startStreaming(chatMessages: history)
         }
     }
 
     func retryLastMessage() {
-        Task { await refreshContextTracker() }
         guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
 
         // Remove the last assistant message
@@ -192,18 +181,9 @@ final class ChatViewModel {
         streamingMessageID = assistantMessage.id
         isStreaming = true
 
-        let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
-            .map { ChatMessage(
-                id: $0.id, role: $0.role, content: $0.content,
-                imagePaths: $0.imagePaths,
-                attachedFilePaths: $0.attachedFilePaths,
-                attachedFileNames: $0.attachedFileNames,
-                attachedFileSizes: $0.attachedFileSizes,
-                fileContent: $0.fileContent
-            ) }
+        let history = self.chatMessages
 
-        startStreaming(chatMessages: chatMessages)
+        startStreaming(chatMessages: history)
     }
 
     func stopGeneration() {
@@ -215,6 +195,21 @@ final class ChatViewModel {
     }
 
     // MARK: - Private
+
+    /// Convert app Messages to lightweight ChatMessages for the engine.
+    /// Filters out empty placeholder messages.
+    private var chatMessages: [ChatMessage] {
+        messages
+            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
+            .map { ChatMessage(
+                id: $0.id, role: $0.role, content: $0.content,
+                imagePaths: $0.imagePaths,
+                attachedFilePaths: $0.attachedFilePaths,
+                attachedFileNames: $0.attachedFileNames,
+                attachedFileSizes: $0.attachedFileSizes,
+                fileContent: $0.fileContent
+            ) }
+    }
 
     private func startStreaming(chatMessages: [ChatMessage], retryCount: Int = 0) {
         // Cancel any in-flight streaming
@@ -319,22 +314,12 @@ final class ChatViewModel {
         messages.append(message)
         conversation.updatedAt = .now
         save()
-        Task { await refreshContextTracker() }
     }
 
     /// Rebuild the context tracker from current messages + settings.
     private func refreshContextTracker() async {
         let pm = ProviderManager.shared
-        let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
-            .map { ChatMessage(
-                id: $0.id, role: $0.role, content: $0.content,
-                imagePaths: $0.imagePaths,
-                attachedFilePaths: $0.attachedFilePaths,
-                attachedFileNames: $0.attachedFileNames,
-                attachedFileSizes: $0.attachedFileSizes,
-                fileContent: $0.fileContent
-            ) }
+        let currentChatMessages = self.chatMessages
 
         // Build full system prompt (mirrors LiteRTLMProvider)
         var fullSystem = pm.systemPrompt
@@ -357,10 +342,10 @@ final class ChatViewModel {
         let sysTokens = await pm.tokenizeCount(fullSystem)
 
         // Tokenize all messages with real tokenizer
-        let tokenCounts = await pm.tokenizeMessages(chatMessages)
+        let tokenCounts = await pm.tokenizeMessages(currentChatMessages)
 
         contextTracker = ContextTracker.build(
-            messages: chatMessages,
+            messages: currentChatMessages,
             tokenCounts: tokenCounts,
             systemPromptTokens: sysTokens,
             memoryTokens: memTokens,
@@ -474,16 +459,7 @@ final class ChatViewModel {
         addMessage(followUp)
 
         // Re-trigger streaming with updated history
-        let chatMessages = messages
-            .filter { !$0.content.isEmpty || !$0.imagePaths.isEmpty || !$0.attachedFilePaths.isEmpty }
-            .map { ChatMessage(
-                id: $0.id, role: $0.role, content: $0.content,
-                imagePaths: $0.imagePaths,
-                attachedFilePaths: $0.attachedFilePaths,
-                attachedFileNames: $0.attachedFileNames,
-                attachedFileSizes: $0.attachedFileSizes,
-                fileContent: $0.fileContent
-            ) }
+        let history = self.chatMessages
 
         // Add empty assistant placeholder
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
@@ -491,7 +467,7 @@ final class ChatViewModel {
         streamingMessageID = assistantMessage.id
         isStreaming = true
 
-        startStreaming(chatMessages: chatMessages)
+        startStreaming(chatMessages: history)
     }
 
     /// Save UIImages to tmp directory as JPEG (resized to max 1024px), return file paths.

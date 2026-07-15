@@ -3,29 +3,44 @@ import os
 
 /// Detects when the model gets stuck in a generation loop.
 /// Monitors streamed text for repeating patterns and triggers a stop.
+/// Optimized: checks every N tokens instead of every token.
 final class RepetitionDetector: @unchecked Sendable {
     private let logger = Logger(subsystem: "com.lamo", category: "RepDetector")
 
     /// Collected output text so far.
     private var buffer: String = ""
+    /// Cached buffer length to avoid O(n) .count on every call.
+    private var bufferLength: Int = 0
     /// How many tokens/chars to keep in the sliding window.
     private let windowSize: Int
     /// Minimum buffer size before detection kicks in (avoid false positives on short output).
     private let minBufferSize: Int
+    /// Check frequency: run detection every N tokens.
+    private let checkFrequency: Int
+    /// Token counter for batched checking.
+    private var tokenCount: Int = 0
 
-    init(windowSize: Int = 2000, minBufferSize: Int = 200) {
+    init(windowSize: Int = 2000, minBufferSize: Int = 200, checkFrequency: Int = 5) {
         self.windowSize = windowSize
         self.minBufferSize = minBufferSize
+        self.checkFrequency = checkFrequency
     }
 
     /// Feed a new chunk of text. Returns `true` if repetition detected.
+    /// Only runs detection every `checkFrequency` tokens for performance.
     func feed(_ chunk: String) -> Bool {
         buffer.append(chunk)
-        // Keep buffer bounded
-        if buffer.count > windowSize * 3 {
+        bufferLength += chunk.count
+        tokenCount += 1
+        // Keep buffer bounded — use cached length to avoid O(n) .count
+        if bufferLength > windowSize * 3 {
             buffer = String(buffer.suffix(windowSize * 2))
+            bufferLength = buffer.count  // recalculate after trim
         }
-        guard buffer.count >= minBufferSize else { return false }
+        guard bufferLength >= minBufferSize else { return false }
+
+        // Only check every N tokens — saves ~80% CPU during streaming
+        guard tokenCount % checkFrequency == 0 else { return false }
 
         return detectLoop()
     }
@@ -132,5 +147,7 @@ final class RepetitionDetector: @unchecked Sendable {
     /// Reset for a new generation.
     func reset() {
         buffer = ""
+        bufferLength = 0
+        tokenCount = 0
     }
 }

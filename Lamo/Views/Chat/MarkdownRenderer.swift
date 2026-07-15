@@ -8,19 +8,53 @@ struct MarkdownRenderer: View {
     let text: String
     let textColor: Color
     let isStreaming: Bool
+    /// Cached parsed blocks — only recomputed when `text` actually changes.
+    /// During streaming, `isStreaming` toggles don't trigger a re-parse.
+    private let cachedBlocks: [Block]
 
     init(text: String, textColor: Color, isStreaming: Bool = false) {
         self.text = text
         self.textColor = textColor
         self.isStreaming = isStreaming
+        self.cachedBlocks = Self.parseBlocksCached(text)
     }
 
     var body: some View {
         if text.isEmpty {
             EmptyView()
         } else {
+            MarkdownBody(blocks: cachedBlocks, textColor: textColor, isStreaming: isStreaming)
+        }
+    }
+
+    /// Parse blocks once per unique text, cached statically for the session.
+    /// Avoids re-parsing on every SwiftUI body evaluation during streaming.
+    private static func parseBlocksCached(_ text: String) -> [Block] {
+        if let cached = blockCache.object(forKey: text as NSString) {
+            return cached as! [Block]
+        }
+        let blocks = parseBlocksStatic(text)
+        blockCache.setObject(blocks as NSArray, forKey: text as NSString)
+        return blocks
+    }
+
+    /// NSCache for parsed markdown blocks. Thread-safe, auto-evicts under memory pressure.
+    private static let blockCache: NSCache<NSString, NSArray> = {
+        let cache = NSCache<NSString, NSArray>()
+        cache.countLimit = 50      // max 50 messages cached
+        cache.totalCostLimit = 2 * 1024 * 1024  // 2MB
+        return cache
+    }()
+
+    // MARK: - Body (extracted to minimize re-render scope)
+
+    private struct MarkdownBody: View {
+        let blocks: [Block]
+        let textColor: Color
+        let isStreaming: Bool
+
+        var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                let blocks = parseBlocks()
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .code(let code, let language):
@@ -104,7 +138,7 @@ struct MarkdownRenderer: View {
 
     // MARK: - Block Types
 
-    private enum Block {
+    private enum Block: Sendable {
         case text(String)
         case code(code: String, language: String)
         case header(String, level: Int)
@@ -117,7 +151,10 @@ struct MarkdownRenderer: View {
 
     // MARK: - Block Parsing
 
-    private func parseBlocks() -> [Block] {
+    /// Cached regex for ordered list detection.
+    private static let orderedListPattern = try! NSRegularExpression(pattern: #"^\d+\.\s"#)
+
+    private static func parseBlocksStatic(_ text: String) -> [Block] {
         var blocks: [Block] = []
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         var inCodeBlock = false
@@ -247,7 +284,7 @@ struct MarkdownRenderer: View {
                 listCounter = 0
             }
             // Ordered list
-            else if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+            else if orderedListPattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
                 flushText()
                 let content = line.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
                 listCounter += 1
@@ -275,7 +312,7 @@ struct MarkdownRenderer: View {
 
     // MARK: - Helpers
 
-    private func headerFont(_ level: Int) -> Font {
+    private static func headerFont(_ level: Int) -> Font {
         switch level {
         case 1: return .title3.bold()
         case 2: return .headline.bold()
@@ -286,7 +323,7 @@ struct MarkdownRenderer: View {
         }
     }
 
-    private func bulletForIndent(_ indent: Int) -> String {
+    private static func bulletForIndent(_ indent: Int) -> String {
         switch indent {
         case 0: return "•"
         case 1: return "◦"
@@ -296,14 +333,14 @@ struct MarkdownRenderer: View {
 
     // MARK: - Table Helpers
 
-    private func parseTableRow(_ line: String) -> [String]? {
+    private static func parseTableRow(_ line: String) -> [String]? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|") else { return nil }
         let inner = String(trimmed.dropFirst().dropLast())
         return inner.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
-    private func isTableSeparatorRow(_ line: String) -> Bool {
+    private static func isTableSeparatorRow(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|") else { return false }
         let inner = String(trimmed.dropFirst().dropLast())

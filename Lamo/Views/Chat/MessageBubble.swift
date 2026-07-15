@@ -213,41 +213,18 @@ struct MessageBubble: View {
             HStack(spacing: 6) {
                 ForEach(message.imagePaths.indices, id: \.self) { index in
                     let path = message.imagePaths[index]
-                    let uiImage: UIImage? = {
-                        if let cached = ImageCache.shared.image(forKey: path) {
-                            return cached
+                    AsyncThumbnailView(path: path)
+                        .onTapGesture {
+                            selectedImageIndex = index
+                            showImageViewer = true
                         }
-                        if let loaded = UIImage(contentsOfFile: path) {
-                            ImageCache.shared.setImage(loaded, forKey: path)
-                            return loaded
-                        }
-                        return nil
-                    }()
-                    if let uiImage {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: 200, maxHeight: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .contentShape(Rectangle())
-                            .accessibilityLabel("Image attachment")
-                            .onTapGesture {
-                                selectedImageIndex = index
-                                showImageViewer = true
-                            }
-                    }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .fullScreenCover(isPresented: $showImageViewer) {
             let uiImages = message.imagePaths.compactMap { path -> UIImage? in
-                if let cached = ImageCache.shared.image(forKey: path) { return cached }
-                if let loaded = UIImage(contentsOfFile: path) {
-                    ImageCache.shared.setImage(loaded, forKey: path)
-                    return loaded
-                }
-                return nil
+                ImageCache.shared.image(forKey: path)
             }
             ImageViewer(images: uiImages, startIndex: selectedImageIndex)
                 .ignoresSafeArea()
@@ -393,5 +370,57 @@ struct ThinkingView: View {
             }
         }
         .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: .rect(cornerRadius: 12))
+    }
+}
+
+// MARK: - Async Thumbnail Loader
+
+/// Loads image thumbnails off the main thread to prevent scroll stuttering.
+/// Checks ImageCache first (O(1)), falls back to async disk load.
+private struct AsyncThumbnailView: View {
+    let path: String
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: 200, maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Image attachment")
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 80, height: 80)
+                    .overlay {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+            }
+        }
+        .task(id: path) {
+            // Check cache first (instant, thread-safe NSCache)
+            if let cached = ImageCache.shared.image(forKey: path) {
+                self.image = cached
+                return
+            }
+            // Load from disk on background thread
+            if let loaded = await loadInBackground(path) {
+                ImageCache.shared.setImage(loaded, forKey: path)
+                self.image = loaded
+            }
+        }
+    }
+
+    private func loadInBackground(_ path: String) async -> UIImage? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let img = UIImage(contentsOfFile: path)
+                continuation.resume(returning: img)
+            }
+        }
     }
 }
