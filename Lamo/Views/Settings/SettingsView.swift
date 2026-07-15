@@ -480,22 +480,22 @@ struct SettingsView: View {
                 Button {
                     isImportingModel = true
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         if isCopyingFile {
-                            ProgressView().controlSize(.small).tint(.white)
+                            ProgressView().controlSize(.mini).tint(.white)
                             Text("Importing…")
                         } else {
                             Image(systemName: "square.and.arrow.down")
                             Text("Import from Files")
                         }
                     }
-                    .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, LamoTheme.Spacing.md)
+                    .font(.system(.caption, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
                 }
-                .buttonStyle(.glassProminent)
-                .foregroundStyle(.white)
+                .buttonStyle(.plain)
                 .disabled(isCopyingFile)
 
                 Text(".litertlm, .bin, or .tflite")
@@ -506,21 +506,28 @@ struct SettingsView: View {
                 modelsStorageCard
 
                 // ── Model Info ──
-                if let info = vm.modelInfo {
-                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-                        Text("Model Info")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.3))
-                            .textCase(.uppercase)
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("Model Info")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
 
+                    if let info = vm.modelInfo {
                         infoRow(label: "Name", value: info.name)
                         infoRow(label: "File Size", value: info.fileSizeString)
                         infoRow(label: "Speculative Decoding", value: info.hasSpeculativeDecoding ? "YES" : "NO")
+                    } else if let current = vm.selectedModel {
+                        infoRow(label: "Name", value: vm.displayName(for: current))
+                        infoRow(label: "Path", value: (current as NSString).lastPathComponent)
+                    } else {
+                        Text("Select a model to see info")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
-                    .padding(LamoTheme.Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
                 }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
             }
             .padding(.horizontal, LamoTheme.Spacing.lg)
             .padding(.bottom, LamoTheme.Spacing.xxxl)
@@ -603,6 +610,7 @@ struct SettingsView: View {
                 ($0 as NSString).lastPathComponent == model.filename
             } ?? vm.selectedModel
             vm.loadModelInfo()
+            vm.refreshModels()
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: model.systemImage)
@@ -652,6 +660,7 @@ struct SettingsView: View {
         Button {
             vm.selectedModel = path
             vm.loadModelInfo()
+            vm.refreshModels()
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "doc.zipper")
