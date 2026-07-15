@@ -18,6 +18,7 @@ struct ChatInputBar: View {
     @State private var showFileImporter = false
     @State private var sendTrigger = false
     @ObservedObject private var provider = ProviderManager.shared
+    @Namespace private var glassNamespace
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,7 +48,8 @@ struct ChatInputBar: View {
                 .frame(height: 0.5)
                 .padding(.horizontal, 12)
 
-            // Bottom: toolbar row
+            // Bottom: toolbar row with glass morphing
+            GlassEffectContainer(spacing: 16) {
             HStack(spacing: 10) {
                 // Plus button — menu with Camera + Photo Library + Files
                 Menu {
@@ -78,6 +80,7 @@ struct ChatInputBar: View {
                             .foregroundStyle(.white)
                             .frame(width: 32, height: 32)
                             .glassEffect(.regular.interactive(), in: .circle)
+                            .glassEffectID("plus", in: glassNamespace)
 
                         let attachCount = pendingImages.count + pendingFiles.count
                         if attachCount > 0 {
@@ -120,12 +123,14 @@ struct ChatInputBar: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .glassEffect(in: .capsule)
+                    .glassEffectID("model", in: glassNamespace)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(modelDisplayName)
 
                 Spacer()
 
+                // Send/Stop — morphing via glassEffectID
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")
@@ -134,8 +139,8 @@ struct ChatInputBar: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.glassProminent)
+                    .glassEffectID("send", in: glassNamespace)
                     .accessibilityLabel("Stop")
-                    .transition(.scale.combined(with: .opacity))
                 } else if canSend {
                     Button(action: {
                         sendTrigger.toggle()
@@ -148,19 +153,21 @@ struct ChatInputBar: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.glassProminent)
+                    .glassEffectID("send", in: glassNamespace)
                     .accessibilityLabel("Send")
                     .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
-                    .transition(.scale.combined(with: .opacity))
                 } else {
                     Image(systemName: "arrow.up")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.3))
                         .frame(width: 32, height: 32)
                         .glassEffect(in: .circle)
+                        .glassEffectID("send", in: glassNamespace)
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            }
         }
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
         .frame(maxWidth: LamoTheme.maxContentWidth)
