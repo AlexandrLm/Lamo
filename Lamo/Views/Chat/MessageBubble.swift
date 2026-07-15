@@ -129,15 +129,7 @@ struct MessageBubble: View {
                 Text(message.content)
                     .font(.body)
                     .foregroundStyle(.white.opacity(0.9))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .glassEffect(.regular.tint(Color.white.opacity(0.1)), in: UnevenRoundedRectangle(
-                        topLeadingRadius: 18,
-                        bottomLeadingRadius: message.hasImages ? 4 : 18,
-                        bottomTrailingRadius: 18,
-                        topTrailingRadius: 4,
-                        style: .continuous
-                    ))
+                    .textSelection(.enabled)
             }
         }
     }
