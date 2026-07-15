@@ -128,20 +128,16 @@ struct MessageBubble: View {
             if !message.content.isEmpty {
                 Text(message.content)
                     .font(.body)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white.opacity(0.9))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.white)
-                    .clipShape(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 18,
-                            bottomLeadingRadius: message.hasImages ? 4 : 18,
-                            bottomTrailingRadius: 18,
-                            topTrailingRadius: 4,
-                            style: .continuous
-                        )
-                    )
-                    .shadow(color: .white.opacity(0.06), radius: 8, y: 2)
+                    .glassEffect(.regular.tint(Color.white.opacity(0.1)), in: UnevenRoundedRectangle(
+                        topLeadingRadius: 18,
+                        bottomLeadingRadius: message.hasImages ? 4 : 18,
+                        bottomTrailingRadius: 18,
+                        topTrailingRadius: 4,
+                        style: .continuous
+                    ))
             }
         }
     }

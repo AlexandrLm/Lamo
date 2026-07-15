@@ -85,7 +85,7 @@ struct ChatInputBar: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(.black)
                                 .frame(width: 16, height: 16)
-                                .background(LamoTheme.Colors.accent, in: Circle())
+                                .background(.white, in: Circle())
                                 .offset(x: 6, y: -6)
                         }
                     }
@@ -110,7 +110,7 @@ struct ChatInputBar: View {
                 } label: {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(provider.isEngineReady ? LamoTheme.Colors.accent : .orange)
+                            .fill(provider.isEngineReady ? .white.opacity(0.6) : .orange)
                             .frame(width: 6, height: 6)
                         Text(modelDisplayName)
                             .font(.caption.weight(.medium))
@@ -119,7 +119,7 @@ struct ChatInputBar: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.06), in: Capsule())
+                    .glassEffect(in: .capsule)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(modelDisplayName)
@@ -288,12 +288,7 @@ private struct PendingFileThumb: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: 10))
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")

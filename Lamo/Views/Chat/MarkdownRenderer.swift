@@ -474,7 +474,6 @@ struct MarkdownTable: View {
                             .gridColumnAlignment(col == 0 ? .leading : .leading)
                     }
                 }
-                .background(Color.white.opacity(0.04))
 
                 Rectangle()
                     .fill(Color.white.opacity(0.08))
@@ -505,11 +504,7 @@ struct MarkdownTable: View {
             }
             .frame(minWidth: 280)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
-        )
+        .glassEffect(.regular.tint(Color.white.opacity(0.03)), in: .rect(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -528,7 +523,7 @@ private struct MarkdownTableCell: View {
             }
         }
         .font(isHeader ? .footnote.weight(.semibold) : .footnote)
-        .foregroundStyle(isHeader ? LamoTheme.Colors.accent : LamoTheme.Colors.textPrimary.opacity(0.85))
+        .foregroundStyle(isHeader ? .white.opacity(0.8) : LamoTheme.Colors.textPrimary.opacity(0.85))
         .lineLimit(nil)
         .fixedSize(horizontal: false, vertical: true)
         .frame(minWidth: 44, alignment: .leading)
