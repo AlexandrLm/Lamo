@@ -773,7 +773,7 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityLabel("Memory")
-                    .tint(.white.opacity(0.5))
+                    .tint(.white.opacity(0.7))
 
                     Text("Facts are injected into context for future conversations.")
                         .font(.system(.caption2, design: .monospaced))
@@ -903,7 +903,7 @@ struct SettingsView: View {
                             .foregroundStyle(.white)
                     }
                     .accessibilityLabel("GPU acceleration")
-                    .tint(.white.opacity(0.5))
+                    .tint(.white.opacity(0.7))
 
                     if !vm.useGPU {
                         VStack(alignment: .leading, spacing: 10) {
@@ -955,7 +955,7 @@ struct SettingsView: View {
                             .font(.system(.subheadline, design: .monospaced))
                             .foregroundStyle(.white)
                     }
-                    .tint(.white.opacity(0.5))
+                    .tint(.white.opacity(0.7))
 
                     if !vm.kvCacheAuto {
                         VStack(alignment: .leading, spacing: 10) {
@@ -1019,7 +1019,7 @@ struct SettingsView: View {
                                     .foregroundStyle(.white.opacity(0.4))
                             }
                         }
-                        .tint(.white.opacity(0.5))
+                        .tint(.white.opacity(0.7))
 
                         Text("Uses a draft model to predict multiple tokens.")
                             .font(.system(.caption2, design: .monospaced))

@@ -8,98 +8,165 @@ struct WebSearchSettings: View {
     @State private var isTesting = false
 
     var body: some View {
-        List {
-            Section {
-                HStack {
-                    Label("Search Engine", systemImage: "magnifyingglass")
-                    Spacer()
-                    if !apiKey.isEmpty {
-                        Text("SearXNG + Brave")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    } else {
-                        Text("SearXNG")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: LamoTheme.Spacing.lg) {
+                // ── Engine Status ──
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+                    sectionHeader("SEARCH ENGINE")
+
+                    HStack {
+                        Text("Active")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.5))
+                        Spacer()
+                        if !apiKey.isEmpty {
+                            Text("SearXNG + Brave")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.8))
+                        } else {
+                            Text("SearXNG")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
                     }
                 }
-            } footer: {
-                Text("SearXNG is the primary search engine (free, no key needed). Brave adds extra results when configured.")
-            }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
 
-            Section("Brave API Key (Optional - for extra results)") {
-                HStack {
-                    if showAPIKey {
-                        TextField("BRAVE_API_KEY", text: $apiKey)
-                            .textContentType(.password)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                    } else {
-                        SecureField("BRAVE_API_KEY", text: $apiKey)
+                // ── Brave API Key ──
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+                    sectionHeader("BRAVE API KEY (OPTIONAL)")
+
+                    HStack {
+                        if showAPIKey {
+                            TextField("BRAVE_API_KEY", text: $apiKey)
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white)
+                                .textContentType(.password)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("BRAVE_API_KEY", text: $apiKey)
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
+
+                        Button {
+                            showAPIKey.toggle()
+                        } label: {
+                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
                     }
+
+                    HStack(spacing: LamoTheme.Spacing.md) {
+                        Button {
+                            saveAPIKey()
+                        } label: {
+                            Text("Save")
+                                .font(.system(.subheadline, design: .monospaced).weight(.medium))
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(apiKey.isEmpty)
+
+                        Button {
+                            apiKey = ""
+                            saveAPIKey()
+                        } label: {
+                            Text("Clear")
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+                        }
+                        .disabled(apiKey.isEmpty)
+                    }
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // ── Options ──
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+                    sectionHeader("OPTIONS")
+
+                    Toggle(isOn: $autoFetch) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Auto-fetch top results")
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white)
+                            Text("Loads full content from top 3 results")
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
+                    }
+                    .tint(.white.opacity(0.7))
+                    .onChange(of: autoFetch) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: "web_auto_fetch")
+                    }
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // ── Test ──
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+                    sectionHeader("TEST")
 
                     Button {
-                        showAPIKey.toggle()
+                        testSearch()
                     } label: {
-                        Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Button {
-                    saveAPIKey()
-                } label: {
-                    Text("Save")
-                }
-                .disabled(apiKey.isEmpty)
-
-                Button(role: .destructive) {
-                    apiKey = ""
-                    saveAPIKey()
-                } label: {
-                    Text("Clear Key")
-                }
-                .disabled(apiKey.isEmpty)
-            }
-
-            Section {
-                Toggle(isOn: $autoFetch) {
-                    Label("Auto-fetch top results", systemImage: "arrow.down.circle")
-                }
-                .onChange(of: autoFetch) { _, newValue in
-                    UserDefaults.standard.set(newValue, forKey: "web_auto_fetch")
-                }
-            } header: {
-                Text("Options")
-            } footer: {
-                Text("When enabled, automatically loads full content from top 3 search results.")
-            }
-
-            Section("Test") {
-                Button {
-                    testSearch()
-                } label: {
-                    HStack {
-                        if isTesting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "play.circle")
+                        HStack(spacing: 8) {
+                            if isTesting {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(.white.opacity(0.5))
+                            } else {
+                                Image(systemName: "play.fill")
+                                    .font(.caption)
+                            }
+                            Text(isTesting ? "Testing…" : "Run Test Search")
+                                .font(.system(.subheadline, design: .monospaced))
                         }
-                        Text("Test Search")
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+                    }
+                    .disabled(isTesting)
+
+                    if let result = testResult {
+                        Text(result)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .textSelection(.enabled)
                     }
                 }
-                .disabled(isTesting)
-
-                if let result = testResult {
-                    Text(result)
-                        .font(.caption)
-                        .foregroundStyle(result.contains("Error") ? .red : .green)
-                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
             }
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.bottom, LamoTheme.Spacing.xxxl)
         }
-        .listStyle(.insetGrouped)
+        .background(LamoTheme.Colors.background)
         .navigationTitle("Web Search")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(.white.opacity(0.3))
+            .textCase(.uppercase)
     }
 
     private func saveAPIKey() {
@@ -116,13 +183,13 @@ struct WebSearchSettings: View {
                 if results.isEmpty {
                     testResult = "No results returned"
                 } else {
-                    testResult = "✅ Found \(results.count) results"
+                    testResult = "Found \(results.count) results"
                     if let first = results.first, let title = first["title"] {
                         testResult = testResult! + "\nFirst: \(title)"
                     }
                 }
             } catch {
-                testResult = "❌ Error: \(error.localizedDescription)"
+                testResult = "Error: \(error.localizedDescription)"
             }
             isTesting = false
         }
