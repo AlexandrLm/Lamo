@@ -77,7 +77,7 @@ struct MessageBubble: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                     if let tokenCount {
-                        Text("· ~\(ContextTracker.formatTokens(tokenCount))")
+                        Text("· \(ContextTracker.formatTokens(tokenCount))")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.gray.opacity(0.5))
                     }
