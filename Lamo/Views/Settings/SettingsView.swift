@@ -22,22 +22,35 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                appHeader
-                engineSection
-                aiSection
-                systemSection
-                deviceLink
-                privacyBadge
-                aboutSection
+            ScrollView {
+                VStack(spacing: LamoTheme.Spacing.lg) {
+                    // ── Hero Status Card ──
+                    heroCard
+                        .padding(.top, LamoTheme.Spacing.sm)
+
+                    // ── Action Grid ──
+                    actionGrid
+
+                    // ── Privacy ──
+                    privacyRow
+
+                    // ── About Links ──
+                    aboutLinks
+
+                    // ── Footer ──
+                    footer
+                }
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.bottom, LamoTheme.Spacing.xxxl)
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Settings")
+            .background(LamoTheme.Colors.background)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                         .fontWeight(.semibold)
+                        .foregroundStyle(.white)
                 }
             }
             .onAppear {
@@ -55,15 +68,16 @@ struct SettingsView: View {
             .overlay {
                 if isCopyingFile {
                     ZStack {
-                        Color.black.opacity(0.3).ignoresSafeArea()
+                        Color.black.opacity(0.6).ignoresSafeArea()
                         VStack(spacing: 12) {
-                            ProgressView().controlSize(.large)
+                            ProgressView()
+                                .tint(.white)
                             Text("Importing model…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.7))
                         }
-                        .padding(24)
-                        .background(.regularMaterial)
+                        .padding(28)
+                        .background(.ultraThinMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
                 }
@@ -118,226 +132,271 @@ struct SettingsView: View {
         case device = "Device"
     }
 
-    private var appHeader: some View {
-        Section {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 52, height: 52)
+    // MARK: - Hero Card
 
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Lamo")
-                        .font(.title3.bold())
-                    Text(appVersion)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.leading, 2)
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+            // Status line
+            HStack(spacing: LamoTheme.Spacing.sm) {
+                statusDot
+                Text(statusLabel)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .textCase(.uppercase)
+                Spacer()
             }
-            .padding(.vertical, 6)
-        }
-    }
 
-    private var engineSection: some View {
-        Section {
-            Group {
-                if providerManager.isEngineReady {
-                    Label {
-                        Text("Model loaded")
-                    } icon: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .symbolEffect(.bounce, value: providerManager.isEngineReady)
-                    }
-                    .foregroundStyle(.green)
-                } else if let error = providerManager.engineError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                } else {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Loading…").foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .font(.subheadline)
-
+            // Model name
             if let current = vm.selectedModel {
-                HStack {
-                    Label("Active", systemImage: "bolt.circle.fill")
-                        .foregroundStyle(LamoTheme.Colors.accent)
-                    Spacer()
-                    Text(vm.displayName(for: current))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundStyle(.secondary)
-                }
-                .font(.subheadline)
+                Text(vm.displayName(for: current))
+                    .font(.system(.title3, design: .monospaced).bold())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Text("No model loaded")
+                    .font(.system(.title3, design: .monospaced).bold())
+                    .foregroundStyle(.white.opacity(0.4))
             }
-        } footer: {
-            Text("On-device AI. No internet needed.")
+
+            // Subtitle
+            Text("On-device · No internet")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.35))
+
+            // Device info
+            if let result = benchmark.result {
+                HStack(spacing: LamoTheme.Spacing.md) {
+                    deviceStat(value: result.chipName, label: "CHIP")
+                    deviceStat(
+                        value: String(format: "%.0f GB", result.ramGB),
+                        label: "RAM"
+                    )
+                    Spacer()
+                    tierBadge(result)
+                }
+            }
+        }
+        .padding(LamoTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+    }
+
+    @ViewBuilder
+    private var statusDot: some View {
+        if providerManager.isEngineReady {
+            Circle()
+                .fill(.white)
+                .frame(width: 8, height: 8)
+        } else if providerManager.engineError != nil {
+            Circle()
+                .fill(.white.opacity(0.5))
+                .frame(width: 8, height: 8)
+        } else {
+            ProgressView()
+                .controlSize(.mini)
+                .tint(.white.opacity(0.6))
         }
     }
 
-    private var aiSection: some View {
-        Section("AI") {
+    private var statusLabel: String {
+        if providerManager.isEngineReady {
+            return "Ready"
+        } else if let error = providerManager.engineError {
+            return "Error"
+        } else {
+            return "Loading"
+        }
+    }
+
+    private func deviceStat(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(.caption, design: .monospaced).bold())
+                .foregroundStyle(.white.opacity(0.8))
+            Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.3))
+                .textCase(.uppercase)
+        }
+    }
+
+    // MARK: - Action Grid
+
+    private var actionGrid: some View {
+        let columns = [
+            GridItem(.flexible(), spacing: LamoTheme.Spacing.md),
+            GridItem(.flexible(), spacing: LamoTheme.Spacing.md)
+        ]
+
+        return LazyVGrid(columns: columns, spacing: LamoTheme.Spacing.md) {
+            // Models
             NavigationLink(value: SettingsSection.models) {
-                Label {
-                    HStack {
-                        Text("Models")
-                        Spacer()
-                        if let current = vm.selectedModel {
-                            Text(vm.displayName(for: current))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                } icon: {
-                    Image(systemName: "internaldrive")
-                        .foregroundStyle(.secondary)
-                }
+                gridCard(
+                    icon: "internaldrive",
+                    title: "Models",
+                    subtitle: gridSubtitle_models
+                )
             }
 
+            // Generation
             NavigationLink(value: SettingsSection.sampler) {
-                Label {
-                    HStack {
-                        Text("Generation")
-                        Spacer()
-                        Text("T:\(String(format: "%.1f", vm.temperature)) K:\(vm.topK)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(.secondary)
-                }
+                gridCard(
+                    icon: "sparkles",
+                    title: "Generation",
+                    subtitle: "T:\(String(format: "%.1f", vm.temperature)) K:\(vm.topK)"
+                )
             }
 
+            // Memory
             NavigationLink(value: SettingsSection.memory) {
-                Label {
-                    HStack {
-                        Text("Memory")
-                        Spacer()
-                        Text("\(MemoryService.shared.totalEntries) facts")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "brain")
-                        .foregroundStyle(.secondary)
-                }
+                gridCard(
+                    icon: "brain",
+                    title: "Memory",
+                    subtitle: "\(MemoryService.shared.totalEntries) facts"
+                )
             }
 
+            // Web Search
             NavigationLink {
                 WebSearchSettings()
             } label: {
-                Label {
-                    HStack {
-                        Text("Web Search")
-                        Spacer()
-                         Text(ProviderManager.shared.braveAPIKey != nil ? "Brave + SearXNG" : "SearXNG")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "globe")
-                        .foregroundStyle(.secondary)
-                }
+                gridCard(
+                    icon: "globe",
+                    title: "Web Search",
+                    subtitle: ProviderManager.shared.braveAPIKey != nil
+                        ? "Brave + SearXNG"
+                        : "SearXNG"
+                )
+            }
+
+            // Device
+            NavigationLink(value: SettingsSection.device) {
+                gridCard(
+                    icon: "iphone",
+                    title: "Device",
+                    subtitle: gridSubtitle_device
+                )
+            }
+
+            // Advanced
+            NavigationLink(value: SettingsSection.advanced) {
+                gridCard(
+                    icon: "gearshape.2",
+                    title: "Advanced",
+                    subtitle: gridSubtitle_advanced
+                )
             }
         }
     }
 
-    private var systemSection: some View {
-        Section("System") {
-            NavigationLink(value: SettingsSection.advanced) {
-                Label("Advanced", systemImage: "gearshape.2")
+    private var gridSubtitle_models: String {
+        if let current = vm.selectedModel {
+            return vm.displayName(for: current)
+        }
+        return "Select model"
+    }
+
+    private var gridSubtitle_device: String {
+        if let result = benchmark.result {
+            return "\(result.chipName) · \(String(format: "%.0f", result.ramGB)) GB"
+        }
+        return "Not benchmarked"
+    }
+
+    private var gridSubtitle_advanced: String {
+        vm.useGPU ? "GPU · Auto" : "CPU · \(vm.cpuThreadCount) threads"
+    }
+
+    private func gridCard(icon: String, title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(.white.opacity(0.7))
+
+            Spacer(minLength: 0)
+
+            Text(title)
+                .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.white)
+
+            Text(subtitle)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.4))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(LamoTheme.Spacing.md)
+        .frame(height: 110)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+    }
+
+    // MARK: - Privacy Row
+
+    private var privacyRow: some View {
+        HStack(spacing: LamoTheme.Spacing.sm) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.5))
+
+            Text("All processing on device")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.4))
+                .textCase(.uppercase)
+
+            Spacer()
+        }
+        .padding(.horizontal, LamoTheme.Spacing.md)
+        .padding(.vertical, LamoTheme.Spacing.sm)
+        .glassEffect(.regular, in: .capsule)
+    }
+
+    // MARK: - About Links
+
+    private var aboutLinks: some View {
+        HStack(spacing: LamoTheme.Spacing.lg) {
+            Link(destination: URL(string: "https://ai.google.dev/edge/litert-lm")!) {
+                HStack(spacing: 4) {
+                    Text("LiteRT-LM")
+                        .font(.system(.caption2, design: .monospaced))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9))
+                }
+                .foregroundStyle(.white.opacity(0.3))
             }
+
+            Link(destination: URL(string: "https://huggingface.co/litert-community")!) {
+                HStack(spacing: 4) {
+                    Text("HuggingFace")
+                        .font(.system(.caption2, design: .monospaced))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9))
+                }
+                .foregroundStyle(.white.opacity(0.3))
+            }
+
+            Spacer()
 
             Button {
                 showResetAlert = true
             } label: {
-                Label("Reset All Settings", systemImage: "arrow.counterclockwise")
-            }
-            .foregroundStyle(.red)
-        }
-    }
-
-    private var deviceLink: some View {
-        Section("Device") {
-            NavigationLink(value: SettingsSection.device) {
-                Label {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Device Info")
-                            if let result = benchmark.result {
-                                Text("\(result.chipName) · \(String(format: "%.0f", result.ramGB)) GB RAM")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        Spacer()
-                        if let result = benchmark.result {
-                            tierBadge(result)
-                        }
-                    }
-                } icon: {
-                    Image(systemName: "iphone")
-                        .foregroundStyle(.green)
-                }
+                Text("Reset")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
             }
         }
     }
 
-    private var privacyBadge: some View {
-        Section {
-            Label {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Fully Private")
-                        .font(.subheadline.weight(.medium))
-                    Text("All processing happens on your device. No data sent to servers.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: "lock.shield.fill")
-                    .foregroundStyle(.green)
-            }
-            .padding(.vertical, 2)
-        }
-    }
+    // MARK: - Footer
 
-    private var aboutSection: some View {
-        Section("About") {
-            Link(destination: URL(string: "https://ai.google.dev/edge/litert-lm")!) {
-                HStack {
-                    Text("LiteRT-LM by Google")
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Link(destination: URL(string: "https://huggingface.co/litert-community")!) {
-                HStack {
-                    Text("Models from HuggingFace")
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .foregroundStyle(.secondary)
-                }
-            }
+    private var footer: some View {
+        VStack(spacing: 4) {
+            Text("Lamo · v\(appVersionShort)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.15))
         }
+        .padding(.top, LamoTheme.Spacing.lg)
     }
 
     // MARK: - Navigation
@@ -929,6 +988,10 @@ struct SettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private var appVersionShort: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
