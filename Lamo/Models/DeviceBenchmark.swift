@@ -171,7 +171,6 @@ final class DeviceBenchmark: ObservableObject {
         errorMessage = nil
         currentPhase = .deviceInfo
 
-        // Phase 1: Device info
         progress = 0.05
         let deviceName = await getDeviceName()
         let chipName = getChipName()
@@ -184,7 +183,6 @@ final class DeviceBenchmark: ObservableObject {
         let coreCount = ProcessInfo.processInfo.activeProcessorCount
         progress = 0.10
 
-        // Phase 2: CPU benchmark (single + multi core)
         currentPhase = .cpuTest
         let cpuStart = CFAbsoluteTimeGetCurrent()
         let cpuSingle = runCPUSingleCore()
@@ -193,21 +191,18 @@ final class DeviceBenchmark: ObservableObject {
         let cpuTime = CFAbsoluteTimeGetCurrent() - cpuStart
         progress = 0.50
 
-        // Phase 3: GPU benchmark
         currentPhase = hasGPU ? .gpuTest : .memoryTest
         let gpuStart = CFAbsoluteTimeGetCurrent()
         let gpuScore = hasGPU ? runGPUMatMul() : 0
         let gpuTime = hasGPU ? CFAbsoluteTimeGetCurrent() - gpuStart : 0
         progress = 0.70
 
-        // Phase 4: Memory bandwidth
         currentPhase = .memoryTest
         let memStart = CFAbsoluteTimeGetCurrent()
         let memBW = runMemoryBandwidth()
         let memoryTime = CFAbsoluteTimeGetCurrent() - memStart
         progress = 0.85
 
-        // Phase 5: Analysis
         currentPhase = .analyzing
         let combinedScore = computeCombinedScore(
             cpuSingle: cpuSingle, cpuMulti: cpuMulti,
@@ -254,7 +249,6 @@ final class DeviceBenchmark: ObservableObject {
     private static let storageKey = "com.lamo.benchmark.result"
 
     init() {
-        // Load previously saved result on startup
         if let data = UserDefaults.standard.data(forKey: Self.storageKey),
            let decoded = try? JSONDecoder().decode(BenchmarkResult.self, from: data) {
             result = decoded
@@ -281,7 +275,6 @@ final class DeviceBenchmark: ObservableObject {
     }
 
     private func getChipName() -> String {
-        // Try machdep.cpu.brand_string first (works on macOS, may be empty on iOS)
         var size = 0
         sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
         if size > 0 {
@@ -291,7 +284,6 @@ final class DeviceBenchmark: ObservableObject {
             if !name.isEmpty { return name }
         }
 
-        // Fallback: infer chip from device model (utsname.machine)
         var systemInfo = utsname()
         uname(&systemInfo)
         let model = withUnsafeBytes(of: &systemInfo.machine) { rawPtr -> String in
@@ -299,7 +291,6 @@ final class DeviceBenchmark: ObservableObject {
             return String(cString: ptr)
         }
 
-        // Map known device models to chip names
         let chipMap: [String: String] = [
             "iPhone17,1": "Apple A18 Pro",  "iPhone17,2": "Apple A18 Pro",
             "iPhone17,3": "Apple A18",       "iPhone17,4": "Apple A18",
@@ -335,21 +326,17 @@ final class DeviceBenchmark: ObservableObject {
     private func detectNeuralEngine() -> Bool {
         let chip = getChipName().lowercased()
 
-        // All Apple chips from A11+ and all M-series have Neural Engine
-        // Since getChipName() now returns reliable names, just check directly
         if chip.contains("a1") || chip.contains("a2") || chip.contains("m1") ||
            chip.contains("m2") || chip.contains("m3") || chip.contains("m4") ||
            chip.contains("m5") {
             return true
         }
 
-        // Fallback: check for ANE framework
         return NSClassFromString("ANEService") != nil
     }
 
     // MARK: - CPU Single-Core Benchmark
 
-    /// 512x512 matrix multiply on a single thread. Returns GFLOPS.
     private func runCPUSingleCore() -> Double {
         let size = 512
         let iterations = 2
@@ -383,7 +370,6 @@ final class DeviceBenchmark: ObservableObject {
 
     // MARK: - CPU Multi-Core Benchmark
 
-    /// Parallel matrix multiply across N threads. Returns aggregate GFLOPS.
     private func runCPUMultiCore(threads: Int) -> Double {
         let size = 512
         let iterations = 2
@@ -396,21 +382,16 @@ final class DeviceBenchmark: ObservableObject {
             let c = [Float](repeating: 0, count: size * size)
             let start = CFAbsoluteTimeGetCurrent()
 
-            // Each thread computes a chunk of rows
             let rowsPerThread = size / threads
             DispatchQueue.concurrentPerform(iterations: threads) { threadIdx in
                 let startRow = threadIdx * rowsPerThread
                 let endRow = (threadIdx == threads - 1) ? size : startRow + rowsPerThread
-                // We need mutable access — use UnsafeMutableBufferPointer
                 c.withUnsafeBufferPointer { cBuf in
-                    // This is safe because rows don't overlap
                 }
-                // Simpler approach: just do the work directly
                 for i in startRow..<endRow {
                     for k in 0..<size {
                         let aik = a[i * size + k]
                         for j in 0..<size {
-                            // Write to local var, we'll accumulate after
                         }
                     }
                 }
@@ -628,14 +609,12 @@ final class DeviceBenchmark: ObservableObject {
 
         for _ in 0..<iterations {
             let start = CFAbsoluteTimeGetCurrent()
-            // Sequential read via pointer arithmetic — compiler can't optimize away
             let intPtr = buffer.assumingMemoryBound(to: UInt64.self)
             let count = sizeBytes / MemoryLayout<UInt64>.size
             var acc: UInt64 = 0
             for i in 0..<count {
                 acc &+= intPtr[i]
             }
-            // Prevent dead store elimination — force acc to be consumed
             withUnsafePointer(to: acc) { _ = $0.pointee }
             totalTime += CFAbsoluteTimeGetCurrent() - start
         }
@@ -652,11 +631,6 @@ final class DeviceBenchmark: ObservableObject {
         gpuScore: Double, memBW: Double,
         hasGPU: Bool, hasANE: Bool, gpuCores: Int
     ) -> Double {
-        // Weighted combination reflecting AI inference characteristics:
-        // - Single-core CPU: 25% (token generation is sequential)
-        // - Multi-core CPU: 15% (prompt processing can be parallel)
-        // - GPU: 40% (matrix multiply is the core AI operation)
-        // - Memory bandwidth: 20% (KV-cache and model loading are bandwidth-bound)
         var score = cpuSingle * 0.25
         score += cpuMulti * 0.15
         if hasGPU {
@@ -664,7 +638,6 @@ final class DeviceBenchmark: ObservableObject {
         }
         score += memBW * 0.20 * 0.1 // Scale memory BW contribution
 
-        // Bonus for Neural Engine (can accelerate INT8 inference)
         if hasANE {
             score *= 1.15
         }
@@ -675,20 +648,16 @@ final class DeviceBenchmark: ObservableObject {
     private func rateDevice(ramGB: Double, combinedScore: Double, gpuCores: Int, hasGPU: Bool, hasANE: Bool) -> AITier {
         var score = 0
 
-        // RAM scoring (0-3)
         if ramGB >= 7 { score += 3 }
         else if ramGB >= 5 { score += 2 }
         else if ramGB >= 3 { score += 1 }
 
-        // GPU scoring (0-2)
         if hasGPU {
             score += gpuCores >= 5 ? 2 : 1
         }
 
-        // Neural Engine bonus (0-1)
         if hasANE { score += 1 }
 
-        // Compute scoring (0-3)
         if combinedScore >= 2.0 { score += 3 }
         else if combinedScore >= 1.0 { score += 2 }
         else if combinedScore >= 0.5 { score += 1 }

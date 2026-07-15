@@ -448,8 +448,7 @@ struct CodeBlock: View {
                     .padding(12)
             }
         }
-        .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .glassEffect(.regular.tint(Color.white.opacity(0.03)), in: .rect(cornerRadius: 10))
     }
 }
 

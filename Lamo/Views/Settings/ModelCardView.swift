@@ -115,8 +115,9 @@ struct ModelCardView: View {
                         } label: {
                             Label("Use", systemImage: "bolt.fill")
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.black)
                         }
+                        .buttonStyle(.glassProminent)
                     }
 
                     Button(role: .destructive) {
@@ -140,8 +141,9 @@ struct ModelCardView: View {
                     } label: {
                         Label("Download", systemImage: "arrow.down.circle.fill")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.black)
                     }
+                    .buttonStyle(.glassProminent)
                 }
 
                 Spacer()

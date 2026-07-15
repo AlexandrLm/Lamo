@@ -77,7 +77,7 @@ struct ChatInputBar: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(width: 32, height: 32)
-                            .background(Color.white.opacity(0.1), in: Circle())
+                            .glassEffect(.regular.interactive(), in: .circle)
 
                         let attachCount = pendingImages.count + pendingFiles.count
                         if attachCount > 0 {
@@ -132,9 +132,8 @@ struct ChatInputBar: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.black)
                             .frame(width: 32, height: 32)
-                            .background(Color.white, in: Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassProminent)
                     .accessibilityLabel("Stop")
                     .transition(.scale.combined(with: .opacity))
                 } else if canSend {
@@ -147,9 +146,8 @@ struct ChatInputBar: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.black)
                             .frame(width: 32, height: 32)
-                            .background(Color.white, in: Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassProminent)
                     .accessibilityLabel("Send")
                     .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
                     .transition(.scale.combined(with: .opacity))
@@ -158,7 +156,7 @@ struct ChatInputBar: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.3))
                         .frame(width: 32, height: 32)
-                        .background(Color.white.opacity(0.1), in: Circle())
+                        .glassEffect(in: .circle)
                 }
             }
             .padding(.horizontal, 14)

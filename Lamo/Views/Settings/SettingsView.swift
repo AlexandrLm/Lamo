@@ -206,7 +206,7 @@ struct SettingsView: View {
                     }
                 } icon: {
                     Image(systemName: "internaldrive")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -221,7 +221,7 @@ struct SettingsView: View {
                     }
                 } icon: {
                     Image(systemName: "sparkles")
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -236,7 +236,7 @@ struct SettingsView: View {
                     }
                 } icon: {
                     Image(systemName: "brain")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -253,7 +253,7 @@ struct SettingsView: View {
                     }
                 } icon: {
                     Image(systemName: "globe")
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -405,7 +405,8 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .foregroundStyle(.white.opacity(0.7))
+                .buttonStyle(.glassProminent)
+                .foregroundStyle(.black)
                 .disabled(isCopyingFile)
             } footer: {
                 Text(".litertlm, .bin, or .tflite model files.")

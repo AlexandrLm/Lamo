@@ -129,7 +129,7 @@ struct ChatView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
                 .frame(width: 32, height: 32)
-                .background(.ultraThinMaterial, in: Circle())
+                .glassEffect(.regular.interactive(), in: .circle)
         }
         .buttonStyle(.plain)
         .padding(.trailing, 16)
@@ -160,13 +160,11 @@ struct ChatView: View {
                 } label: {
                     Label("Download a Model", systemImage: "arrow.down.circle")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.white.opacity(0.8))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.06))
-                        .clipShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glass)
                 .padding(.top, 8)
             }
 
@@ -190,42 +188,25 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Streaming Indicator (Three Dots)
+// MARK: - Streaming Indicator (Pulsing Cursor)
 
 struct StreamingIndicator: View {
-    @State private var dotOffsets: [CGFloat] = [0, 0, 0]
-    @State private var animating = false
+    @State private var opacity: Double = 0.3
 
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
-            HStack(spacing: 5) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.white.opacity(0.6))
-                        .frame(width: 6, height: 6)
-                        .offset(y: dotOffsets[index])
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+        HStack(alignment: .top, spacing: 0) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.white)
+                .frame(width: 2.5, height: 16)
+                .opacity(opacity)
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
         .onAppear {
-            startAnimation()
-        }
-    }
-
-    private func startAnimation() {
-        animating = true
-        for index in 0..<3 {
-            withAnimation(
-                .easeInOut(duration: 0.4)
-                .repeatForever(autoreverses: true)
-                .delay(Double(index) * 0.15)
-            ) {
-                dotOffsets[index] = -5
+            withAnimation(.easeInOut(duration: 0.8).repeatForever()) {
+                opacity = 0.8
             }
         }
     }
