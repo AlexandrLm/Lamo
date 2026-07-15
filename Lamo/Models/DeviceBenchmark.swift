@@ -420,8 +420,6 @@ final class DeviceBenchmark: ObservableObject {
             _ = c[0]
         }
 
-        // The above concurrent version is tricky with value types.
-        // Use a simpler but still multi-threaded approach:
         var totalTime2: CFAbsoluteTime = 0
         for _ in 0..<iterations {
             let results = UnsafeMutablePointer<Float>.allocate(capacity: size * size)
@@ -455,12 +453,11 @@ final class DeviceBenchmark: ObservableObject {
 
     // MARK: - GPU Matrix Multiply Benchmark
 
-    /// Metal matrix multiply kernel — more representative of AI workloads than vector add.
     private func runGPUMatMul() -> Double {
         guard let device = MTLCreateSystemDefaultDevice() else { return 0 }
         guard let commandQueue = device.makeCommandQueue() else { return 0 }
 
-        let N = 256 // 256x256 matrix
+        let N = 256
         let count = N * N
         let iterations = 5
 
@@ -477,7 +474,6 @@ final class DeviceBenchmark: ObservableObject {
             ptrB[i] = Float.random(in: -1...1)
         }
 
-        // Metal compute shader for tiled matrix multiply
         let shaderSource = """
         #include <metal_stdlib>
         using namespace metal;
@@ -498,12 +494,10 @@ final class DeviceBenchmark: ObservableObject {
 
         guard let library = try? device.makeLibrary(source: shaderSource, options: nil),
               let function = library.makeFunction(name: "matMul"),
-              let pipeline = try? device.makeComputePipelineState(function: function) else {
-            // Fallback to vector add if matMul fails
+               let pipeline = try? device.makeComputePipelineState(function: function) else {
             return runGPUVectorAdd(device: device, commandQueue: commandQueue)
         }
 
-        // Set N constant
         var nVal = UInt32(N)
         let nBuffer = device.makeBuffer(bytes: &nVal, length: MemoryLayout<UInt32>.size, options: .storageModeShared)
 
@@ -547,7 +541,6 @@ final class DeviceBenchmark: ObservableObject {
         return flops / avgTime / 1_000_000_000
     }
 
-    /// Fallback GPU benchmark using vector add.
     private func runGPUVectorAdd(device: MTLDevice, commandQueue: MTLCommandQueue) -> Double {
         let count = 1_000_000
         let iterations = 10
@@ -621,7 +614,6 @@ final class DeviceBenchmark: ObservableObject {
 
     // MARK: - Memory Bandwidth
 
-    /// Measures sequential memory read bandwidth (GB/s). Important for model loading and KV-cache.
     private func runMemoryBandwidth() -> Double {
         let sizeMB = 64
         let sizeBytes = sizeMB * 1024 * 1024
@@ -630,7 +622,6 @@ final class DeviceBenchmark: ObservableObject {
         guard let buffer = malloc(sizeBytes) else { return 0 }
         defer { free(buffer) }
 
-        // Fill with data
         memset(buffer, 0xAB, sizeBytes)
 
         var totalTime: CFAbsoluteTime = 0
