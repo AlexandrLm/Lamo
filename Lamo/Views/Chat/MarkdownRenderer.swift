@@ -373,12 +373,16 @@ private struct InlineMarkdown: View {
         // First try native markdown parsing
         guard var attributed = try? AttributedString(markdown: text) else { return nil }
 
-        // Style inline code spans with background
+        // Style inline code spans and links
         for run in attributed.runs {
             if let intent = run.inlinePresentationIntent, intent.contains(.code) {
                 attributed[run.range].backgroundColor = Color.white.opacity(0.06)
                 attributed[run.range].font = .system(.footnote, design: .monospaced)
                 attributed[run.range].foregroundColor = .white.opacity(0.8)
+            }
+            if run.link != nil {
+                attributed[run.range].foregroundColor = .white.opacity(0.7)
+                attributed[run.range].underlineStyle = .single
             }
         }
         return attributed
@@ -527,5 +531,6 @@ private struct MarkdownTableCell: View {
         .lineLimit(nil)
         .fixedSize(horizontal: false, vertical: true)
         .frame(minWidth: 44, alignment: .leading)
+        .textSelection(.enabled)
     }
 }
