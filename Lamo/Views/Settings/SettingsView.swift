@@ -118,8 +118,6 @@ struct SettingsView: View {
         case device = "Device"
     }
 
-    // ── App Header ──
-
     private var appHeader: some View {
         Section {
             HStack(spacing: 14) {
@@ -151,8 +149,6 @@ struct SettingsView: View {
             .padding(.vertical, 6)
         }
     }
-
-    // ── Engine Status ──
 
     private var engineSection: some View {
         Section {
@@ -193,8 +189,6 @@ struct SettingsView: View {
             Text("On-device AI. No internet needed.")
         }
     }
-
-    // ── AI Section ──
 
     private var aiSection: some View {
         Section("AI") {
@@ -265,8 +259,6 @@ struct SettingsView: View {
         }
     }
 
-    // ── System Section ──
-
     private var systemSection: some View {
         Section("System") {
             NavigationLink(value: SettingsSection.advanced) {
@@ -281,8 +273,6 @@ struct SettingsView: View {
             .foregroundStyle(.red)
         }
     }
-
-    // ── Device Link ──
 
     private var deviceLink: some View {
         Section("Device") {
@@ -310,8 +300,6 @@ struct SettingsView: View {
         }
     }
 
-    // ── Privacy Badge ──
-
     private var privacyBadge: some View {
         Section {
             Label {
@@ -329,8 +317,6 @@ struct SettingsView: View {
             .padding(.vertical, 2)
         }
     }
-
-    // ── About ──
 
     private var aboutSection: some View {
         Section("About") {
@@ -469,7 +455,6 @@ struct SettingsView: View {
 
     private var samplerSection: some View {
         List {
-            // Temperature with visual indicator
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -483,7 +468,6 @@ struct SettingsView: View {
                     Slider(value: $vm.temperature, in: 0.0...2.0, step: 0.05)
                         .tint(LamoTheme.Colors.accent)
 
-                    // Visual range indicator
                     HStack(spacing: 0) {
                         Text("Focused")
                             .font(.caption2)
@@ -509,7 +493,6 @@ struct SettingsView: View {
                 Text("0.7 is a good balance.")
             }
 
-            // Top-K
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -539,7 +522,6 @@ struct SettingsView: View {
                 Text("Number of top tokens to consider.")
             }
 
-            // Top-P
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {

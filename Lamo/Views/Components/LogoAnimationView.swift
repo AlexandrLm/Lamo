@@ -13,15 +13,12 @@ struct LogoAnimationView: View {
 
     var body: some View {
         ZStack {
-            // Central glow
             centralGlow
 
-            // Translucent rotating layers
             ForEach(0..<layerCount, id: \.self) { i in
                 layer(at: i)
             }
 
-            // Outer squircle border
             squircleBorder
         }
         .frame(width: size, height: size)

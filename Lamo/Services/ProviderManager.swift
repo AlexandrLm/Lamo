@@ -39,26 +39,16 @@ final class ProviderManager: ObservableObject {
     private var tokenCache: [String: Int] = [:]
     private let tokenCacheLock = NSLock()
 
-    /// Safe max tokens based on ACTUAL available memory at runtime.
-    /// Uses os_proc_available_memory() for real-time data.
-    /// Adaptive: scales KV-cache to fit available RAM with safety margin.
     private func safeMaxTokens(modelPath: String) -> Int? {
-        // Get real available memory from the OS (iOS 13+)
         let availableBytes: UInt64
         #if os(iOS)
         availableBytes = UInt64(os_proc_available_memory())
         #else
-        // Fallback for macOS/simulator: physical RAM minus conservative estimate
         availableBytes = ProcessInfo.processInfo.physicalMemory / 2
         #endif
 
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
-        // Safety factor: leave headroom for engine internals + system pressure
-        // < 1.5 GB: critical → 25%
-        // < 3 GB:   tight   → 35%
-        // < 5 GB:   normal  → 45%
-        // >= 5 GB:  comfort → 55%
         let safetyFactor: Double
         if availableMB < 1500 {
             safetyFactor = 0.25
@@ -70,13 +60,11 @@ final class ProviderManager: ObservableObject {
             safetyFactor = 0.55
         }
 
-        // Each 1024 tokens of KV-cache ≈ 300 MB for Gemma-4-class models
         let usableMB = availableMB * safetyFactor
         let maxTokensFromMemory = max(512, Int(usableMB / 300.0 * 1024))
 
         let requested: Int
         if kvCacheAuto {
-            // Auto: use as much as memory allows (no fixed cap)
             requested = maxTokensFromMemory
         } else {
             requested = maxNumTokens > 0 ? maxNumTokens : 1024
@@ -84,7 +72,6 @@ final class ProviderManager: ObservableObject {
 
         let capped = min(requested, maxTokensFromMemory)
 
-        // Round down to nearest 256 (clean KV-cache blocks)
         let result = (capped / 256) * 256
         LamoLogger.engine.debug("safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
         return result
@@ -216,7 +203,6 @@ final class ProviderManager: ObservableObject {
     /// Tokenize a string using the engine's real tokenizer.
     /// Uses tokenization cache to avoid re-tokenizing identical strings.
     func tokenizeCount(_ text: String) async -> Int {
-        // Check cache first
         tokenCacheLock.lock()
         if let cached = tokenCache[text] {
             tokenCacheLock.unlock()
@@ -227,7 +213,6 @@ final class ProviderManager: ObservableObject {
         guard let engine = cachedEngine else { return text.count / 4 }
         let count = (try? await engine.tokenize(text))?.count ?? (text.count / 4)
 
-        // Store in cache
         tokenCacheLock.lock()
         tokenCache[text] = count
         tokenCacheLock.unlock()
@@ -239,7 +224,6 @@ final class ProviderManager: ObservableObject {
     /// Uses cached token counts for unchanged messages.
     func tokenizeMessages(_ messages: [ChatMessage]) async -> [UUID: Int] {
         guard let engine = cachedEngine else {
-            // Absolute fallback: shouldn't happen if engine is loaded
             var fallback: [UUID: Int] = [:]
             for msg in messages { fallback[msg.id] = msg.content.count / 4 }
             return fallback
@@ -247,7 +231,6 @@ final class ProviderManager: ObservableObject {
 
         var counts: [UUID: Int] = [:]
         for msg in messages {
-            // Check tokenization cache by content
             tokenCacheLock.lock()
             if let cached = tokenCache[msg.content] {
                 tokenCacheLock.unlock()
@@ -259,7 +242,6 @@ final class ProviderManager: ObservableObject {
             if let tokens = try? await engine.tokenize(msg.content) {
                 let count = tokens.count
                 counts[msg.id] = count
-                // Store in cache
                 tokenCacheLock.lock()
                 tokenCache[msg.content] = count
                 tokenCacheLock.unlock()
@@ -286,9 +268,6 @@ final class ProviderManager: ObservableObject {
         if let cached = cachedProvider {
             return cached
         }
-        // Engine not ready yet — return a temporary provider.
-        // This prevents creating an engine-less LiteRTLMProvider that would
-        // try to load the model synchronously on the first message send.
         return LiteRTLMProvider(modelPath: litertLMModelPath ?? "")
     }
 
@@ -395,7 +374,6 @@ final class ProviderManager: ObservableObject {
             }
         }
 
-        // Enable speculative decoding experimental flag if requested
         // Enable experimental flags
         LiteRTLM.ExperimentalFlags.optIntoExperimentalAPIs()
         if speculativeDecoding {
@@ -410,7 +388,6 @@ final class ProviderManager: ObservableObject {
             backend = .cpu(threadCount: cpuThreadCount)
         }
 
-        // Use safe token limit to prevent OOM on larger models
         let maxTokens = safeMaxTokens(modelPath: resolvedPath)
         currentMaxTokens = maxTokens
 
@@ -457,7 +434,6 @@ final class ProviderManager: ObservableObject {
                 LamoLogger.engine.error("\(lastEngineError) (attempt \(attempt)/\(maxAttempts))")
             }
         }
-        // All retry attempts exhausted
         engineError = lastEngineError
     }
 
@@ -474,12 +450,9 @@ final class ProviderManager: ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 self.isMemoryPressure = true
-                // Trim conversation cache instead of destroying it completely
-                // This preserves recent context while freeing KV-cache from old messages
                 if let provider = self.cachedProvider as? LiteRTLMProvider {
                     provider.invalidateConversationCache()
                 }
-                // Also clear tokenization cache to free memory
                 self.clearTokenCache()
             }
         }
@@ -491,7 +464,6 @@ final class ProviderManager: ObservableObject {
     /// Called automatically when model path or GPU setting changes.
     /// Debounced: rapid changes within 300ms are coalesced.
     func invalidateEngine() {
-        // Release existing engine memory before invalidating
         if let provider = cachedProvider as? LiteRTLMProvider {
             provider.invalidateConversationCache()
         }
@@ -500,9 +472,7 @@ final class ProviderManager: ObservableObject {
         isEngineReady = false
         currentMaxTokens = nil
         clearTokenCache()
-        // Cancel any pending re-initialization
         invalidateTask?.cancel()
-        // Re-initialize after 300ms debounce
         invalidateTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
@@ -512,11 +482,9 @@ final class ProviderManager: ObservableObject {
 
     /// Atomically switch to a different model without double-invalidation.
     func switchModel(modelPath: String) {
-        // Suppress individual setter invalidation
         suppressInvalidation = true
         litertLMModelPath = modelPath
         suppressInvalidation = false
-        // Single invalidation with all new values set
         invalidateEngine()
     }
 
@@ -528,27 +496,21 @@ final class ProviderManager: ObservableObject {
     /// Aggressive cleanup before engine load — frees everything we can
     /// so the OS has maximum contiguous memory for the mmap'd model.
     private func performPreloadCleanup() {
-        // 1. Release URL cache (Safari, image downloads, etc.)
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared.memoryCapacity = 0
         URLCache.shared.diskCapacity = 0
 
-        // 2. Release any cached conversation data
         if let provider = cachedProvider as? LiteRTLMProvider {
             provider.invalidateConversationCache()
         }
 
-        // 3. Release the old engine (if switching models)
         cachedEngine = nil
         cachedProvider = nil
 
-        // 4. Clear tokenization cache
         clearTokenCache()
 
-        // 5. Drain autorelease pools
         autoreleasepool { }
 
-        // 6. Clear any temporary files that might hold memory
         let tmp = FileManager.default.temporaryDirectory
         if let contents = try? FileManager.default.contentsOfDirectory(
             at: tmp, includingPropertiesForKeys: nil
@@ -558,13 +520,10 @@ final class ProviderManager: ObservableObject {
             }
         }
 
-        // 7. Memory pressure trick: allocate a large block to force iOS
-        //    to evict cached pages from other apps, then release it.
-        //    The freed physical RAM is now available for our model.
         #if os(iOS)
         let availableBefore = os_proc_available_memory() / 1_048_576
-        let targetMB = max(500, Int(availableBefore) / 3)  // Try to reclaim ~33% of available
-        performMemoryPressureTrunc(targetMB: min(targetMB, 2000))  // Cap at 2 GB
+        let targetMB = max(500, Int(availableBefore) / 3)
+        performMemoryPressureTrunc(targetMB: min(targetMB, 2000))
         let availableAfter = os_proc_available_memory() / 1_048_576
         LamoLogger.engine.info("Preload cleanup: \(availableBefore)MB → \(availableAfter)MB (freed \(availableAfter - availableBefore)MB)")
         #else
@@ -588,19 +547,14 @@ final class ProviderManager: ObservableObject {
             return
         }
 
-        // Touch every page to force it into physical RAM
-        // (mmap pages are lazy — they don't consume RAM until touched)
         let buffer = ptr.bindMemory(to: UInt8.self, capacity: targetBytes)
         let pageSize = 4096
         for offset in stride(from: 0, to: targetBytes, by: pageSize) {
             buffer[offset] = 1
         }
 
-        // Tell the kernel we no longer need these pages
-        // MADV_DONTNEED: pages are discarded immediately (not just marked lazy)
         madvise(ptr, targetBytes, MADV_DONTNEED)
 
-        // Free the virtual address space
         munmap(ptr, targetBytes)
         LamoLogger.engine.info("Pressure trick: allocated/touched/released \(targetMB)MB")
     }

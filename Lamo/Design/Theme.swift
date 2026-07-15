@@ -2,15 +2,12 @@ import SwiftUI
 
 enum LamoTheme {
     enum Colors {
-        // Backgrounds — pure black
         static let background = Color.black
         static let secondaryBackground = Color.black
         static let tertiaryBackground = Color.black
 
-        // Accent — ChatGPT green
-        static let accent = Color(red: 0.06, green: 0.64, blue: 0.50) // #10a37f
+        static let accent = Color(red: 0.06, green: 0.64, blue: 0.50)
 
-        // Bubbles
         static let userBubble = Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
                 ? UIColor(red: 0.22, green: 0.22, blue: 0.22, alpha: 1.0)  // #383838
@@ -20,17 +17,14 @@ enum LamoTheme {
         static let bubbleTextUser = Color.primary
         static let bubbleTextAssistant = Color.primary
 
-        // Text
         static let textPrimary = Color.primary
         static let textSecondary = Color.secondary
         static let textTertiary = Color(uiColor: .tertiaryLabel)
 
-        // Semantic
         static let success = Color.green
         static let warning = Color.orange
         static let error = Color.red
 
-        // Separators
         static let separator = Color(uiColor: .separator)
     }
 

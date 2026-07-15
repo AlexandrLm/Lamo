@@ -13,7 +13,6 @@ struct MessageBubble: View {
 
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-            // Content
             if message.role == .user {
                 HStack {
                     Spacer(minLength: 48)
@@ -27,7 +26,6 @@ struct MessageBubble: View {
             // Info bar (assistant only — always visible)
             if message.role == .assistant && !message.isStreaming && !message.content.isEmpty {
                 HStack(spacing: 6) {
-                    // Left: benchmark stats
                     if let b = message.benchmark {
                         Text("\(String(format: "%.0f", b.decodeTokensPerSec)) tok/s")
                         Text("·")
@@ -42,7 +40,6 @@ struct MessageBubble: View {
 
                     Spacer()
 
-                    // Right: actions
                     HStack(spacing: 8) {
                         actionButton(
                             icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
@@ -120,17 +117,14 @@ struct MessageBubble: View {
 
     private var userContent: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            // Attached images
             if message.hasImages {
                 userImagesView
             }
 
-            // Attached files indicator
             if message.hasAttachedFiles {
                 userFilesView
             }
 
-            // Text content (only if non-empty)
             if !message.content.isEmpty {
                 Text(message.content)
                     .font(.body)
@@ -158,13 +152,11 @@ struct MessageBubble: View {
         VStack(alignment: .trailing, spacing: 4) {
             ForEach(message.attachedFileNames.indices, id: \.self) { index in
                 HStack(spacing: 8) {
-                    // File icon
                     Image(systemName: fileIcon(for: index))
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.6))
                         .frame(width: 20)
 
-                    // File info
                     VStack(alignment: .leading, spacing: 1) {
                         Text(message.attachedFileNames[index])
                             .font(.subheadline)
@@ -235,12 +227,10 @@ struct MessageBubble: View {
 
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Thinking content (collapsible)
             if !message.thinkingContent.isEmpty {
                 ThinkingView(content: message.thinkingContent, isStreaming: message.isStreaming)
             }
 
-            // Main content
             MarkdownRenderer(text: message.content, textColor: LamoTheme.Colors.textPrimary, isStreaming: message.isStreaming && message.content.isEmpty)
         }
         .textSelection(.enabled)

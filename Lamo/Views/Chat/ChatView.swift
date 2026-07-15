@@ -27,7 +27,6 @@ struct ChatView: View {
         ZStack(alignment: .bottomTrailing) {
             chatScrollView
 
-            // "Scroll to bottom" floating button
             if !isUserNearBottom && !viewModel.messages.isEmpty {
                 scrollToBottomButton
             }
@@ -199,7 +198,6 @@ struct StreamingIndicator: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
-            // Dots only — no avatar
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()

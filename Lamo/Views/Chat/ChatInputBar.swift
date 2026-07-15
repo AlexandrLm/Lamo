@@ -79,7 +79,6 @@ struct ChatInputBar: View {
                             .frame(width: 32, height: 32)
                             .background(Color.white.opacity(0.1), in: Circle())
 
-                        // Badge: attachment count
                         let attachCount = pendingImages.count + pendingFiles.count
                         if attachCount > 0 {
                             Text("\(attachCount)")
@@ -106,7 +105,6 @@ struct ChatInputBar: View {
                     }
                 }
 
-                // Model selector pill
                 Button {
                     showModelPicker = true
                 } label: {
@@ -128,7 +126,6 @@ struct ChatInputBar: View {
 
                 Spacer()
 
-                // Send / Stop button
                 if isStreaming {
                     Button(action: onStop) {
                         Image(systemName: "stop.fill")

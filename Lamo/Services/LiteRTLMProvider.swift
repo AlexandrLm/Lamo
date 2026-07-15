@@ -60,9 +60,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
     /// Invalidate cached conversation (e.g. when model or GPU setting changes).
     func invalidateConversationCache() {
-        // No persistent conversation cache to clear — conversations are rebuilt each turn.
-        // This is called by ProviderManager on memory pressure; the next inference
-        // will build a fresh conversation which is the default behavior.
     }
 
     // MARK: - Private
@@ -71,7 +68,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         messages: [ChatMessage],
         continuation: AsyncStream<StreamingToken>.Continuation
     ) async throws {
-        // Resolve engine
         let resolvedEngine: LiteRTLM.Engine
         if let cached = engine {
             resolvedEngine = cached
@@ -91,12 +87,10 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             resolvedEngine = newEngine
         }
 
-        // Build conversation with smart context management
         let conversation = try await buildConversation(
             engine: resolvedEngine, messages: messages
         )
 
-        // Send the last user message and stream the response
         guard !Task.isCancelled else { return }
         try await streamLastMessage(
             conversation: conversation,
@@ -165,7 +159,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
 
         // --- Build LiteRT-LM messages ---
-        let systemMessage = LiteRTLM.Message(systemPrompt, role: .user)
+        let systemMessage = LiteRTLM.Message(systemPrompt, role: .system)
         var allMessages: [LiteRTLM.Message] = [systemMessage]
 
         for msg in includedMessages {

@@ -38,9 +38,7 @@ struct BenchmarkResultView: View {
 
     private var heroSection: some View {
         VStack(spacing: 16) {
-            // Device icon with tier ring
             ZStack {
-                // Outer ring
                 Circle()
                     .stroke(
                         tierColor.opacity(0.2),
@@ -58,7 +56,6 @@ struct BenchmarkResultView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.easeOut(duration: 1.2).delay(0.4), value: showContent)
 
-                // Inner icon
                 ZStack {
                     Circle()
                         .fill(tierColor.opacity(0.15))
@@ -69,7 +66,6 @@ struct BenchmarkResultView: View {
                 }
             }
 
-            // Device name + chip
             VStack(spacing: 4) {
                 Text(result.deviceName)
                     .font(.title2.weight(.semibold))
@@ -78,7 +74,6 @@ struct BenchmarkResultView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Tier badge
             HStack(spacing: 6) {
                 Image(systemName: result.aiTierIcon)
                     .font(.caption)
@@ -99,7 +94,6 @@ struct BenchmarkResultView: View {
 
     private var scoreGauge: some View {
         VStack(spacing: 12) {
-            // Large score number
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(String(format: "%.2f", result.combinedScore * (showContent ? 1 : 0)))
                     .font(.system(size: 48, weight: .bold, design: .rounded))
@@ -115,7 +109,6 @@ struct BenchmarkResultView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            // Score bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -188,7 +181,6 @@ struct BenchmarkResultView: View {
                 .font(.headline)
                 .foregroundStyle(.secondary)
 
-            // CPU Single-Core
             perfRow(
                 icon: "cpu.fill",
                 title: "CPU Single-Core",
@@ -199,7 +191,6 @@ struct BenchmarkResultView: View {
                 unit: "GFLOPS"
             )
 
-            // CPU Multi-Core
             perfRow(
                 icon: "cpu.fill",
                 title: "CPU Multi-Core",
@@ -210,7 +201,6 @@ struct BenchmarkResultView: View {
                 unit: "GFLOPS"
             )
 
-            // GPU
             if result.hasGPU {
                 perfRow(
                     icon: "gpu",
@@ -223,7 +213,6 @@ struct BenchmarkResultView: View {
                 )
             }
 
-            // Memory Bandwidth
             perfRow(
                 icon: "memories",
                 title: "Memory Bandwidth",
@@ -320,7 +309,6 @@ struct BenchmarkResultView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
-            // Max tokens info
             HStack(spacing: 6) {
                 Image(systemName: "textformat.size")
                     .font(.caption)

@@ -37,10 +37,7 @@ final class ChatViewModel {
         self.provider = provider
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
 
-        // Wire up memory service with the SwiftData context
         MemoryService.shared.setModelContext(modelContext)
-
-        // Build initial context tracker
         Task { await refreshContextTracker() }
     }
 
@@ -48,11 +45,9 @@ final class ChatViewModel {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty else { return }
 
-        // 1) Save pending images to tmp directory
         var imagePaths = saveImagesToTmp(pendingImages)
         pendingImages = []
 
-        // 2) Process attached files
         let filesToProcess = pendingFiles
         pendingFiles = []
 
@@ -128,10 +123,8 @@ final class ChatViewModel {
                 }
             }
 
-            // File content goes to separate field — NOT into message text
             let extractedFileContent = fileTextParts.joined(separator: "\n\n")
 
-            // User message — clean text only
             let userMessage = Message(
                 content: text,
                 role: .user,
@@ -145,13 +138,11 @@ final class ChatViewModel {
             addMessage(userMessage)
             inputText = ""
 
-            // Add empty assistant placeholder
             let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
             addMessage(assistantMessage)
             streamingMessageID = assistantMessage.id
             isStreaming = true
 
-            // Update title
             let titleText = text.isEmpty
                 ? (fileNames.first.map { "📎 \($0)" } ?? "New Chat")
                 : String(text.prefix(40))
@@ -159,10 +150,8 @@ final class ChatViewModel {
                 conversation.title = titleText
             }
 
-            // Build chat history from current messages
             let history = self.chatMessages
 
-            // Stream response
             MemoryService.shared.currentConversationID = conversation.id
             startStreaming(chatMessages: history)
         }
@@ -171,11 +160,9 @@ final class ChatViewModel {
     func retryLastMessage() {
         guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
 
-        // Remove the last assistant message
         messages.removeLast()
         modelContext.delete(lastMsg)
 
-        // Add fresh streaming placeholder
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id
@@ -212,7 +199,6 @@ final class ChatViewModel {
     }
 
     private func startStreaming(chatMessages: [ChatMessage], retryCount: Int = 0) {
-        // Cancel any in-flight streaming
         streamingTask?.cancel()
         streamingTask = nil
 
@@ -238,19 +224,16 @@ final class ChatViewModel {
                     self.pendingBenchmark = data
                 case .loopDetected:
                     if retryCount < maxRetries {
-                        // Auto-retry: clear generated text, invalidate cache for new seed
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
                         if let id = self.streamingMessageID,
                            let index = self.messages.firstIndex(where: { $0.id == id }) {
                             self.messages[index].content = ""
                             self.messages[index].thinkingContent = ""
                         }
-                        // Invalidate conversation cache for fresh seed (breaks the loop)
                         (ProviderManager.shared.currentProvider as? LiteRTLMProvider)?.invalidateConversationCache()
                         self.startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
                         return
                     } else {
-                        // All retries exhausted
                         if let id = self.streamingMessageID,
                            let index = self.messages.firstIndex(where: { $0.id == id }) {
                             self.messages[index].content += "\n\n⚠️ Генерация остановлена — зацикливание не удалось устранить"
@@ -284,7 +267,6 @@ final class ChatViewModel {
         if success == false, let error {
             messages[index].content = "Error: \(error.localizedDescription)"
         }
-        // Attach benchmark data to the response message
         if let benchmark = pendingBenchmark {
             messages[index].benchmark = benchmark
             pendingBenchmark = nil
@@ -303,9 +285,6 @@ final class ChatViewModel {
                 && conversation.summary.isEmpty && messages.count > 15 {
                 Task { await generateConversationSummary() }
             }
-            // Auto-fetch URLs that the model mentioned but didn't actually fetch
-            // (common with small models like E2B that generate text about tools
-            // instead of actually calling them)
             Task { await autoFetchUnfetchedURLs(from: messages[index].content) }
         }
     }
@@ -341,7 +320,6 @@ final class ChatViewModel {
         }
         let sysTokens = await pm.tokenizeCount(fullSystem)
 
-        // Tokenize all messages with real tokenizer
         let tokenCounts = await pm.tokenizeMessages(currentChatMessages)
 
         contextTracker = ContextTracker.build(
@@ -392,7 +370,6 @@ final class ChatViewModel {
     /// After streaming completes, detect URLs the model mentioned but didn't actually fetch.
     /// If found, fetch them automatically and send a follow-up so the model can answer.
     private func autoFetchUnfetchedURLs(from response: String) async {
-        // Extract all URLs from the response
         let urlPattern = #"https?://[^\s<>"'\)\],;:!?"#
         guard let regex = try? NSRegularExpression(pattern: urlPattern) else { return }
         let range = NSRange(response.startIndex..., in: response)
@@ -437,7 +414,6 @@ final class ChatViewModel {
 
         LamoLogger.ui.info("Auto-fetching \(unfetchedURLs.count) unfetched URLs")
 
-        // Fetch the URLs
         var fetchedContent = ""
         for url in unfetchedURLs.prefix(2) { // Max 2 URLs to avoid token overflow
             do {
@@ -450,7 +426,6 @@ final class ChatViewModel {
 
         guard !fetchedContent.isEmpty else { return }
 
-        // Send fetched content as a follow-up user message and re-trigger the model
         let followUp = Message(
             content: "Вот содержимое страниц, которые вы хотели проверить:\(fetchedContent)\n\nТеперь, основываясь на этой информации, ответьте на вопрос пользователя.",
             role: .user,
@@ -458,10 +433,8 @@ final class ChatViewModel {
         )
         addMessage(followUp)
 
-        // Re-trigger streaming with updated history
         let history = self.chatMessages
 
-        // Add empty assistant placeholder
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id

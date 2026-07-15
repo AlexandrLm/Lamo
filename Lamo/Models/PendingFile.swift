@@ -17,7 +17,6 @@ struct PendingFile: Identifiable, Equatable {
         self.type = UTType(filenameExtension: url.pathExtension) ?? .data
     }
 
-    /// Human-readable file size.
     var formattedSize: String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB]
@@ -25,7 +24,6 @@ struct PendingFile: Identifiable, Equatable {
         return formatter.string(fromByteCount: size)
     }
 
-    /// SF Symbol name for the file type.
     var iconName: String {
         if type.conforms(to: .image) { return "photo" }
         if type.conforms(to: .audio) { return "waveform" }
@@ -38,10 +36,8 @@ struct PendingFile: Identifiable, Equatable {
         return "doc"
     }
 
-    /// Whether the file is an image (should be sent as vision content, not text).
     var isImage: Bool { type.conforms(to: .image) }
 
-    /// Whether the file is audio (should be sent as audio content).
     var isAudio: Bool { type.conforms(to: .audio) || type.conforms(to: .movie) }
 
     static func == (lhs: PendingFile, rhs: PendingFile) -> Bool {

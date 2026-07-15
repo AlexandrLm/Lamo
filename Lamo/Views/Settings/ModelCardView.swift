@@ -21,7 +21,6 @@ struct ModelCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header row
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: model.systemImage)
                     .font(.system(size: 18, weight: .medium))
@@ -59,7 +58,6 @@ struct ModelCardView: View {
                 }
             }
 
-            // Specs row
             HStack(spacing: 16) {
                 specItem(model.parameterCount, "params")
                 specItem(model.fileSizeString, "size")
@@ -67,7 +65,6 @@ struct ModelCardView: View {
             }
             .padding(.top, 10)
 
-            // Progress
             if isDownloading, let state = downloadState, state.totalBytes > 0 {
                 VStack(spacing: 4) {
                     ProgressView(value: state.progress)
@@ -94,7 +91,6 @@ struct ModelCardView: View {
                 .padding(.top, 8)
             }
 
-            // Error
             if let error = downloadState?.error {
                 Text(error)
                     .font(.caption)
@@ -102,13 +98,11 @@ struct ModelCardView: View {
                     .padding(.top, 6)
             }
 
-            // Divider
             Rectangle()
                 .fill(Color.white.opacity(0.06))
                 .frame(height: 0.5)
                 .padding(.vertical, 10)
 
-            // Actions
             HStack {
                 if isDownloaded {
                     if !isActiveModel {

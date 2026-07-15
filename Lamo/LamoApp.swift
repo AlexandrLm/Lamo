@@ -6,7 +6,6 @@ struct LamoApp: App {
     @State private var hasSetupMemory = false
 
     init() {
-        // Pre-initialize DownloadManager to handle background sessions
         _ = DownloadManager.shared
 
         Task {
@@ -19,7 +18,6 @@ struct LamoApp: App {
             MainView()
                 .preferredColorScheme(.dark)
                 .onAppear {
-                    // Prune old memory entries on first launch
                     if !hasSetupMemory {
                         hasSetupMemory = true
                         MemoryService.shared.pruneOldEntries(olderThan: 90)

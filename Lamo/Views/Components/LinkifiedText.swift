@@ -12,7 +12,6 @@ struct LinkifiedText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Render text with tappable links
             ForEach(Array(parseLinks().enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .text(let content):
@@ -51,7 +50,6 @@ struct LinkifiedText: View {
         for match in regex.matches(in: text, options: [], range: nsRange) {
             guard let range = Range(match.range, in: text) else { continue }
 
-            // Add text before the link
             if lastEnd < range.lowerBound {
                 segments.append(.text(String(text[lastEnd..<range.lowerBound])))
             }
@@ -66,7 +64,6 @@ struct LinkifiedText: View {
             lastEnd = range.upperBound
         }
 
-        // Add remaining text
         if lastEnd < text.endIndex {
             segments.append(.text(String(text[lastEnd..<text.endIndex])))
         }

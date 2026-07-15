@@ -25,8 +25,6 @@ struct MainView: View {
         conversations.first { $0.id == selectedID }
     }
 
-    // MARK: - Grouped Conversations (Pinned first)
-
     private var groupedConversations: [(title: String, items: [Conversation])] {
         let cal = Calendar.current
         let now = Date()
@@ -339,7 +337,6 @@ struct ConversationRow: View {
     }
 
     private var previewText: String? {
-        // Prefer first user message as preview (like ChatGPT)
         if let first = firstUserMessage, !first.isEmpty {
             return String(first.prefix(80))
         }
@@ -352,7 +349,6 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Chat icon with pin indicator
             ZStack(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.white.opacity(0.06))

@@ -43,7 +43,6 @@ struct ImageViewer: View {
             .tabViewStyle(.page(indexDisplayMode: .automatic))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
 
-            // Close button
             Button {
                 dismiss()
             } label: {
@@ -56,7 +55,6 @@ struct ImageViewer: View {
             .padding(.top, 60)
             .padding(.trailing, 16)
 
-            // Image counter
             if images.count > 1 {
                 VStack {
                     Spacer()

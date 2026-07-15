@@ -41,7 +41,6 @@ final class DownloadManager: ObservableObject {
         var retryCount: Int = 0
         var lastError: String? = nil
 
-        // Speed tracking
         var speedBytesPerSec: Double = 0
         var lastSpeedUpdateTime: Date = Date()
         var lastSpeedUpdateBytes: Int64 = 0
@@ -92,12 +91,9 @@ final class DownloadManager: ObservableObject {
         config.sessionSendsLaunchEvents = true
         session = URLSession(configuration: config, delegate: DownloadSessionDelegate.shared, delegateQueue: nil)
 
-        // #7: Load persisted resume data from disk
         loadPersistedResumeData()
-        // #7: Clean up old resume data (> 7 days)
         cleanupOldResumeData()
 
-        // Monitor network — track expensive (cellular) connections
         networkMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isExpensive = path.isExpensive
@@ -160,13 +156,11 @@ final class DownloadManager: ObservableObject {
         guard let url = model.downloadURL else { return }
         guard activeDownloads[model.filename]?.isDownloading != true else { return }
 
-        // Check if already downloaded
         if model.isDownloaded {
             activeDownloads[model.filename] = DownloadState(progress: 1.0, isComplete: true)
             return
         }
 
-        // Cellular warning for large files (> 500 MB)
         if isExpensive && model.fileSizeGB > 0.5 {
             pendingCellularDownload = model
             return
@@ -189,8 +183,6 @@ final class DownloadManager: ObservableObject {
     }
 
     private func startDownload(model: PresetModel, url: URL) {
-
-        // Create models directory
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
@@ -204,10 +196,8 @@ final class DownloadManager: ObservableObject {
             task = session.downloadTask(with: url)
         }
 
-        // Store metadata for delegate
         DownloadSessionDelegate.shared.pendingModels[model.filename] = model
 
-        // Track progress + speed
         let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
             guard let self else { return }
             Task { @MainActor in
@@ -218,12 +208,10 @@ final class DownloadManager: ObservableObject {
                 state.bytesWritten = newBytes
                 state.totalBytes = progress.totalUnitCount
 
-                // Calculate speed from delta (throttle to ~2 updates/sec)
                 let elapsed = now.timeIntervalSince(state.lastSpeedUpdateTime)
                 if elapsed >= 0.5 {
                     let deltaBytes = newBytes - state.lastSpeedUpdateBytes
                     if deltaBytes > 0 && elapsed > 0 {
-                        // EMA smoothing (70% old + 30% new) for stable display
                         let instantSpeed = Double(deltaBytes) / elapsed
                         state.speedBytesPerSec = state.speedBytesPerSec > 0
                             ? state.speedBytesPerSec * 0.7 + instantSpeed * 0.3
@@ -243,7 +231,6 @@ final class DownloadManager: ObservableObject {
 
     func cancelDownload(model: PresetModel) {
         guard let task = tasks[model.filename] else { return }
-        // #7: Save resume data to disk before cancelling
         task.cancel { [weak self] resumeData in
             guard let self, let resumeData else { return }
             Task { @MainActor in
@@ -261,7 +248,6 @@ final class DownloadManager: ObservableObject {
         let fileURL = documents.appendingPathComponent("models").appendingPathComponent(model.filename)
         try? FileManager.default.removeItem(at: fileURL)
         activeDownloads.removeValue(forKey: model.filename)
-        // Clean up any persisted resume data for this model
         removePersistedResumeData(for: model.filename)
 
         if ProviderManager.shared.litertLMModelPath == model.filename {
@@ -289,7 +275,6 @@ final class DownloadManager: ObservableObject {
 
     func handleCompletion(filename: String, tempURL: URL?, error: Error?) {
         Task { @MainActor in
-            // Prevent double-handling (race condition between didFinishDownloadingTo and didCompleteWithError)
             guard self.activeDownloads[filename]?.isComplete != true else { return }
 
             if let error = error {
@@ -297,14 +282,12 @@ final class DownloadManager: ObservableObject {
                 self.activeDownloads[filename]?.error = error.localizedDescription
                 self.activeDownloads[filename]?.isDownloading = false
 
-                // Auto-retry up to 3 times for network errors
                 if let urlError = error as? URLError,
                    [.timedOut, .networkConnectionLost, .notConnectedToInternet].contains(urlError.code),
                    let retryCount = self.activeDownloads[filename]?.retryCount, retryCount < 3 {
                     self.activeDownloads[filename]?.retryCount = retryCount + 1
                     self.activeDownloads[filename]?.error = "Retrying... (attempt \(retryCount + 1)/3)"
                     self.activeDownloads[filename]?.isDownloading = true
-                    // Wait before retry
                     try? await Task.sleep(for: .seconds(2))
                     if let model = DownloadSessionDelegate.shared.pendingModels[filename] {
                         self.download(model: model)
@@ -328,21 +311,18 @@ final class DownloadManager: ObservableObject {
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destination)
 
-                // SHA256 verification after download
                 if let model = DownloadSessionDelegate.shared.pendingModels[filename],
                    let modelURL = model.downloadURL {
                     let sha256URL = URL(string: modelURL.absoluteString + ".sha256")
                     if let sha256URL = sha256URL {
                         do {
                             let (sha256Data, response) = try await URLSession.shared.data(from: sha256URL)
-                            // Only verify if we got a small text file (not an HTML error page)
                             let httpResponse = response as? HTTPURLResponse
                             if httpResponse?.statusCode == 200 {
                                 let expectedHash = String(data: sha256Data, encoding: .utf8)?
                                     .trimmingCharacters(in: .whitespacesAndNewlines)
                                     .split(separator: " ").first.map(String.init)
                                 if let expectedHash = expectedHash, expectedHash.count == 64 {
-                                    // Stream-based SHA256 — never load entire file into memory
                                     let computedHash = try computeFileSHA256(at: destination)
                                     if computedHash != expectedHash {
                                         LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
@@ -357,7 +337,6 @@ final class DownloadManager: ObservableObject {
                                 }
                             }
                         } catch {
-                            // .sha256 file doesn't exist or network error — skip verification
                             LamoLogger.download.warning("SHA256 verification skipped for \(filename): \(error.localizedDescription)")
                         }
                     }
@@ -370,7 +349,6 @@ final class DownloadManager: ObservableObject {
                 self.activeDownloads[filename]?.lastError = nil
                 self.observations.removeValue(forKey: filename)
                 self.tasks.removeValue(forKey: filename)
-                // Clean up persisted resume data for completed download
                 self.removePersistedResumeData(for: filename)
 
                 ProviderManager.shared.reloadEngine()

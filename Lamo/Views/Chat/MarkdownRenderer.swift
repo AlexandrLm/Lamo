@@ -177,7 +177,6 @@ struct MarkdownRenderer: View {
         while i < lines.count {
             let line = String(lines[i])
 
-            // Code block
             if line.hasPrefix("```") {
                 flushText()
                 if inCodeBlock {
@@ -202,7 +201,6 @@ struct MarkdownRenderer: View {
 
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            // HR
             if trimmed == "---" || trimmed == "***" || trimmed == "___" {
                 flushText()
                 blocks.append(.hr)
@@ -211,7 +209,6 @@ struct MarkdownRenderer: View {
                 continue
             }
 
-            // Table
             if i + 1 < lines.count,
                line.contains("|"),
                let headerRow = parseTableRow(line),
@@ -231,7 +228,6 @@ struct MarkdownRenderer: View {
                 continue
             }
 
-            // Headers (###### first to match longest prefix)
             if line.hasPrefix("###### ") {
                 flushText()
                 blocks.append(.header(String(line.dropFirst(7)), level: 6))
@@ -257,19 +253,16 @@ struct MarkdownRenderer: View {
                 blocks.append(.header(String(line.dropFirst(2)), level: 1))
                 listCounter = 0
             }
-            // Blockquote
             else if line.hasPrefix("> ") {
                 flushText()
                 blocks.append(.blockquote(String(line.dropFirst(2))))
                 listCounter = 0
             }
-            // Task list
             else if line.hasPrefix("- [ ] ") || line.hasPrefix("- [x] ") {
                 flushText()
                 blocks.append(.taskItem(String(line.dropFirst(6)), checked: line.hasPrefix("- [x] ")))
                 listCounter = 0
             }
-            // Unordered list (3 indent levels)
             else if line.hasPrefix("    - ") || line.hasPrefix("    * ") {
                 flushText()
                 blocks.append(.listItem(String(line.dropFirst(6)), indent: 2, number: nil))
@@ -283,19 +276,16 @@ struct MarkdownRenderer: View {
                 blocks.append(.listItem(String(line.dropFirst(2)), indent: 0, number: nil))
                 listCounter = 0
             }
-            // Ordered list
             else if orderedListPattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
                 flushText()
                 let content = line.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
                 listCounter += 1
                 blocks.append(.listItem(content, indent: 0, number: listCounter))
             }
-            // Empty line
             else if trimmed.isEmpty {
                 flushText()
                 listCounter = 0
             }
-            // Text
             else {
                 textBuffer.append(line)
             }
@@ -476,7 +466,6 @@ struct MarkdownTable: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-                // Header row
                 GridRow {
                     ForEach(0..<columnCount, id: \.self) { col in
                         let text = col < headers.count ? headers[col] : ""
@@ -488,12 +477,10 @@ struct MarkdownTable: View {
                 }
                 .background(Color.white.opacity(0.04))
 
-                // Header separator
                 Rectangle()
                     .fill(Color.white.opacity(0.08))
                     .frame(height: 0.5)
 
-                // Data rows
                 ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
                     GridRow {
                         ForEach(0..<columnCount, id: \.self) { col in

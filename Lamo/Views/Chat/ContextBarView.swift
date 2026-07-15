@@ -43,19 +43,14 @@ struct ContextDetailView: View {
                 ScrollView {
                     VStack(spacing: 20) {
 
-                        // ── Hero ring ──
                         heroSection(tracker)
 
-                        // ── Used / Free / Limit row ──
                         statsRow(tracker)
 
-                        // ── Stacked bar breakdown ──
                         breakdownBar(tracker)
 
-                        // ── Breakdown list ──
                         breakdownList(tracker)
 
-                        // ── Per-message list ──
                         messageList(tracker)
                     }
                     .padding(.horizontal, 20)
