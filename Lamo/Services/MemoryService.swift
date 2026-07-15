@@ -205,7 +205,6 @@ final class MemoryService: ObservableObject {
             let intersection = newWords.intersection(existingWords)
             let union = newWords.union(existingWords)
 
-            // Jaccard similarity > 0.6 = duplicate
             guard !union.isEmpty else { continue }
             let similarity = Float(intersection.count) / Float(union.count)
             if similarity > 0.6 { return true }

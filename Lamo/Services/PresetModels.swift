@@ -126,7 +126,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Check if this model is already downloaded in ~/Documents/models/
     var isDownloaded: Bool {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
@@ -134,8 +133,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         return FileManager.default.fileExists(atPath: fileURL.path)
     }
 
-    /// Check if the downloaded file size matches expected (within 5% tolerance).
-    /// Corrupted/incomplete downloads cause C++ null pointer crashes.
     var isFileValid: Bool {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")

@@ -178,7 +178,6 @@ enum FileContentExtractor {
 
     // MARK: - XML Helpers
 
-    /// Cached regex for extracting text between XML tags.
     private static let xmlTextPattern = try! NSRegularExpression(pattern: ">([^<]+)<", options: [])
 
     private static func extractTextFromOOXML(_ data: Data) -> String {
@@ -200,7 +199,6 @@ enum FileContentExtractor {
 
     // MARK: - XLSX Helpers
 
-    /// Cached regex patterns for XLSX parsing.
     private static let xlsxRowPattern = try! NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])
     private static let xlsxCellPattern = try! NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])
 

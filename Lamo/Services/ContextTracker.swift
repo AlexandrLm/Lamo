@@ -60,12 +60,6 @@ struct ContextTracker {
 
     // MARK: - Build from settings + messages (requires real token counts)
 
-    /// - Parameters:
-    ///   - messages: All messages in the conversation.
-    ///   - tokenCounts: Real token counts per message ID (from engine.tokenize).
-    ///   - systemPromptTokens: Real token count of the system prompt.
-    ///   - memoryTokens: Real token count of the memory context.
-    ///   - maxNumTokens: Configured KV-cache budget (real value from safeMaxTokens, not UserDefaults).
     static func build(
         messages: [ChatMessage],
         tokenCounts: [UUID: Int],

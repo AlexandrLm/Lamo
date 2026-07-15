@@ -19,14 +19,12 @@ struct WebSearchTool: Tool {
         let shouldFetch = UserDefaults.standard.object(forKey: "web_auto_fetch") as? Bool ?? true
 
         if shouldFetch && !searchResults.isEmpty {
-            // Parallel fetch top 3 results
             let topResults = Array(searchResults.prefix(3))
             let urls = topResults.compactMap { result -> URL? in
                 guard let urlString = result["url"] else { return nil }
                 return URL(string: urlString)
             }
 
-            // Fetch all URLs concurrently
             let fetchedContents = await withTaskGroup(of: (Int, String?).self) { group in
                 for (index, url) in urls.enumerated() {
                     group.addTask {
@@ -45,7 +43,6 @@ struct WebSearchTool: Tool {
                 return results
             }
 
-            // Build enriched results
             var contentMap: [Int: String] = [:]
             for (index, content) in fetchedContents {
                 if let content { contentMap[index] = content }
@@ -122,7 +119,6 @@ struct DeepResearchTool: Tool {
             throw ResearchError.noQueries
         }
 
-        // Step 1: Search all queries in parallel
         let allResults = await withTaskGroup(of: [[String: String]].self) { group in
             for query in queryList.prefix(4) {
                 group.addTask {
@@ -140,7 +136,6 @@ struct DeepResearchTool: Tool {
             return combined
         }
 
-        // Step 2: Deduplicate by URL
         var seen = Set<String>()
         var uniqueResults: [[String: String]] = []
         for result in allResults {
@@ -149,7 +144,6 @@ struct DeepResearchTool: Tool {
             uniqueResults.append(result)
         }
 
-        // Step 3: Fetch top 5 unique results in parallel
         let toFetch = Array(uniqueResults.prefix(5))
         let urls = toFetch.compactMap { r -> URL? in
             guard let s = r["url"] else { return nil }
@@ -175,7 +169,6 @@ struct DeepResearchTool: Tool {
         var contentMap: [Int: String] = [:]
         for (i, c) in fetched { if let c { contentMap[i] = c } }
 
-        // Step 4: Build structured research output
         var findings: [[String: Any]] = []
         for (i, result) in toFetch.enumerated() {
             var finding: [String: Any] = [
@@ -676,7 +669,6 @@ actor WebFetcher {
 
     /// Fetch a URL and return structured metadata + content.
     static func fetchStructured(url: URL) async throws -> PageMetadata {
-        // Check cache
         let cacheKey = url.absoluteString
         if let cached = contentCache[cacheKey], Date().timeIntervalSince(cached.timestamp) < contentCacheTTL {
             return PageMetadata(title: nil, description: nil, contentType: nil, content: cached.content)
@@ -701,7 +693,6 @@ actor WebFetcher {
             }
             do {
                 let result = try await fetchOnceStructured(url: url)
-                // Cache the result
                 contentCache[cacheKey] = (content: result.content, timestamp: Date())
                 return result
             } catch {
@@ -737,7 +728,6 @@ actor WebFetcher {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        // Check content type
         let mimeType = (response as? HTTPURLResponse)?.mimeType ?? ""
         let isPDF = mimeType.contains("pdf") || url.pathExtension == "pdf"
 

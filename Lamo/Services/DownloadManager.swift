@@ -377,7 +377,6 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         didFinishDownloadingTo location: URL
     ) {
         guard let filename = downloadTask.originalRequest?.url?.lastPathComponent else { return }
-        // Copy temp file immediately — iOS deletes it after this method returns
         let tempDir = FileManager.default.temporaryDirectory
         let backupURL = tempDir.appendingPathComponent("lamo_dl_\(filename)")
         try? FileManager.default.removeItem(at: backupURL)
@@ -394,7 +393,6 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     ) {
         guard let filename = task.originalRequest?.url?.lastPathComponent else { return }
         if let error = error as? URLError, error.code == .cancelled { return }
-        // Only report errors — success is handled by didFinishDownloadingTo
         if let error = error {
             Task { @MainActor in
                 DownloadManager.shared.handleCompletion(filename: filename, tempURL: nil, error: error)
