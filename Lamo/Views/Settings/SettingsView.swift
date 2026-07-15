@@ -423,38 +423,49 @@ struct SettingsView: View {
 
     private var modelsSection: some View {
         ScrollView {
-            VStack(spacing: LamoTheme.Spacing.md) {
-                // Active model picker
-                if !vm.availableModels.isEmpty {
+            VStack(spacing: LamoTheme.Spacing.lg) {
+                // ── Hero: Active Model ──
+                modelsHeroCard
+
+                // ── Library: Downloaded Models ──
+                let downloadedPresets = PresetModel.allCases.filter { $0.isDownloaded }
+                let localModels = vm.availableModels.filter { path in
+                    !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
+                }
+                let hasDownloadedModels = !downloadedPresets.isEmpty || !localModels.isEmpty
+
+                if hasDownloadedModels {
                     VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-                        Text("Active Model")
+                        HStack {
+                            Text("Library")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
+                                .textCase(.uppercase)
+                            Spacer()
+                            Text("\(downloadedPresets.count + localModels.count) models")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.2))
+                        }
+
+                        ForEach(downloadedPresets) { model in
+                            modelLibraryRow(model: model)
+                        }
+
+                        ForEach(localModels, id: \.self) { path in
+                            importedModelRow(path: path)
+                        }
+                    }
+                }
+
+                // ── Catalog: Available to Download ──
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    HStack {
+                        Text("Catalog")
                             .font(.system(size: 9, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.3))
                             .textCase(.uppercase)
-
-                        Picker(selection: Binding(
-                            get: { vm.selectedModel ?? vm.availableModels.first ?? "" },
-                            set: { vm.selectedModel = $0; vm.loadModelInfo() }
-                        )) {
-                            ForEach(vm.availableModels, id: \.self) { model in
-                                Text(vm.displayName(for: model)).tag(model)
-                            }
-                        } label: {
-                            Label("Active Model", systemImage: "bolt.circle.fill")
-                        }
+                        Spacer()
                     }
-                    .padding(LamoTheme.Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-                }
-
-                // Available Models
-                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-                    Text("Available Models")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.3))
-                        .textCase(.uppercase)
-                        .padding(.horizontal, 4)
 
                     ForEach(PresetModel.allCases) { model in
                         ModelCardView(
@@ -465,11 +476,11 @@ struct SettingsView: View {
                     }
                 }
 
-                // Import from Files
+                // ── Import ──
                 Button {
                     isImportingModel = true
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         if isCopyingFile {
                             ProgressView().controlSize(.small).tint(.white)
                             Text("Importing…")
@@ -487,85 +498,14 @@ struct SettingsView: View {
                 .foregroundStyle(.white)
                 .disabled(isCopyingFile)
 
-                Text(".litertlm, .bin, or .tflite model files.")
+                Text(".litertlm, .bin, or .tflite")
                     .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.3))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
+                    .foregroundStyle(.white.opacity(0.25))
 
-                // Imported Models
-                let localModels = vm.availableModels.filter { path in
-                    !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
-                }
-                if !localModels.isEmpty {
-                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-                        Text("Imported Models")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.3))
-                            .textCase(.uppercase)
+                // ── Storage ──
+                modelsStorageCard
 
-                        ForEach(localModels, id: \.self) { path in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(vm.displayName(for: path))
-                                        .font(.system(.body, design: .monospaced))
-                                        .foregroundStyle(.white)
-                                    Text((path as NSString).lastPathComponent)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundStyle(.white.opacity(0.4))
-                                }
-                                Spacer()
-                                if vm.selectedModel == path {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.white.opacity(0.5))
-                                }
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-                    .padding(LamoTheme.Spacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-                }
-
-                // Storage info
-                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-                    Text("Storage")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.3))
-                        .textCase(.uppercase)
-
-                    storageRow(label: "Location", value: "On My iPhone → Lamo → models")
-
-                    let totalSize = calculateModelsSize()
-                    if totalSize > 0 {
-                        storageRow(label: "Used Space", value: ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
-                    }
-
-                    if let freeSpace = getFreeSpace() {
-                        storageRow(label: "Available", value: ByteCountFormatter.string(fromByteCount: freeSpace, countStyle: .file))
-                    }
-
-                    Button {
-                        openModelsFolder()
-                    } label: {
-                        Label("Open in Files", systemImage: "folder")
-                            .font(.system(.subheadline, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(LamoTheme.Spacing.lg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-
-                Text("Models are stored in the Files app under On My iPhone → Lamo → models. You can also add .litertlm files there manually.")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.3))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-
-                // Model Info
+                // ── Model Info ──
                 if let info = vm.modelInfo {
                     VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
                         Text("Model Info")
@@ -573,9 +513,9 @@ struct SettingsView: View {
                             .foregroundStyle(.white.opacity(0.3))
                             .textCase(.uppercase)
 
-                        storageRow(label: "Name", value: info.name)
-                        storageRow(label: "File Size", value: info.fileSizeString)
-                        storageRow(label: "Speculative Decoding", value: info.hasSpeculativeDecoding ? "Supported" : "Not Available")
+                        infoRow(label: "Name", value: info.name)
+                        infoRow(label: "File Size", value: info.fileSizeString)
+                        infoRow(label: "Speculative Decoding", value: info.hasSpeculativeDecoding ? "YES" : "NO")
                     }
                     .padding(LamoTheme.Spacing.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -583,11 +523,209 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, LamoTheme.Spacing.lg)
-            .padding(.vertical, LamoTheme.Spacing.md)
+            .padding(.bottom, LamoTheme.Spacing.xxxl)
         }
         .background(LamoTheme.Colors.background)
         .navigationTitle("Models")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Models Hero Card
+
+    private var modelsHeroCard: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+            if let current = vm.selectedModel {
+                let name = vm.displayName(for: current)
+
+                HStack {
+                    Image(systemName: "bolt.fill")
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("ACTIVE")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                    Spacer()
+                }
+
+                Text(name)
+                    .font(.system(.title3, design: .monospaced).bold())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text("Loaded and ready for inference")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.35))
+
+                if let info = vm.modelInfo {
+                    HStack(spacing: LamoTheme.Spacing.lg) {
+                        specStat(value: info.fileSizeString, label: "SIZE")
+                        specStat(value: info.hasSpeculativeDecoding ? "YES" : "NO", label: "SPEC")
+                    }
+                }
+            } else {
+                HStack {
+                    Image(systemName: "minus.circle")
+                        .foregroundStyle(.white.opacity(0.3))
+                    Text("NO MODEL")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                    Spacer()
+                }
+
+                Text("Select or download a model below")
+                    .font(.system(.subheadline, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .padding(LamoTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+    }
+
+    private func specStat(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.white.opacity(0.8))
+            Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.25))
+        }
+    }
+
+    // MARK: - Model Library Row
+
+    private func modelLibraryRow(model: PresetModel) -> some View {
+        let isActive = vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
+
+        return Button {
+            vm.selectedModel = vm.availableModels.first {
+                ($0 as NSString).lastPathComponent == model.filename
+            } ?? vm.selectedModel
+            vm.loadModelInfo()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: model.systemImage)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.displayName)
+                        .font(.system(.subheadline, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(model.parameterCount)
+                        Text("·")
+                            .foregroundStyle(.white.opacity(0.15))
+                        Text(model.fileSizeString)
+                        Text("·")
+                            .foregroundStyle(.white.opacity(0.15))
+                        Text(model.minRAM)
+                    }
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.35))
+                }
+
+                Spacer()
+
+                if isActive {
+                    Text("ACTIVE")
+                        .font(.system(size: 8, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 4))
+                }
+            }
+            .padding(.horizontal, LamoTheme.Spacing.md)
+            .padding(.vertical, 12)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Imported Model Row
+
+    private func importedModelRow(path: String) -> some View {
+        Button {
+            vm.selectedModel = path
+            vm.loadModelInfo()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.zipper")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(vm.displayName(for: path))
+                        .font(.system(.subheadline, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text((path as NSString).lastPathComponent)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if vm.selectedModel == path {
+                    Text("ACTIVE")
+                        .font(.system(size: 8, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 4))
+                }
+            }
+            .padding(.horizontal, LamoTheme.Spacing.md)
+            .padding(.vertical, 12)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Models Storage Card
+
+    private var modelsStorageCard: some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            Text("Storage")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.3))
+                .textCase(.uppercase)
+
+            let totalSize = calculateModelsSize()
+            let freeSpace = getFreeSpace()
+
+            if totalSize > 0 || freeSpace != nil {
+                HStack(spacing: LamoTheme.Spacing.lg) {
+                    if totalSize > 0 {
+                        specStat(value: ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file), label: "USED")
+                    }
+                    if let free = freeSpace {
+                        specStat(value: ByteCountFormatter.string(fromByteCount: free, countStyle: .file), label: "FREE")
+                    }
+                }
+            }
+
+            Button {
+                openModelsFolder()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                    Text("Open in Files")
+                }
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
+            }
+            .padding(.top, 4)
+        }
+        .padding(LamoTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
     private func storageRow(label: String, value: String) -> some View {
@@ -599,6 +737,18 @@ struct SettingsView: View {
             Text(value)
                 .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.8))
+        }
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.4))
+            Spacer()
+            Text(value)
+                .font(.system(.caption, design: .monospaced).weight(.medium))
+                .foregroundStyle(.white.opacity(0.7))
         }
     }
 
