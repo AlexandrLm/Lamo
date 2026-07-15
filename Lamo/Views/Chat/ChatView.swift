@@ -123,7 +123,9 @@ struct ChatView: View {
                 let tokenCount = viewModel.contextTracker?.messageUsages.first(where: { $0.id == message.id })?.tokenCount
                 MessageBubble(message: message, tokenCount: tokenCount, onRetry: {
                     viewModel.retryLastMessage()
-                })
+                }, onEdit: message.role == .user ? {
+                    viewModel.editMessage(message)
+                } : nil)
                 .id(message.id)
             }
 

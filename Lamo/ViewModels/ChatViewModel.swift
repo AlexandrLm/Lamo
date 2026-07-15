@@ -173,6 +173,25 @@ final class ChatViewModel {
         startStreaming(chatMessages: history)
     }
 
+    func editMessage(_ message: Message) {
+        guard message.role == .user else { return }
+
+        // Load message content into input
+        inputText = message.content
+
+        // Find index of this message and delete everything after it (including itself)
+        let sorted = messages.sorted(by: { $0.timestamp < $1.timestamp })
+        guard let idx = sorted.firstIndex(where: { $0.id == message.id }) else { return }
+
+        // Delete all messages from idx onwards
+        for i in idx..<sorted.count {
+            let msg = sorted[i]
+            messages.removeAll { $0.id == msg.id }
+            modelContext.delete(msg)
+        }
+        try? modelContext.save()
+    }
+
     func stopGeneration() {
         // Cancel the task. onTermination in LiteRTLMProvider's AsyncStream
         // will call conversation.cancel() to stop the native C++ stream.

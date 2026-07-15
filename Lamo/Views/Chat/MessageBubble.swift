@@ -5,6 +5,7 @@ struct MessageBubble: View {
     let message: Message
     let tokenCount: Int?
     let onRetry: (() -> Void)?
+    let onEdit: (() -> Void)?
     @State private var showCopyConfirmation = false
     @State private var showImageViewer = false
     @State private var selectedImageIndex = 0
@@ -67,10 +68,11 @@ struct MessageBubble: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // User timestamp + token count
-            if message.role == .user {
-                HStack {
+            // User timestamp + actions
+            if message.role == .user && !message.content.isEmpty {
+                HStack(spacing: 8) {
                     Spacer()
+
                     Text(message.timestamp, style: .time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -78,6 +80,20 @@ struct MessageBubble: View {
                         Text("· ~\(ContextTracker.formatTokens(tokenCount))")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.gray.opacity(0.5))
+                    }
+
+                    actionButton(
+                        icon: showCopyConfirmation ? "checkmark" : "doc.on.doc",
+                        label: "Copy",
+                        color: showCopyConfirmation ? .white : .white.opacity(0.3)
+                    ) {
+                        copyContent()
+                    }
+
+                    if let onEdit {
+                        actionButton(icon: "pencil", label: "Edit", color: .white.opacity(0.3)) {
+                            onEdit()
+                        }
                     }
                 }
                 .padding(.trailing, 16)
