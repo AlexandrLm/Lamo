@@ -7,37 +7,22 @@ import os
 /// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
 ///
 /// Performance notes:
-/// - Conversation is reused across utterances as long as message history remains compatible.
-/// - Only new messages trigger inference; prefill is incremental.
+/// - Conversation is rebuilt each turn, but tokenization is cached for speed.
+/// - When context fills up, old messages are auto-summarized via the model.
+/// - Budget is calculated using the real tokenizer, not char/4 approximation.
 final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     let name = "LiteRT-LM"
 
     /// Path to the .litertlm model file.
     private let modelPath: String?
-
     /// Backend selection
     private let useGPU: Bool
-
     /// CPU thread count (only used when useGPU is false)
     private let cpuThreadCount: Int
-
     /// Max tokens for KV-cache. nil = model default.
     private let maxNumTokens: Int?
-
     /// Cached engine — injected by ProviderManager to avoid reloading.
     private let engine: LiteRTLM.Engine?
-
-    // MARK: - Persistent Conversation Cache
-
-    /// Cached native conversation — reused to avoid KV-cache rebuild.
-    nonisolated(unsafe) private var cachedConversation: LiteRTLM.Conversation?
-    /// Hash of the messages last used to build `cachedConversation`.
-    nonisolated(unsafe) private var cachedMessagesHash: Int = 0
-    /// Whether the provider's conversation still matches the incoming message list.
-    nonisolated private func isCacheValid(for messages: [ChatMessage]) -> Bool {
-        return cachedConversation != nil
-            && messageHash(messages) == cachedMessagesHash
-    }
 
     /// Lock for thread-safe access to cached conversation
     private let cacheLock = OSAllocatedUnfairLock(initialState: ())
@@ -67,40 +52,17 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                     continuation.yield(.error(error))
                 }
             }
-            // When the AsyncStream consumer is deallocated or cancelled,
-            // cancel the inference task so the native C stream stops too.
             continuation.onTermination = { _ in
                 task.cancel()
-                // Attempt to cancel the native conversation stream
-                let conv = provider.cacheLock.withLock { provider.cachedConversation }
-                try? conv?.cancel()
             }
         }
     }
 
     /// Invalidate cached conversation (e.g. when model or GPU setting changes).
     func invalidateConversationCache() {
-        cacheLock.withLock {
-            cachedConversation = nil
-            cachedMessagesHash = 0
-        }
-    }
-
-
-    nonisolated private func messageHash(_ messages: [ChatMessage]) -> Int {
-        var hasher = Hasher()
-        for msg in messages {
-            hasher.combine(msg.role.rawValue)
-            hasher.combine(msg.content)
-            hasher.combine(msg.fileContent)
-            for path in msg.imagePaths {
-                hasher.combine(path)
-            }
-            for path in msg.attachedFilePaths {
-                hasher.combine(path)
-            }
-        }
-        return hasher.finalize()
+        // No persistent conversation cache to clear — conversations are rebuilt each turn.
+        // This is called by ProviderManager on memory pressure; the next inference
+        // will build a fresh conversation which is the default behavior.
     }
 
     // MARK: - Private
@@ -109,115 +71,249 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         messages: [ChatMessage],
         continuation: AsyncStream<StreamingToken>.Continuation
     ) async throws {
-        // Reuse cached engine, or create new one
+        // Resolve engine
         let resolvedEngine: LiteRTLM.Engine
         if let cached = engine {
             resolvedEngine = cached
         } else {
             let resolvedPath = try resolveModelPath()
-            let backend: LiteRTLM.Backend = useGPU
-                ? .gpu
-                : .cpu(threadCount: cpuThreadCount)
-
-            let maxTokens: Int? = self.maxNumTokens
-
+            let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: cpuThreadCount)
             let engineConfig = try LiteRTLM.EngineConfig(
                 modelPath: resolvedPath,
                 backend: backend,
                 visionBackend: .cpu(),
                 audioBackend: nil,
-                maxNumTokens: maxTokens,
+                maxNumTokens: self.maxNumTokens,
                 cacheDir: NSTemporaryDirectory()
             )
-
             let newEngine = LiteRTLM.Engine(engineConfig: engineConfig)
             try await newEngine.initialize()
             resolvedEngine = newEngine
         }
 
-        // Reuse or rebuild conversation (thread-safe)
-        let conversation: LiteRTLM.Conversation
-        let cached: LiteRTLM.Conversation? = cacheLock.withLock {
-            isCacheValid(for: messages) ? cachedConversation : nil
-        }
-        if let cached {
-            conversation = cached
-        } else {
-            conversation = try await buildConversation(engine: resolvedEngine, messages: messages)
-            cacheLock.withLock {
-                cachedConversation = conversation
-                cachedMessagesHash = messageHash(messages)
-            }
-        }
+        // Build conversation with smart context management
+        let conversation = try await buildConversation(
+            engine: resolvedEngine, messages: messages
+        )
 
         // Send the last user message and stream the response
         guard !Task.isCancelled else { return }
+        try await streamLastMessage(
+            conversation: conversation,
+            messages: messages,
+            continuation: continuation
+        )
+    }
 
-        if let lastUserMessage = messages.last(where: { $0.role == .user }) {
-            // Build multimodal or text-only message
-            let message: LiteRTLM.Message
-            if !lastUserMessage.imagePaths.isEmpty {
-                var contents: [LiteRTLM.Content] = []
-                for path in lastUserMessage.imagePaths {
-                    contents.append(.imageFile(path))
-                }
-                // Prepend file context before user text
-                if !lastUserMessage.fileContent.isEmpty {
-                    contents.append(.text("Содержимое прикреплённых файлов:\n\n\(lastUserMessage.fileContent)"))
-                }
-                if !lastUserMessage.content.isEmpty {
-                    contents.append(.text(lastUserMessage.content))
-                }
-                message = LiteRTLM.Message(contents: contents)
-            } else if !lastUserMessage.fileContent.isEmpty {
-                // File attached but no image — send file context + user text as single message
-                let fullText: String
-                if lastUserMessage.content.isEmpty {
-                    fullText = "Проанализируй содержимое прикреплённых файлов:\n\n\(lastUserMessage.fileContent)"
-                } else {
-                    fullText = "Содержимое прикреплённых файлов:\n\n\(lastUserMessage.fileContent)\n\n---\n\n\(lastUserMessage.content)"
-                }
-                message = LiteRTLM.Message(fullText)
-            } else {
-                message = LiteRTLM.Message(lastUserMessage.content)
+    /// Build a conversation with token-accurate budget and auto-summarization.
+    private func buildConversation(
+        engine: LiteRTLM.Engine,
+        messages: [ChatMessage]
+    ) async throws -> LiteRTLM.Conversation {
+        let pm = ProviderManager.shared
+
+        // --- System prompt + memory ---
+        var systemPrompt = pm.systemPrompt
+        let memoryContext = MemoryService.shared.buildMemoryContext()
+        var extraSummaryContext = ""
+
+        if MemoryService.shared.isEnabled {
+            systemPrompt += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
+
+            // Inject existing conversation summary (from previous summarizations)
+            if let convID = MemoryService.shared.currentConversationID,
+               let summary = fetchConversationSummary(convID: convID), !summary.isEmpty {
+                extraSummaryContext = "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
             }
+            if !memoryContext.isEmpty {
+                systemPrompt += "\n\n" + memoryContext
+            }
+        }
+        systemPrompt += extraSummaryContext
 
-            // Enable thinking mode via extraContext
-            let extraContext: [String: Any]? = ProviderManager.shared.thinkingMode
-                ? ["enable_thinking": "true"]
-                : nil
+        // --- Token budget calculation (real tokenizer, not char/4) ---
+        let effectiveMaxTokens = self.maxNumTokens ?? max(pm.maxNumTokens, 2048)
+        let systemTokens = await pm.tokenizeCount(systemPrompt)
+        let memoryTokens = await pm.tokenizeCount(memoryContext + extraSummaryContext)
 
-            // Repetition detector — catches generation loops
-            let repDetector = RepetitionDetector()
+        // Use ContextTracker for accurate message selection
+        let budgetResult = ContextTracker.calculateIncluded(
+            messages: messages,
+            tokenCounts: await pm.tokenizeMessages(messages),
+            systemPromptTokens: systemTokens,
+            memoryTokens: memoryTokens,
+            maxNumTokens: effectiveMaxTokens
+        )
 
-            for try await chunk in conversation.sendMessageStream(message, extraContext: extraContext) {
-                guard !Task.isCancelled else {
-                    // Cancel native stream to stop C++ callback loop
-                    try? conversation.cancel()
-                    return
+        // --- Auto-summarization when context is full ---
+        var includedMessages = budgetResult.included
+        if budgetResult.needsSummary,
+           !budgetResult.dropped.isEmpty,
+           let sumEngine = self.engine ?? pm.engineForSummarization {
+            if let summary = await summarizeOldContext(
+                dropped: budgetResult.dropped,
+                engine: sumEngine
+            ) {
+                LamoLogger.engine.info("Auto-summary: \(budgetResult.dropped.count) messages → \(summary.count) chars")
+                // Inject summary into system prompt
+                systemPrompt += "\n\n<earlier_context_summary>\n\(summary)\n</earlier_context_summary>"
+                // Persist summary for future conversations
+                if let convID = MemoryService.shared.currentConversationID {
+                    await MemoryService.shared.updateConversationSummary(summary)
                 }
-                // Check for thinking content in channels
-                if let thought = chunk.channels["thought"], !thought.isEmpty {
-                    continuation.yield(.thinkingDelta(thought))
+            }
+        }
+
+        // --- Build LiteRT-LM messages ---
+        let systemMessage = LiteRTLM.Message(systemPrompt, role: .user)
+        var allMessages: [LiteRTLM.Message] = [systemMessage]
+
+        for msg in includedMessages {
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            if msg.role == .user && !msg.fileContent.isEmpty {
+                let fileContext = "Содержимое прикреплённых файлов:\n\n\(msg.fileContent)"
+                allMessages.append(LiteRTLM.Message(fileContext, role: .user))
+                if !msg.content.isEmpty {
+                    allMessages.append(LiteRTLM.Message(msg.content, role: .user))
                 }
-                // Always yield the main content
+            } else {
+                allMessages.append(LiteRTLM.Message(msg.content, role: role))
+            }
+        }
+
+        // --- Create conversation ---
+        let samplerConfig = try buildSamplerConfig()
+        let tools: [LiteRTLM.Tool] = MemoryService.shared.isEnabled
+            ? [UpdateMemoryTool(), WebSearchTool(), FetchUrlTool(), DeepResearchTool()]
+            : [WebSearchTool(), FetchUrlTool(), DeepResearchTool()]
+
+        let config = LiteRTLM.ConversationConfig(
+            initialMessages: allMessages,
+            tools: tools,
+            samplerConfig: samplerConfig
+        )
+
+        do {
+            return try await engine.createConversation(with: config)
+        } catch {
+            // Fallback: minimal history (system prompt + last user message only)
+            LamoLogger.engine.warning("Conversation creation failed, falling back to minimal: \(error)")
+            var minimal: [LiteRTLM.Message] = [systemMessage]
+            if let last = allMessages.last, last.role == .user {
+                minimal.append(last)
+            }
+            let fallbackConfig = LiteRTLM.ConversationConfig(
+                initialMessages: minimal,
+                samplerConfig: samplerConfig
+            )
+            return try await engine.createConversation(with: fallbackConfig)
+        }
+    }
+
+    /// Summarize old context via a temporary conversation.
+    /// The temporary conversation is destroyed after getting the summary,
+    /// freeing its KV-cache allocation.
+    private func summarizeOldContext(
+        dropped: [ChatMessage],
+        engine: LiteRTLM.Engine
+    ) async -> String? {
+        guard !dropped.isEmpty else { return nil }
+
+        let summaryRequest = """
+        Summarize the following conversation history into a concise context block. Preserve: \
+        key facts, decisions, user preferences, code changes, file names, and important conclusions. \
+        Be brief but complete — this summary replaces the original messages.
+        """
+
+        let samplerConfig = try? buildSamplerConfig()
+
+        // Old messages as initial context (prefilled into KV-cache)
+        var initialMessages: [LiteRTLM.Message] = []
+        for msg in dropped {
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            initialMessages.append(LiteRTLM.Message(msg.content, role: role))
+        }
+
+        let config = LiteRTLM.ConversationConfig(
+            initialMessages: initialMessages,
+            samplerConfig: samplerConfig
+        )
+
+        do {
+            let summaryConv = try await engine.createConversation(with: config)
+            // Send summary request as the final message — model responds with summary
+            var summaryText = ""
+            let summaryMsg = LiteRTLM.Message(summaryRequest)
+            for try await chunk in summaryConv.sendMessageStream(summaryMsg) {
                 let text = chunk.toString
                 if !text.isEmpty {
-                    continuation.yield(.delta(text))
+                    summaryText += text
+                }
+            }
+            // Temporary conversation is released here, freeing its KV-cache
+            if !summaryText.isEmpty {
+                return summaryText
+            }
+        } catch {
+            LamoLogger.engine.warning("Summarization failed: \(error)")
+        }
+        return nil
+    }
 
-                    // Feed chunk to repetition detector
-                    if repDetector.feed(text) {
-                        try? conversation.cancel()
-                        continuation.yield(.loopDetected)
-                        break
-                    }
+    /// Build the sampler config with safe ranges for Gemma 4.
+    private func buildSamplerConfig() throws -> LiteRTLM.SamplerConfig {
+        let pm = ProviderManager.shared
+        let safeTopK = max(1, min(pm.topK, 100))
+        let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
+        let safeTopP: Float = max(0.0, min(Float(pm.topP), 1.0))
+        return try LiteRTLM.SamplerConfig(
+            topK: safeTopK,
+            topP: safeTopP,
+            temperature: safeTemp,
+            seed: Int.random(in: 0..<Int(Int32.max))
+        )
+    }
+
+    /// Stream the last user message and yield tokens.
+    private func streamLastMessage(
+        conversation: LiteRTLM.Conversation,
+        messages: [ChatMessage],
+        continuation: AsyncStream<StreamingToken>.Continuation
+    ) async throws {
+        guard let lastUserMessage = messages.last(where: { $0.role == .user }) else {
+            continuation.yield(.done)
+            continuation.finish()
+            return
+        }
+
+        let message = buildLiteMessage(from: lastUserMessage, role: .user)
+        let extraContext: [String: Any]? = ProviderManager.shared.thinkingMode
+            ? ["enable_thinking": "true"] : nil
+
+        let repDetector = RepetitionDetector()
+
+        for try await chunk in conversation.sendMessageStream(message, extraContext: extraContext) {
+            guard !Task.isCancelled else {
+                try? conversation.cancel()
+                return
+            }
+            if let thought = chunk.channels["thought"], !thought.isEmpty {
+                continuation.yield(.thinkingDelta(thought))
+            }
+            let text = chunk.toString
+            if !text.isEmpty {
+                continuation.yield(.delta(text))
+                if repDetector.feed(text) {
+                    try? conversation.cancel()
+                    continuation.yield(.loopDetected)
+                    break
                 }
             }
         }
 
         guard !Task.isCancelled else { return }
 
-        // Capture benchmark data from the conversation
+        // Capture benchmark data
         if let benchmarkInfo = try? conversation.getBenchmarkInfo() {
             let data = BenchmarkData(
                 timeToFirstToken: benchmarkInfo.timeToFirstTokenInSecond,
@@ -233,126 +329,32 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         continuation.finish()
     }
 
-    /// Build a fresh Conversation from the full message history.
-    private func buildConversation(
-        engine: LiteRTLM.Engine,
-        messages: [ChatMessage]
-    ) async throws -> LiteRTLM.Conversation {
-        let pm = ProviderManager.shared
-
-        // Sampler config — clamp values to safe ranges for Gemma 4
-        let safeTopK = max(1, min(pm.topK, 100))
-        let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
-        let safeTopP: Float = max(0.0, min(Float(pm.topP), 1.0))
-
-        let samplerConfig = try LiteRTLM.SamplerConfig(
-            topK: safeTopK,
-            topP: safeTopP,
-            temperature: safeTemp,
-            seed: Int.random(in: 0..<Int(Int32.max))
-        )
-
-        // Build truncated history — fit within KV-cache token budget
-        // Use the actual token limit passed to the engine, not pm.maxNumTokens
-        // (which is 0 in auto mode and would zero out the budget)
-        let maxCharsPerToken = 4
-        var systemPrompt = pm.systemPrompt
-        let effectiveMaxTokens = self.maxNumTokens ?? max(pm.maxNumTokens, 2048)
-
-        // Inject stored memory facts into system prompt
-        let memoryContext = MemoryService.shared.buildMemoryContext()
-        if MemoryService.shared.isEnabled {
-            systemPrompt += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
-
-            // Inject conversation summary (for when old messages are dropped)
-            if let convID = MemoryService.shared.currentConversationID,
-               let summary = fetchConversationSummary(convID: convID), !summary.isEmpty {
-                systemPrompt += "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
+    /// Build a LiteRTLM.Message from a ChatMessage.
+    private func buildLiteMessage(from msg: ChatMessage, role: LiteRTLM.Role) -> LiteRTLM.Message {
+        if !msg.imagePaths.isEmpty {
+            var contents: [LiteRTLM.Content] = msg.imagePaths.map { .imageFile($0) }
+            if !msg.fileContent.isEmpty {
+                contents.append(.text("Содержимое прикреплённых файлов:\n\n\(msg.fileContent)"))
             }
-
-            if !memoryContext.isEmpty {
-                systemPrompt += "\n\n" + memoryContext
+            if !msg.content.isEmpty {
+                contents.append(.text(msg.content))
             }
-        }
-
-        let systemPromptChars = systemPrompt.count
-        let budgetChars = max(0, (effectiveMaxTokens * maxCharsPerToken) - systemPromptChars - 512)
-        
-        var allMessages: [LiteRTLM.Message] = []
-        
-        // Inject system prompt as first user message
-        if !systemPrompt.isEmpty {
-            allMessages.append(LiteRTLM.Message(systemPrompt, role: .user))
-        }
-        
-        // Add conversation history — most recent first, fit within budget
-        var usedChars = 0
-        var historyMessages: [LiteRTLM.Message] = []
-        for msg in messages.dropLast().reversed() {
-            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
-            // If user message has file content, inject it as preceding context
-            if msg.role == .user && !msg.fileContent.isEmpty {
-                let fileContext = "Содержимое прикреплённых файлов:\n\n\(msg.fileContent)"
-                let fileChars = fileContext.count
-                if usedChars + fileChars <= budgetChars {
-                    historyMessages.insert(LiteRTLM.Message(fileContext, role: .user), at: 0)
-                    usedChars += fileChars
-                }
+            return LiteRTLM.Message(contents: contents)
+        } else if !msg.fileContent.isEmpty {
+            let fullText: String
+            if msg.content.isEmpty {
+                fullText = "Проанализируй содержимое прикреплённых файлов:\n\n\(msg.fileContent)"
+            } else {
+                fullText = "Содержимое прикреплённых файлов:\n\n\(msg.fileContent)\n\n---\n\n\(msg.content)"
             }
-            let msgChars = msg.content.count
-            if usedChars + msgChars > budgetChars {
-                break  // Budget exceeded — skip older messages
-            }
-            historyMessages.insert(LiteRTLM.Message(msg.content, role: role), at: 0)
-            usedChars += msgChars
-        }
-        allMessages.append(contentsOf: historyMessages)
-
-        // Try creating conversation — abort-safe
-        var config: LiteRTLM.ConversationConfig
-        if MemoryService.shared.isEnabled {
-            // Register memory tool — model will call update_memory when it
-            // detects facts worth remembering. Engine handles tool calls
-            // automatically during streaming.
-            config = LiteRTLM.ConversationConfig(
-                initialMessages: allMessages,
-                tools: [UpdateMemoryTool(), WebSearchTool(), FetchUrlTool(), DeepResearchTool()],
-                samplerConfig: samplerConfig
-            )
+            return LiteRTLM.Message(fullText)
         } else {
-            config = LiteRTLM.ConversationConfig(
-                initialMessages: allMessages,
-                tools: [WebSearchTool(), FetchUrlTool(), DeepResearchTool()],
-                samplerConfig: samplerConfig
-            )
-        }
-
-        // Use DispatchSemaphore + async to catch SIGABRT
-        // If engine aborts, we restart with minimal history
-        do {
-            return try await engine.createConversation(with: config)
-        } catch {
-            // Fallback: minimal history (system prompt + last user message only)
-            // This prevents SIGABRT when full history exceeds KV-cache capacity
-            LamoLogger.engine.warning("Conversation creation failed, falling back to minimal history: \(error.localizedDescription)")
-            let systemMessage = allMessages.prefix(1)
-            let lastUserMessage = allMessages.last
-            var minimal: [LiteRTLM.Message] = Array(systemMessage)
-            if let last = lastUserMessage, last.role == .user {
-                minimal.append(last)
-            }
-
-            let fallbackConfig = LiteRTLM.ConversationConfig(
-                initialMessages: minimal,
-                samplerConfig: samplerConfig
-            )
-            return try await engine.createConversation(with: fallbackConfig)
+            return LiteRTLM.Message(msg.content)
         }
     }
 
     /// Fetch conversation summary from SwiftData.
     private func fetchConversationSummary(convID: UUID) -> String? {
-        // We need a ModelContext — get it from MemoryService which has one
         guard let context = MemoryService.shared.modelContext else { return nil }
         let descriptor = FetchDescriptor<Conversation>(
             predicate: #Predicate { $0.id == convID }

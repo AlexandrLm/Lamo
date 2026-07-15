@@ -34,6 +34,11 @@ final class ProviderManager: ObservableObject {
     // MARK: - Memory Pressure
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
+    /// Tokenization cache — avoids re-tokenizing unchanged messages.
+    /// Key: message content (String), Value: token count.
+    private var tokenCache: [String: Int] = [:]
+    private let tokenCacheLock = NSLock()
+
     /// Safe max tokens based on ACTUAL available memory at runtime.
     /// Uses os_proc_available_memory() for real-time data.
     /// Adaptive: scales KV-cache to fit available RAM with safety margin.
@@ -202,16 +207,36 @@ final class ProviderManager: ObservableObject {
     /// Cached engine. Nil when invalidated or not yet loaded.
     private var cachedEngine: LiteRTLM.Engine?
 
+    /// Public read-only access to the cached engine (used by LiteRTLMProvider for summarization).
+    var engineForSummarization: LiteRTLM.Engine? { cachedEngine }
+
     /// The provider wrapping the cached engine.
     private var cachedProvider: (any LLMProvider)?
 
     /// Tokenize a string using the engine's real tokenizer.
+    /// Uses tokenization cache to avoid re-tokenizing identical strings.
     func tokenizeCount(_ text: String) async -> Int {
+        // Check cache first
+        tokenCacheLock.lock()
+        if let cached = tokenCache[text] {
+            tokenCacheLock.unlock()
+            return cached
+        }
+        tokenCacheLock.unlock()
+
         guard let engine = cachedEngine else { return text.count / 4 }
-        return (try? await engine.tokenize(text))?.count ?? (text.count / 4)
+        let count = (try? await engine.tokenize(text))?.count ?? (text.count / 4)
+
+        // Store in cache
+        tokenCacheLock.lock()
+        tokenCache[text] = count
+        tokenCacheLock.unlock()
+
+        return count
     }
 
     /// Tokenize all messages and return per-message token counts.
+    /// Uses cached token counts for unchanged messages.
     func tokenizeMessages(_ messages: [ChatMessage]) async -> [UUID: Int] {
         guard let engine = cachedEngine else {
             // Absolute fallback: shouldn't happen if engine is loaded
@@ -219,10 +244,25 @@ final class ProviderManager: ObservableObject {
             for msg in messages { fallback[msg.id] = msg.content.count / 4 }
             return fallback
         }
+
         var counts: [UUID: Int] = [:]
         for msg in messages {
+            // Check tokenization cache by content
+            tokenCacheLock.lock()
+            if let cached = tokenCache[msg.content] {
+                tokenCacheLock.unlock()
+                counts[msg.id] = cached
+                continue
+            }
+            tokenCacheLock.unlock()
+
             if let tokens = try? await engine.tokenize(msg.content) {
-                counts[msg.id] = tokens.count
+                let count = tokens.count
+                counts[msg.id] = count
+                // Store in cache
+                tokenCacheLock.lock()
+                tokenCache[msg.content] = count
+                tokenCacheLock.unlock()
             } else {
                 counts[msg.id] = msg.content.count / 4
             }
@@ -230,6 +270,12 @@ final class ProviderManager: ObservableObject {
         return counts
     }
 
+    /// Clear tokenization cache (e.g., when engine changes).
+    func clearTokenCache() {
+        tokenCacheLock.lock()
+        tokenCache.removeAll()
+        tokenCacheLock.unlock()
+    }
 
     /// Debounce: prevents rapid re-initialization when settings change quickly.
     private var invalidateTask: Task<Void, Never>?
@@ -428,10 +474,13 @@ final class ProviderManager: ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 self.isMemoryPressure = true
-                // Release conversation cache to free memory
+                // Trim conversation cache instead of destroying it completely
+                // This preserves recent context while freeing KV-cache from old messages
                 if let provider = self.cachedProvider as? LiteRTLMProvider {
                     provider.invalidateConversationCache()
                 }
+                // Also clear tokenization cache to free memory
+                self.clearTokenCache()
             }
         }
         source.resume()
@@ -450,6 +499,7 @@ final class ProviderManager: ObservableObject {
         cachedProvider = nil
         isEngineReady = false
         currentMaxTokens = nil
+        clearTokenCache()
         // Cancel any pending re-initialization
         invalidateTask?.cancel()
         // Re-initialize after 300ms debounce
@@ -492,10 +542,13 @@ final class ProviderManager: ObservableObject {
         cachedEngine = nil
         cachedProvider = nil
 
-        // 4. Drain autorelease pools
+        // 4. Clear tokenization cache
+        clearTokenCache()
+
+        // 5. Drain autorelease pools
         autoreleasepool { }
 
-        // 5. Clear any temporary files that might hold memory
+        // 6. Clear any temporary files that might hold memory
         let tmp = FileManager.default.temporaryDirectory
         if let contents = try? FileManager.default.contentsOfDirectory(
             at: tmp, includingPropertiesForKeys: nil
@@ -505,7 +558,7 @@ final class ProviderManager: ObservableObject {
             }
         }
 
-        // 6. Memory pressure trick: allocate a large block to force iOS
+        // 7. Memory pressure trick: allocate a large block to force iOS
         //    to evict cached pages from other apps, then release it.
         //    The freed physical RAM is now available for our model.
         #if os(iOS)

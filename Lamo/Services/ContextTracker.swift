@@ -43,6 +43,9 @@ struct ContextTracker {
     /// Whether any message was dropped because the budget was exceeded.
     var hasDroppedMessages: Bool { messageUsages.contains { !$0.isInContext } }
 
+    /// Number of messages included in context.
+    var includedCount: Int { messageUsages.filter(\.isInContext).count }
+
     // MARK: - Build from settings + messages (requires real token counts)
 
     /// - Parameters:
@@ -98,6 +101,52 @@ struct ContextTracker {
             totalLimit: effective,
             messageUsages: usages
         )
+    }
+
+    // MARK: - Budget calculation for buildConversation
+
+    /// Calculate which messages fit in the KV-cache budget using real token counts.
+    /// Returns the included messages (excluding the last user message) and whether
+    /// summarization is recommended.
+    static func calculateIncluded(
+        messages: [ChatMessage],
+        tokenCounts: [UUID: Int],
+        systemPromptTokens: Int,
+        memoryTokens: Int,
+        maxNumTokens: Int,
+        reservedTokens: Int = 512
+    ) -> (included: [ChatMessage], dropped: [ChatMessage], needsSummary: Bool) {
+        let effective = max(maxNumTokens, 512)
+        let budget = max(0, effective - systemPromptTokens - memoryTokens - reservedTokens)
+
+        var usedTokens = 0
+        var includedIDs = [UUID]()
+
+        // Walk most-recent-first, exclude last message (sent separately via sendMessageStream)
+        let historyMessages = Array(messages.dropLast().reversed())
+        for msg in historyMessages {
+            let tokens = tokenCounts[msg.id] ?? (msg.content.count / 4)
+            if usedTokens + tokens > budget { break }
+            includedIDs.insert(msg.id, at: 0)
+            usedTokens += tokens
+        }
+
+        let includedSet = Set(includedIDs)
+        let included = messages.filter { includedSet.contains($0.id) }
+        let dropped = messages.dropLast().filter { !includedSet.contains($0.id) }
+
+        // Recommend summarization if:
+        // - We dropped messages AND the budget is large enough for a summary request
+        // - Or context is >80% full
+        let needsSummary: Bool
+        if !dropped.isEmpty && effective >= 1024 {
+            needsSummary = true
+        } else {
+            let fillRatio = Double(usedTokens) / Double(max(budget, 1))
+            needsSummary = fillRatio > 0.80
+        }
+
+        return (included, Array(dropped), needsSummary)
     }
 
     // MARK: - Formatting
