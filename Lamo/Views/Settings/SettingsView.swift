@@ -422,200 +422,335 @@ struct SettingsView: View {
     // MARK: - Models
 
     private var modelsSection: some View {
-        List {
-            if !vm.availableModels.isEmpty {
-                Section {
-                    Picker(selection: Binding(
-                        get: { vm.selectedModel ?? vm.availableModels.first ?? "" },
-                        set: { vm.selectedModel = $0; vm.loadModelInfo() }
-                    )) {
-                        ForEach(vm.availableModels, id: \.self) { model in
-                            Text(vm.displayName(for: model)).tag(model)
+        ScrollView {
+            VStack(spacing: LamoTheme.Spacing.md) {
+                // Active model picker
+                if !vm.availableModels.isEmpty {
+                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                        Text("Active Model")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .textCase(.uppercase)
+
+                        Picker(selection: Binding(
+                            get: { vm.selectedModel ?? vm.availableModels.first ?? "" },
+                            set: { vm.selectedModel = $0; vm.loadModelInfo() }
+                        )) {
+                            ForEach(vm.availableModels, id: \.self) { model in
+                                Text(vm.displayName(for: model)).tag(model)
+                            }
+                        } label: {
+                            Label("Active Model", systemImage: "bolt.circle.fill")
                         }
-                    } label: {
-                        Label("Active Model", systemImage: "bolt.circle.fill")
+                    }
+                    .padding(LamoTheme.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+                }
+
+                // Available Models
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("Available Models")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+                        .padding(.horizontal, 4)
+
+                    ForEach(PresetModel.allCases) { model in
+                        ModelCardView(
+                            model: model,
+                            downloadManager: downloadManager,
+                            isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
+                        )
                     }
                 }
-            }
 
-            Section("Available Models") {
-                ForEach(PresetModel.allCases) { model in
-                    ModelCardView(
-                        model: model,
-                        downloadManager: downloadManager,
-                        isActiveModel: vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
-                    )
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                }
-            }
-
-            Section {
+                // Import from Files
                 Button {
                     isImportingModel = true
                 } label: {
                     HStack {
                         if isCopyingFile {
-                            ProgressView().controlSize(.small)
+                            ProgressView().controlSize(.small).tint(.white)
                             Text("Importing…")
                         } else {
                             Image(systemName: "square.and.arrow.down")
                             Text("Import from Files")
                         }
                     }
+                    .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, LamoTheme.Spacing.md)
                 }
                 .buttonStyle(.glassProminent)
-                .foregroundStyle(.black)
+                .foregroundStyle(.white)
                 .disabled(isCopyingFile)
-            } footer: {
-                Text(".litertlm, .bin, or .tflite model files.")
-            }
 
-            let localModels = vm.availableModels.filter { path in
-                !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
-            }
-            if !localModels.isEmpty {
-                Section("Imported Models") {
-                    ForEach(localModels, id: \.self) { path in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(vm.displayName(for: path))
-                                    .font(.body)
-                                Text((path as NSString).lastPathComponent)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                Text(".litertlm, .bin, or .tflite model files.")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+
+                // Imported Models
+                let localModels = vm.availableModels.filter { path in
+                    !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
+                }
+                if !localModels.isEmpty {
+                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                        Text("Imported Models")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .textCase(.uppercase)
+
+                        ForEach(localModels, id: \.self) { path in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(vm.displayName(for: path))
+                                        .font(.system(.body, design: .monospaced))
+                                        .foregroundStyle(.white)
+                                    Text((path as NSString).lastPathComponent)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                }
+                                Spacer()
+                                if vm.selectedModel == path {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
                             }
-                            Spacer()
-                            if vm.selectedModel == path {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(LamoTheme.Colors.accent)
-                            }
+                            .padding(.vertical, 2)
                         }
                     }
+                    .padding(LamoTheme.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+                }
+
+                // Storage info
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("Storage")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
+                    storageRow(label: "Location", value: "On My iPhone → Lamo → models")
+
+                    let totalSize = calculateModelsSize()
+                    if totalSize > 0 {
+                        storageRow(label: "Used Space", value: ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
+                    }
+
+                    if let freeSpace = getFreeSpace() {
+                        storageRow(label: "Available", value: ByteCountFormatter.string(fromByteCount: freeSpace, countStyle: .file))
+                    }
+
+                    Button {
+                        openModelsFolder()
+                    } label: {
+                        Label("Open in Files", systemImage: "folder")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                Text("Models are stored in the Files app under On My iPhone → Lamo → models. You can also add .litertlm files there manually.")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+
+                // Model Info
+                if let info = vm.modelInfo {
+                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                        Text("Model Info")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .textCase(.uppercase)
+
+                        storageRow(label: "Name", value: info.name)
+                        storageRow(label: "File Size", value: info.fileSizeString)
+                        storageRow(label: "Speculative Decoding", value: info.hasSpeculativeDecoding ? "Supported" : "Not Available")
+                    }
+                    .padding(LamoTheme.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
                 }
             }
-
-            // Storage info
-            storageSection
-
-            if let info = vm.modelInfo {
-                Section("Model Info") {
-                    LabeledContent("Name", value: info.name)
-                    LabeledContent("File Size", value: info.fileSizeString)
-                    LabeledContent("Speculative Decoding", value: info.hasSpeculativeDecoding ? "Supported" : "Not Available")
-                }
-            }
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.vertical, LamoTheme.Spacing.md)
         }
-        .listStyle(.insetGrouped)
+        .background(LamoTheme.Colors.background)
         .navigationTitle("Models")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func storageRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(.subheadline, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            Text(value)
+                .font(.system(.subheadline, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.8))
+        }
     }
 
     // MARK: - Generation
 
     private var samplerSection: some View {
-        List {
-            Section {
+        ScrollView {
+            VStack(spacing: LamoTheme.Spacing.md) {
+                // Temperature
                 VStack(alignment: .leading, spacing: 10) {
+                    Text("Temperature")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
                     HStack {
                         Text("Temperature")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white)
                         Spacer()
                         Text(String(format: "%.2f", vm.temperature))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
 
                     Slider(value: $vm.temperature, in: 0.0...2.0, step: 0.05)
-                        .tint(LamoTheme.Colors.accent)
+                        .tint(.white.opacity(0.5))
 
                     HStack(spacing: 0) {
                         Text("Focused")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                         Spacer()
                         if vm.temperature >= 0.5 && vm.temperature <= 1.0 {
                             Text("Balanced")
-                                .font(.caption2)
-                                .foregroundStyle(LamoTheme.Colors.accent)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
                                 .fontWeight(.medium)
                         } else {
                             Text("Balanced")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
                         }
                         Spacer()
                         Text("Creative")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
-                }
-            } footer: {
-                Text("0.7 is a good balance.")
-            }
 
-            Section {
+                    Text("0.7 is a good balance.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // Top-K
                 VStack(alignment: .leading, spacing: 10) {
+                    Text("Top-K")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
                     HStack {
                         Text("Top-K")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white)
                         Spacer()
                         Text("\(vm.topK)")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
+
                     Slider(value: Binding(
                         get: { Double(vm.topK) },
                         set: { vm.topK = Int($0) }
                     ), in: 1...100, step: 1)
-                        .tint(LamoTheme.Colors.accent)
+                        .tint(.white.opacity(0.5))
 
                     HStack(spacing: 0) {
                         Text("Focused")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                         Spacer()
                         Text("Diverse")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
-                }
-            } footer: {
-                Text("Number of top tokens to consider.")
-            }
 
-            Section {
+                    Text("Number of top tokens to consider.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // Top-P
                 VStack(alignment: .leading, spacing: 10) {
+                    Text("Top-P")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
                     HStack {
                         Text("Top-P")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white)
                         Spacer()
                         Text(String(format: "%.2f", vm.topP))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
+
                     Slider(value: $vm.topP, in: 0.0...1.0, step: 0.05)
-                        .tint(LamoTheme.Colors.accent)
+                        .tint(.white.opacity(0.5))
 
                     HStack(spacing: 0) {
                         Text("Narrow")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                         Spacer()
                         Text("Broad")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
-                }
-            } footer: {
-                Text("Nucleus sampling probability mass.")
-            }
 
-            Button {
-                vm.resetSamplerDefaults()
-            } label: {
-                Label("Reset to Defaults", systemImage: "arrow.counterclockwise")
+                    Text("Nucleus sampling probability mass.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // Reset button
+                Button {
+                    vm.resetSamplerDefaults()
+                } label: {
+                    Label("Reset to Defaults", systemImage: "arrow.counterclockwise")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, LamoTheme.Spacing.md)
+                }
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
             }
-            .foregroundStyle(.red)
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.vertical, LamoTheme.Spacing.md)
         }
-        .listStyle(.insetGrouped)
+        .background(LamoTheme.Colors.background)
         .navigationTitle("Generation")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -623,82 +758,129 @@ struct SettingsView: View {
     // MARK: - Memory
 
     private var memorySection: some View {
-        List {
-            Section {
-                Toggle(isOn: $vm.memoryEnabled) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Remember Facts")
-                        Text("AI extracts key facts from conversations")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+        ScrollView {
+            VStack(spacing: LamoTheme.Spacing.md) {
+                // Memory toggle
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Toggle(isOn: $vm.memoryEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Remember Facts")
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white)
+                            Text("AI extracts key facts from conversations")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
                     }
-                }
-                .accessibilityLabel("Memory")
-                .tint(LamoTheme.Colors.accent)
-            } footer: {
-                Text("Facts are injected into context for future conversations.")
-            }
+                    .accessibilityLabel("Memory")
+                    .tint(.white.opacity(0.5))
 
-            if vm.memoryEnabled {
-                Section {
-                    HStack {
-                        Label("Total Facts", systemImage: "brain")
-                        Spacer()
-                        Text("\(MemoryService.shared.totalEntries)")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                    Text("Facts are injected into context for future conversations.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                if vm.memoryEnabled {
+                    // Total facts
+                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                        HStack {
+                            Label("Total Facts", systemImage: "brain")
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Text("\(MemoryService.shared.totalEntries)")
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
                     }
-                }
+                    .padding(LamoTheme.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
 
-                let facts = MemoryService.shared.allFacts
-                if !facts.isEmpty {
-                    Section("What AI Remembers") {
-                        ForEach(facts, id: \.id) { fact in
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: "text.quote")
-                                    .font(.caption)
-                                    .foregroundStyle(LamoTheme.Colors.accent)
-                                    .frame(width: 16)
-                                    .padding(.top, 2)
+                    let facts = MemoryService.shared.allFacts
+                    if !facts.isEmpty {
+                        // What AI Remembers
+                        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                            Text("What AI Remembers")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
+                                .textCase(.uppercase)
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(fact.text)
-                                        .font(.subheadline)
-                                        .textSelection(.enabled)
+                            ForEach(facts, id: \.id) { fact in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "text.quote")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                        .frame(width: 16)
+                                        .padding(.top, 2)
 
-                                    Text(fact.timestamp, style: .relative)
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(fact.text)
+                                            .font(.system(.subheadline, design: .monospaced))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                            .textSelection(.enabled)
+
+                                        Text(fact.timestamp, style: .relative)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(.white.opacity(0.3))
+                                    }
+                                    Spacer()
+                                    Button {
+                                        MemoryService.shared.deleteFact(fact)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(.white.opacity(0.3))
+                                    }
+                                }
+                                .padding(.vertical, 4)
+
+                                if fact.id != facts.last?.id {
+                                    Divider().background(.white.opacity(0.1))
                                 }
                             }
-                            .padding(.vertical, 2)
                         }
-                        .onDelete { indexSet in
-                            for index in indexSet {
-                                MemoryService.shared.deleteFact(facts[index])
-                            }
+                        .padding(LamoTheme.Spacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+                    } else {
+                        // Empty state
+                        VStack(spacing: LamoTheme.Spacing.md) {
+                            Image(systemName: "brain")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.white.opacity(0.3))
+                            Text("No Facts Yet")
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.6))
+                            Text("Facts will appear as you chat.")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, LamoTheme.Spacing.xl)
+                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
                     }
-                } else {
-                    Section {
-                        ContentUnavailableView(
-                            "No Facts Yet",
-                            systemImage: "brain",
-                            description: Text("Facts will appear as you chat.")
-                        )
-                    }
-                }
 
-                Section {
+                    // Clear All Facts
                     Button(role: .destructive) {
                         MemoryService.shared.clearAll()
                     } label: {
                         Label("Clear All Facts", systemImage: "trash")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, LamoTheme.Spacing.md)
                     }
+                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
                 }
             }
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.vertical, LamoTheme.Spacing.md)
         }
-        .listStyle(.insetGrouped)
+        .background(LamoTheme.Colors.background)
         .navigationTitle("Memory")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -706,117 +888,165 @@ struct SettingsView: View {
     // MARK: - Advanced
 
     private var advancedSection: some View {
-        List {
-            Section {
-                Toggle(isOn: $vm.useGPU) {
-                    Label("GPU Acceleration", systemImage: "bolt.fill")
-                }
-                .accessibilityLabel("GPU acceleration")
-                .tint(LamoTheme.Colors.accent)
+        ScrollView {
+            VStack(spacing: LamoTheme.Spacing.md) {
+                // Compute Backend
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("Compute Backend")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
 
-                if !vm.useGPU {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("CPU Threads")
-                            Spacer()
-                            Text("\(vm.cpuThreadCount)")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        Slider(value: Binding(
-                            get: { Double(vm.cpuThreadCount) },
-                            set: { vm.cpuThreadCount = Int($0) }
-                        ), in: 1...8, step: 1)
-                            .tint(LamoTheme.Colors.accent)
-
-                        HStack(spacing: 0) {
-                            Text("Battery")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Spacer()
-                            Text("Speed")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                    Toggle(isOn: $vm.useGPU) {
+                        Label("GPU Acceleration", systemImage: "bolt.fill")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            } header: {
-                Text("Compute Backend")
-            } footer: {
-                Text("GPU (Metal) is faster for most models.")
-            }
+                    .accessibilityLabel("GPU acceleration")
+                    .tint(.white.opacity(0.5))
 
-            Section {
-                Toggle(isOn: $vm.kvCacheAuto) {
-                    Label("Auto (Recommended)", systemImage: "wand.and.stars")
-                }
-                .tint(LamoTheme.Colors.accent)
+                    if !vm.useGPU {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("CPU Threads")
+                                    .font(.system(.subheadline, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Text("\(vm.cpuThreadCount)")
+                                    .font(.system(.subheadline, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                            Slider(value: Binding(
+                                get: { Double(vm.cpuThreadCount) },
+                                set: { vm.cpuThreadCount = Int($0) }
+                            ), in: 1...8, step: 1)
+                                .tint(.white.opacity(0.5))
 
-                if !vm.kvCacheAuto {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Max Tokens")
-                            Spacer()
-                            Text("\(vm.maxNumTokens)")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
+                            HStack(spacing: 0) {
+                                Text("Battery")
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.3))
+                                Spacer()
+                                Text("Speed")
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.3))
+                            }
                         }
-                        Slider(value: Binding(
-                            get: { Double(vm.maxNumTokens) },
-                            set: { vm.maxNumTokens = Int($0) }
-                        ), in: 1024...16384, step: 256)
-                            .tint(LamoTheme.Colors.accent)
-
-                        HStack(spacing: 0) {
-                            Text("Short")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Spacer()
-                            Text("Long")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            } header: {
-                Text("KV-Cache")
-            } footer: {
-                if vm.kvCacheAuto {
-                    Text("Uses model's recommended context size.")
-                } else {
-                    Text("4096 is a good default.")
-                }
-            }
 
-            if vm.modelInfo?.hasSpeculativeDecoding == true {
-                Section {
-                    Toggle(isOn: $vm.speculativeDecoding) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label("Enable", systemImage: "bolt.speedometer")
-                            Text("Up to 3x faster generation")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
+                    Text("GPU (Metal) is faster for most models.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // KV-Cache
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("KV-Cache")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
+                    Toggle(isOn: $vm.kvCacheAuto) {
+                        Label("Auto (Recommended)", systemImage: "wand.and.stars")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white)
                     }
-                    .tint(LamoTheme.Colors.accent)
-                } header: {
-                    Text("Speculative Decoding")
-                } footer: {
-                    Text("Uses a draft model to predict multiple tokens.")
-                }
-            }
+                    .tint(.white.opacity(0.5))
 
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
+                    if !vm.kvCacheAuto {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Max Tokens")
+                                    .font(.system(.subheadline, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Text("\(vm.maxNumTokens)")
+                                    .font(.system(.subheadline, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                            Slider(value: Binding(
+                                get: { Double(vm.maxNumTokens) },
+                                set: { vm.maxNumTokens = Int($0) }
+                            ), in: 1024...16384, step: 256)
+                                .tint(.white.opacity(0.5))
+
+                            HStack(spacing: 0) {
+                                Text("Short")
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.3))
+                                Spacer()
+                                Text("Long")
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.3))
+                            }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    if vm.kvCacheAuto {
+                        Text("Uses model's recommended context size.")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                    } else {
+                        Text("4096 is a good default.")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // Speculative Decoding
+                if vm.modelInfo?.hasSpeculativeDecoding == true {
+                    VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                        Text("Speculative Decoding")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .textCase(.uppercase)
+
+                        Toggle(isOn: $vm.speculativeDecoding) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Label("Enable", systemImage: "bolt.speedometer")
+                                    .font(.system(.subheadline, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Text("Up to 3x faster generation")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                        }
+                        .tint(.white.opacity(0.5))
+
+                        Text("Uses a draft model to predict multiple tokens.")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                    .padding(LamoTheme.Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+                }
+
+                // Vision
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("Vision")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
                     HStack {
                         Text("Visual Token Budget")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white)
                         Spacer()
                         Text("\(vm.visualTokenBudget)")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
+
                     Picker("Budget", selection: $vm.visualTokenBudget) {
                         Text("70 (Fast)").tag(70)
                         Text("140").tag(140)
@@ -825,27 +1055,43 @@ struct SettingsView: View {
                         Text("1120 (Best)").tag(1120)
                     }
                     .pickerStyle(.segmented)
-                }
-            } header: {
-                Text("Vision")
-            } footer: {
-                Text("Image processing quality for multimodal models.")
-            }
 
-            Section {
-                TextEditor(text: $vm.systemPrompt)
-                    .font(.subheadline)
-                    .frame(minHeight: 120)
-                    .scrollContentBackground(.visible)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            } header: {
-                Text("System Prompt")
-            } footer: {
-                Text("Applies to new conversations only.")
+                    Text("Image processing quality for multimodal models.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                // System Prompt
+                VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                    Text("System Prompt")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .textCase(.uppercase)
+
+                    TextEditor(text: $vm.systemPrompt)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(minHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.sm))
+
+                    Text("Applies to new conversations only.")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .padding(LamoTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
             }
+            .padding(.horizontal, LamoTheme.Spacing.lg)
+            .padding(.vertical, LamoTheme.Spacing.md)
         }
-        .listStyle(.insetGrouped)
+        .background(LamoTheme.Colors.background)
         .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -867,61 +1113,79 @@ struct SettingsView: View {
                                 }
                             } label: {
                                 Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(.white.opacity(0.7))
                             }
                             .disabled(benchmark.isRunning)
                         }
                     }
             } else if benchmark.isRunning {
                 // Running — show progress
-                List {
-                    Section {
-                        VStack(spacing: 20) {
+                ScrollView {
+                    VStack(spacing: LamoTheme.Spacing.md) {
+                        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                            Text("Benchmark")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
+                                .textCase(.uppercase)
+
                             ProgressView(value: benchmark.progress)
-                                .tint(LamoTheme.Colors.accent)
+                                .tint(.white.opacity(0.5))
+
                             Text(benchmarkProgressLabel(benchmark.progress))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .font(.system(.subheadline, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.6))
                         }
-                        .padding(.vertical, 8)
+                        .padding(LamoTheme.Spacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
                     }
+                    .padding(.horizontal, LamoTheme.Spacing.lg)
+                    .padding(.vertical, LamoTheme.Spacing.md)
                 }
-                .listStyle(.insetGrouped)
+                .background(LamoTheme.Colors.background)
+                .navigationTitle("Device")
+                .navigationBarTitleDisplayMode(.inline)
             } else {
                 // No result yet — show start button
-                List {
-                    Section {
-                        Button {
-                            Task { await benchmark.runBenchmark() }
-                        } label: {
-                            HStack {
-                                Image(systemName: "bolt.fill")
-                                    .font(.body)
-                                Text("Start Benchmark")
-                                    .fontWeight(.semibold)
+                ScrollView {
+                    VStack(spacing: LamoTheme.Spacing.md) {
+                        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+                            Text("Benchmark")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
+                                .textCase(.uppercase)
+
+                            Button {
+                                Task { await benchmark.runBenchmark() }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(.body, design: .monospaced))
+                                    Text("Start Benchmark")
+                                        .font(.system(.body, design: .monospaced).weight(.semibold))
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                LinearGradient(
-                                    colors: [LamoTheme.Colors.accent, LamoTheme.Colors.accent.opacity(0.8)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                            Text("Takes about 5–10 seconds. Tests CPU, GPU, memory and Neural Engine.")
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
                         }
-                    } footer: {
-                        Text("Takes about 5–10 seconds. Tests CPU, GPU, memory and Neural Engine.")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        .padding(LamoTheme.Spacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
                     }
+                    .padding(.horizontal, LamoTheme.Spacing.lg)
+                    .padding(.vertical, LamoTheme.Spacing.md)
                 }
-                .listStyle(.insetGrouped)
+                .background(LamoTheme.Colors.background)
+                .navigationTitle("Device")
+                .navigationBarTitleDisplayMode(.inline)
             }
         }
-        .navigationTitle("Device")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Quick Stat
@@ -964,7 +1228,7 @@ struct SettingsView: View {
             VStack(spacing: 4) {
                 ZStack {
                     Circle()
-                        .fill(isComplete ? LamoTheme.Colors.accent : (isCurrent ? LamoTheme.Colors.accent.opacity(0.2) : Color(.tertiarySystemFill)))
+                        .fill(isComplete ? .white.opacity(0.6) : (isCurrent ? .white.opacity(0.15) : Color(.tertiarySystemFill)))
                         .frame(width: 28, height: 28)
                     if isComplete {
                         Image(systemName: "checkmark")
@@ -972,7 +1236,7 @@ struct SettingsView: View {
                             .foregroundStyle(.white)
                     } else if isCurrent {
                         ProgressView()
-                            .tint(LamoTheme.Colors.accent)
+                            .tint(.white.opacity(0.5))
                             .controlSize(.mini)
                     } else {
                         Image(systemName: phase.icon)
@@ -982,7 +1246,7 @@ struct SettingsView: View {
                 }
                 Text(phase.rawValue)
                     .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(isCurrent ? LamoTheme.Colors.accent : Color(.tertiaryLabel))
+                    .foregroundStyle(isCurrent ? .white.opacity(0.6) : Color(.tertiaryLabel))
             }
         )
     }
