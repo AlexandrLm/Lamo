@@ -158,7 +158,7 @@ struct ContextDetailView: View {
                         )
                     }
                     barSegment(
-                        width: geo.size.width * (Double(tracker.messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenCount }) / Double(total)),
+                        width: geo.size.width * (Double(tracker.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }) / Double(total)),
                         color: .white.opacity(0.35)
                     )
                     barSegment(
@@ -203,15 +203,15 @@ struct ContextDetailView: View {
             if tracker.memoryTokens > 0 {
                 breakdownRow(icon: "brain", label: "Memory facts", tokens: tracker.memoryTokens)
             }
-            breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", tokens: tracker.messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenCount })
-            breakdownRow(icon: "arrowshape.down", label: "Reply buffer", tokens: 512)
+            breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", tokens: tracker.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount })
+            breakdownRow(icon: "arrowshape.down", label: "Reply buffer", tokens: 512, isEstimate: true)
         }
         .padding(.vertical, 4)
         .background(Color.white.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func breakdownRow(icon: String, label: String, tokens: Int) -> some View {
+    private func breakdownRow(icon: String, label: String, tokens: Int, isEstimate: Bool = false) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.caption)
@@ -221,7 +221,7 @@ struct ContextDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(.white)
             Spacer()
-            Text("~\(ContextTracker.formatTokens(tokens))")
+            Text("\(isEstimate ? "~" : "")\(ContextTracker.formatTokens(tokens))")
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.gray)
         }
@@ -238,7 +238,7 @@ struct ContextDetailView: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
                 Spacer()
-                Text("\(tracker.messageUsages.filter(\.isInContext).count)/\(tracker.messageUsages.count) in context")
+                Text("\(tracker.includedCount)/\(tracker.totalCountExcludingStreaming) in context")
                     .font(.caption)
                     .foregroundStyle(.gray)
             }
@@ -266,12 +266,19 @@ struct ContextDetailView: View {
 
                     Spacer()
 
-                    // Token count
-                    Text("~\(ContextTracker.formatTokens(msg.tokenCount))")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(msg.isInContext ? .gray : .gray.opacity(0.3))
+                    // Token count — real tokenizer, no "~" prefix
+                    if msg.isStreaming {
+                        // Streaming message: show special indicator
+                        Image(systemName: "arrowtriangle.right.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.5))
+                    } else {
+                        Text(ContextTracker.formatTokens(msg.tokenCount))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(msg.isInContext ? .gray : .gray.opacity(0.3))
+                    }
 
-                    if !msg.isInContext {
+                    if !msg.isInContext && !msg.isStreaming {
                         Image(systemName: "arrow.right.to.line")
                             .font(.caption2)
                             .foregroundStyle(.gray.opacity(0.3))

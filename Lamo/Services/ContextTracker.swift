@@ -9,8 +9,9 @@ struct ContextTracker {
         let role: String          // "user" / "assistant" / "system"
         let charCount: Int
         let tokenCount: Int       // real tokenizer count
-        let isInContext: Bool     // false = dropped (too old)
+        let isInContext: Bool     // false = dropped (too old to fit in KV-cache)
         let tokenOffset: Int      // running token offset from start
+        let isStreaming: Bool     // true = this message is being sent via sendMessageStream right now
     }
 
     let systemPromptTokens: Int
@@ -20,9 +21,10 @@ struct ContextTracker {
 
     // MARK: - Aggregates
 
-    /// Tokens used by system prompt + memory + history that fit.
+    /// Tokens used by system prompt + memory + history that fit in the KV-cache.
+    /// Excludes the streaming message (it's being sent now, not yet in cache).
     var usedTokens: Int {
-        systemPromptTokens + memoryTokens + messageUsages.filter(\.isInContext).reduce(0) { $0 + $1.tokenCount }
+        systemPromptTokens + memoryTokens + messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }
     }
 
     /// Tokens reserved for the model's reply (always at least 512).
@@ -41,10 +43,20 @@ struct ContextTracker {
     var headroom: Int { max(budgetTokens - usedTokens, 0) }
 
     /// Whether any message was dropped because the budget was exceeded.
-    var hasDroppedMessages: Bool { messageUsages.contains { !$0.isInContext } }
+    /// Excludes the "streaming" message (last message sent via sendMessageStream — not a real drop).
+    var hasDroppedMessages: Bool {
+        messageUsages.contains { !$0.isInContext && !$0.isStreaming }
+    }
 
-    /// Number of messages included in context.
-    var includedCount: Int { messageUsages.filter(\.isInContext).count }
+    /// Number of messages that fit in the KV-cache (excluding the streaming message).
+    var includedCount: Int {
+        messageUsages.filter { $0.isInContext && !$0.isStreaming }.count
+    }
+
+    /// Total messages (excluding the streaming message from the "dropped" count).
+    var totalCountExcludingStreaming: Int {
+        messageUsages.filter { !$0.isStreaming }.count
+    }
 
     // MARK: - Build from settings + messages (requires real token counts)
 
@@ -69,10 +81,12 @@ struct ContextTracker {
 
         let budget = effective - systemPromptTokens - memoryTokens - reservedTokens
 
-        // Walk messages most-recent-first to determine which fit by token count
+        // Walk messages most-recent-first to determine which fit by token count.
+        // Exclude the last message — it's sent via sendMessageStream and is always "in context".
+        let historyMessages = Array(messages.dropLast())
         var usedTokens = 0
         var includedIDs = Set<UUID>()
-        for msg in messages.dropLast().reversed() {
+        for msg in historyMessages.reversed() {
             let tokens = tokenCounts[msg.id] ?? 0
             if usedTokens + tokens > budget { break }
             includedIDs.insert(msg.id)
@@ -82,17 +96,21 @@ struct ContextTracker {
         // Build final list in chronological order
         var usages: [MessageUsage] = []
         var runningOffset = 0
-        for msg in messages {
+        for (index, msg) in messages.enumerated() {
             let tokens = tokenCounts[msg.id] ?? 0
+            let isLast = (index == messages.count - 1)
             usages.append(MessageUsage(
                 id: msg.id,
                 role: msg.role == .user ? "user" : "assistant",
                 charCount: msg.content.count,
                 tokenCount: tokens,
-                isInContext: includedIDs.contains(msg.id),
-                tokenOffset: runningOffset
+                // Last message is always "in context" — it's sent via sendMessageStream.
+                // Other messages are in context only if they fit in the KV-cache budget.
+                isInContext: isLast || includedIDs.contains(msg.id),
+                tokenOffset: runningOffset,
+                isStreaming: isLast
             ))
-            runningOffset += tokens
+            if !isLast { runningOffset += tokens }
         }
 
         return ContextTracker(
@@ -135,9 +153,8 @@ struct ContextTracker {
         let included = messages.filter { includedSet.contains($0.id) }
         let dropped = messages.dropLast().filter { !includedSet.contains($0.id) }
 
-        // Recommend summarization if:
-        // - We dropped messages AND the budget is large enough for a summary request
-        // - Or context is >80% full
+        // Recommend summarization only if messages were actually dropped (not just the last one)
+        // AND the budget is large enough to warrant a summary
         let needsSummary: Bool
         if !dropped.isEmpty && effective >= 1024 {
             needsSummary = true

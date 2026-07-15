@@ -365,7 +365,7 @@ final class ChatViewModel {
     /// The model can override this with a better summary via update_memory(summary:) tool.
     private func generateConversationSummary() async {
         guard let tracker = contextTracker else { return }
-        let droppedIDs = Set(tracker.messageUsages.filter { !$0.isInContext }.map(\.id))
+        let droppedIDs = Set(tracker.messageUsages.filter { !$0.isInContext && !$0.isStreaming }.map(\.id))
         guard !droppedIDs.isEmpty else { return }
 
         let droppedMessages = messages
