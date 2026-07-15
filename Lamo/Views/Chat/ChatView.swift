@@ -7,7 +7,6 @@ struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var scrollPosition = ScrollPosition()
     @State private var showContextDetail = false
-    @Namespace private var glassNamespace
     var onNewChat: (() -> Void)?
 
     init(
@@ -37,24 +36,17 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                GlassEffectContainer(spacing: 12) {
-                    HStack(spacing: 12) {
-                        if viewModel.isStreaming {
-                            Button(action: { viewModel.stopGeneration() }) {
-                                Image(systemName: "stop.fill")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.white.opacity(0.8))
-                                    .frame(width: 28, height: 28)
-                            }
-                            .buttonStyle(.plain)
-                            .glassEffect(.regular.interactive(), in: .circle)
-                            .glassEffectUnion(id: "toolbar", namespace: glassNamespace)
-                        } else {
-                            ContextBarView(tracker: viewModel.contextTracker) {
-                                showContextDetail = true
-                            }
-                            .glassEffectUnion(id: "toolbar", namespace: glassNamespace)
-                        }
+                if viewModel.isStreaming {
+                    Button(action: { viewModel.stopGeneration() }) {
+                        Image(systemName: "stop.fill")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    ContextBarView(tracker: viewModel.contextTracker) {
+                        showContextDetail = true
                     }
                 }
             }

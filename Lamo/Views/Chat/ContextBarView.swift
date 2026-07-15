@@ -23,9 +23,6 @@ struct ContextBarView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .glassEffect(in: .capsule)
             }
             .buttonStyle(.plain)
             .transition(.opacity)
