@@ -14,7 +14,6 @@ final class DownloadManager: ObservableObject {
     /// Set when a large download is attempted on cellular — UI shows confirmation.
     @Published var pendingCellularDownload: PresetModel? = nil
     private var tasks: [String: URLSessionDownloadTask] = [:]
-    private var observations: [String: NSKeyValueObservation] = [:]
     private var resumeData: [String: Data] = [:]
     private let session: URLSession
     private let backgroundSessionID = "com.lamo.download"
@@ -187,7 +186,10 @@ final class DownloadManager: ObservableObject {
         let modelsDir = documents.appendingPathComponent("models")
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
 
-        activeDownloads[model.filename] = DownloadState(isDownloading: true)
+        // Expected total bytes from model metadata (fallback when server omits Content-Length)
+        let expectedBytes = Int64(model.fileSizeGB * 1_073_741_824)
+
+        activeDownloads[model.filename] = DownloadState(totalBytes: expectedBytes, isDownloading: true)
 
         let task: URLSessionDownloadTask
         if let data = resumeData.removeValue(forKey: model.filename) {
@@ -198,33 +200,6 @@ final class DownloadManager: ObservableObject {
 
         DownloadSessionDelegate.shared.pendingModels[model.filename] = model
 
-        let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
-            guard let self else { return }
-            Task { @MainActor in
-                let now = Date()
-                var state = self.activeDownloads[model.filename] ?? DownloadState()
-                let newBytes = progress.completedUnitCount
-                state.progress = progress.fractionCompleted
-                state.bytesWritten = newBytes
-                state.totalBytes = progress.totalUnitCount
-
-                let elapsed = now.timeIntervalSince(state.lastSpeedUpdateTime)
-                if elapsed >= 0.5 {
-                    let deltaBytes = newBytes - state.lastSpeedUpdateBytes
-                    if deltaBytes > 0 && elapsed > 0 {
-                        let instantSpeed = Double(deltaBytes) / elapsed
-                        state.speedBytesPerSec = state.speedBytesPerSec > 0
-                            ? state.speedBytesPerSec * 0.7 + instantSpeed * 0.3
-                            : instantSpeed
-                    }
-                    state.lastSpeedUpdateTime = now
-                    state.lastSpeedUpdateBytes = newBytes
-                }
-                self.activeDownloads[model.filename] = state
-            }
-        }
-
-        observations[model.filename] = observation
         tasks[model.filename] = task
         task.resume()
     }
@@ -239,7 +214,6 @@ final class DownloadManager: ObservableObject {
             }
         }
         tasks.removeValue(forKey: model.filename)
-        observations.removeValue(forKey: model.filename)
         activeDownloads[model.filename]?.isDownloading = false
     }
 
@@ -329,7 +303,6 @@ final class DownloadManager: ObservableObject {
                                         try FileManager.default.removeItem(at: destination)
                                         self.activeDownloads[filename]?.error = "File integrity check failed. Please re-download."
                                         self.activeDownloads[filename]?.isDownloading = false
-                                        self.observations.removeValue(forKey: filename)
                                         self.tasks.removeValue(forKey: filename)
                                         return
                                     }
@@ -347,7 +320,6 @@ final class DownloadManager: ObservableObject {
                 self.activeDownloads[filename]?.progress = 1.0
                 self.activeDownloads[filename]?.retryCount = 0
                 self.activeDownloads[filename]?.lastError = nil
-                self.observations.removeValue(forKey: filename)
                 self.tasks.removeValue(forKey: filename)
                 self.removePersistedResumeData(for: filename)
 
@@ -383,6 +355,47 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         try? FileManager.default.copyItem(at: location, to: backupURL)
         Task { @MainActor in
             DownloadManager.shared.handleCompletion(filename: filename, tempURL: backupURL, error: nil)
+        }
+    }
+
+    nonisolated func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard let filename = downloadTask.originalRequest?.url?.lastPathComponent else { return }
+        Task { @MainActor in
+            let now = Date()
+            var state = DownloadManager.shared.activeDownloads[filename] ?? DownloadManager.DownloadState()
+            state.bytesWritten = totalBytesWritten
+
+            // Use server-reported total if valid (>1MB = real Content-Length)
+            if totalBytesExpectedToWrite > 1_000_000 {
+                state.totalBytes = totalBytesExpectedToWrite
+            }
+
+            // Calculate progress from actual bytes
+            if state.totalBytes > 0 {
+                state.progress = min(Double(totalBytesWritten) / Double(state.totalBytes), 1.0)
+            }
+
+            // Smoothed speed calculation
+            let elapsed = now.timeIntervalSince(state.lastSpeedUpdateTime)
+            if elapsed >= 0.5 {
+                let deltaBytes = totalBytesWritten - state.lastSpeedUpdateBytes
+                if deltaBytes > 0 && elapsed > 0 {
+                    let instantSpeed = Double(deltaBytes) / elapsed
+                    state.speedBytesPerSec = state.speedBytesPerSec > 0
+                        ? state.speedBytesPerSec * 0.7 + instantSpeed * 0.3
+                        : instantSpeed
+                }
+                state.lastSpeedUpdateTime = now
+                state.lastSpeedUpdateBytes = totalBytesWritten
+            }
+
+            DownloadManager.shared.activeDownloads[filename] = state
         }
     }
 
