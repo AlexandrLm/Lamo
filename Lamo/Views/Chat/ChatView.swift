@@ -156,8 +156,9 @@ struct ChatView: View {
             Spacer(minLength: 100)
 
             VStack(spacing: 20) {
-                LogoAnimationView(size: 100)
-                    .shadow(color: .white.opacity(0.04), radius: 30, y: 8)
+                Text("Lamo")
+                    .font(.system(size: 40, weight: .light, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.15))
 
                 VStack(spacing: 6) {
                     Text("How can I help you today?")
@@ -167,17 +168,19 @@ struct ChatView: View {
                         .foregroundStyle(.tertiary)
                 }
 
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Label("Download a Model", systemImage: "arrow.down.circle")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
+                if ProviderManager.shared.litertLMModelPath == nil {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Label("Download a Model", systemImage: "arrow.down.circle")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.glass)
+                    .padding(.top, 8)
                 }
-                .buttonStyle(.glass)
-                .padding(.top, 8)
             }
 
             Spacer()
