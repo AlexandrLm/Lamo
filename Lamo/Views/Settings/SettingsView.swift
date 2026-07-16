@@ -513,7 +513,13 @@ struct SettingsView: View {
                 ModelCardView(
                     model: model,
                     downloadManager: downloadManager,
-                    isActiveModel: false
+                    isActiveModel: false,
+                    onSelect: {
+                        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        let path = documents.appendingPathComponent("models").appendingPathComponent(model.filename).path
+                        vm.selectedModel = path
+                        vm.loadModelInfo()
+                    }
                 )
             }
         }

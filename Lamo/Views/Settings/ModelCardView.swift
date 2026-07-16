@@ -4,6 +4,7 @@ struct ModelCardView: View {
     let model: PresetModel
     @ObservedObject var downloadManager: DownloadManager
     var isActiveModel: Bool = false
+    var onSelect: (() -> Void)?
     @State private var showDeleteConfirmation = false
     @State private var showCellularConfirmation = false
 
@@ -107,11 +108,7 @@ struct ModelCardView: View {
                 if isDownloaded {
                     if !isActiveModel {
                         Button {
-                            NotificationCenter.default.post(
-                                name: .selectModel,
-                                object: nil,
-                                userInfo: ["filename": model.filename]
-                            )
+                            onSelect?()
                         } label: {
                             Label("Use", systemImage: "bolt.fill")
                                 .font(.caption.weight(.medium))

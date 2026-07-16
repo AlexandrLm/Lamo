@@ -1,10 +1,9 @@
 import Foundation
 
-/// Known models available for download via LiteRT-LM.
+/// Known Gemma 4 models available for download via LiteRT-LM.
 enum PresetModel: String, CaseIterable, Identifiable {
     case gemma4E4B = "gemma-4-E4B-it"
     case gemma4E2B = "gemma-4-E2B-it"
-    case qwen3_4B = "qwen3_4b_mixed_int4"
 
     var id: String { rawValue }
 
@@ -12,7 +11,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "Gemma 4 E4B"
         case .gemma4E2B: return "Gemma 4 E2B"
-        case .qwen3_4B: return "Qwen3 4B"
         }
     }
 
@@ -20,7 +18,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "litert-community/gemma-4-E4B-it-litert-lm"
         case .gemma4E2B: return "litert-community/gemma-4-E2B-it-litert-lm"
-        case .qwen3_4B: return "litert-community/Qwen3-4B"
         }
     }
 
@@ -28,7 +25,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "gemma-4-E4B-it.litertlm"
         case .gemma4E2B: return "gemma-4-E2B-it.litertlm"
-        case .qwen3_4B: return "qwen3_4b_mixed_int4.litertlm"
         }
     }
 
@@ -40,7 +36,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return 3.65
         case .gemma4E2B: return 2.58
-        case .qwen3_4B: return 2.48
         }
     }
 
@@ -53,7 +48,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "4B"
         case .gemma4E2B: return "2B"
-        case .qwen3_4B: return "4B"
         }
     }
 
@@ -63,8 +57,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
             return "Larger multimodal model with vision and tool calling support."
         case .gemma4E2B:
             return "Compact multimodal model. Fast inference, supports images."
-        case .qwen3_4B:
-            return "4B parameter text model from Alibaba's Qwen team. Strong reasoning and multilingual support."
         }
     }
     var highlights: [String] {
@@ -83,13 +75,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
                 "Lowest memory footprint",
                 "Ideal for older devices"
             ]
-        case .qwen3_4B:
-            return [
-                "Mixed INT4 quantization",
-                "2048 token context",
-                "Strong reasoning capabilities",
-                "Multilingual support"
-            ]
         }
     }
 
@@ -97,7 +82,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "~6 GB"
         case .gemma4E2B: return "~3 GB"
-        case .qwen3_4B: return "~3 GB"
         }
     }
 
@@ -105,7 +89,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "⚡⚡⚡ Moderate"
         case .gemma4E2B: return "⚡⚡⚡⚡⚡ Fast"
-        case .qwen3_4B: return "⚡⚡⚡ Moderate"
         }
     }
 
@@ -113,7 +96,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "🏆🏆🏆🏆 High"
         case .gemma4E2B: return "🏆🏆🏆 Good"
-        case .qwen3_4B: return "🏆🏆🏆🏆 High"
         }
     }
 
@@ -121,7 +103,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "blue"
         case .gemma4E2B: return "green"
-        case .qwen3_4B: return "purple"
         }
     }
 
@@ -129,7 +110,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         switch self {
         case .gemma4E4B: return "brain.head.profile"
         case .gemma4E2B: return "bolt.fill"
-        case .qwen3_4B: return "text.book.closed.fill"
         }
     }
 
@@ -143,8 +123,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
             return ["Text", "Images", "Tool Calling", "Thinking"]
         case .gemma4E2B:
             return ["Text", "Images", "Tool Calling"]
-        case .qwen3_4B:
-            return ["Text", "Thinking"]
         }
     }
 

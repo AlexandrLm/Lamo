@@ -157,7 +157,7 @@ struct ContextDetailView: View {
                         color: .white.opacity(0.35)
                     )
                     barSegment(
-                        width: geo.size.width * (Double(512) / Double(total)),
+                        width: geo.size.width * (Double(tracker.reservedForReply) / Double(total)),
                         color: .white.opacity(0.12)
                     )
                 }
@@ -199,7 +199,7 @@ struct ContextDetailView: View {
                 breakdownRow(icon: "brain", label: "Memory facts", tokens: tracker.memoryTokens)
             }
             breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", tokens: tracker.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount })
-            breakdownRow(icon: "arrowshape.down", label: "Reply buffer", tokens: 512, isEstimate: true)
+            breakdownRow(icon: "arrowshape.down", label: "Reply buffer", tokens: tracker.reservedForReply, isEstimate: true)
         }
         .padding(.vertical, 4)
         .background(Color.white.opacity(0.04))

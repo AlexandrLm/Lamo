@@ -61,6 +61,9 @@ final class ChatViewModel {
             var fileSizes: [String] = []
 
             for file in filesToProcess {
+                let accessing = file.url.startAccessingSecurityScopedResource()
+                defer { if accessing { file.url.stopAccessingSecurityScopedResource() } }
+
                 if file.isImage {
                     if let data = try? Data(contentsOf: file.url),
                        let image = UIImage(data: data) {
@@ -80,8 +83,6 @@ final class ChatViewModel {
                         LamoLogger.ui.error("Failed to copy audio file: \(error)")
                     }
                 } else if file.type.conforms(to: .pdf) {
-                    // PDF: text layer → extract text, scanned → render as images
-                    let accessing = file.url.startAccessingSecurityScopedResource()
                     if FileContentExtractor.pdfHasTextLayer(file.url) {
                         do {
                             let extracted = try await FileContentExtractor.extract(from: file.url)
@@ -106,7 +107,6 @@ final class ChatViewModel {
                         fileSizes.append(file.formattedSize)
                         fileTextParts.append("[Scanned PDF: \(file.name) — \(pageImages.count) pages sent as images]")
                     }
-                    if accessing { file.url.stopAccessingSecurityScopedResource() }
                 } else {
                     do {
                         let extracted = try await FileContentExtractor.extract(from: file.url)

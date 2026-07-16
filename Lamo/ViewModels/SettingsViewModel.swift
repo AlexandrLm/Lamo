@@ -104,21 +104,6 @@ final class SettingsViewModel: ObservableObject {
         self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
         self.memoryEnabled = defaults.object(forKey: "memoryEnabled") as? Bool ?? true
         refreshModels()
-
-        NotificationCenter.default.addObserver(
-            forName: .selectModel,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            if let filename = notification.userInfo?["filename"] as? String {
-                let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                let path = documents.appendingPathComponent("models").appendingPathComponent(filename).path
-                Task { @MainActor [weak self] in
-                    self?.selectedModel = path
-                    self?.loadModelInfo()
-                }
-            }
-        }
     }
 
     // MARK: - Actions
@@ -210,10 +195,4 @@ struct ModelInfo {
         let mb = Double(fileSize) / 1_048_576
         return String(format: "%.0f MB", mb)
     }
-}
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let selectModel = Notification.Name("selectModel")
 }

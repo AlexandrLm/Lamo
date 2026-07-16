@@ -10,6 +10,7 @@ struct MainView: View {
     @State private var hasAppeared = false
     @State private var renamingID: UUID?
     @State private var renameText = ""
+    @State private var conversationToDelete: Conversation?
     @StateObject private var providerManager = ProviderManager.shared
 
     private var filteredConversations: [Conversation] {
@@ -84,6 +85,22 @@ struct MainView: View {
             }
             Button("Cancel", role: .cancel) { renamingID = nil }
         }
+        .alert("Delete Chat?", isPresented: .init(
+            get: { conversationToDelete != nil },
+            set: { if !$0 { conversationToDelete = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let conv = conversationToDelete {
+                    deleteConversation(conv)
+                }
+                conversationToDelete = nil
+            }
+            Button("Cancel", role: .cancel) { conversationToDelete = nil }
+        } message: {
+            if let conv = conversationToDelete {
+                Text("Delete \"\(conv.title)\" and all its messages?")
+            }
+        }
         .onAppear {
             if !hasAppeared {
                 hasAppeared = true
@@ -138,7 +155,7 @@ struct MainView: View {
                                 Divider()
 
                                 Button(role: .destructive) {
-                                    deleteConversation(conversation)
+                                    conversationToDelete = conversation
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -146,7 +163,7 @@ struct MainView: View {
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    deleteConversation(conversation)
+                                    conversationToDelete = conversation
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
