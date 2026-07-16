@@ -51,9 +51,7 @@ struct MainView: View {
         var groups: [(String, [Conversation])] = []
 
         let pinned = filteredConversations.filter { $0.isPinned }
-        if !pinned.isEmpty {
-            groups.append(("Pinned", pinned))
-        }
+        if !pinned.isEmpty { groups.append(("Pinned", pinned)) }
         if !today.isEmpty { groups.append(("Today", today)) }
         if !yesterday.isEmpty { groups.append(("Yesterday", yesterday)) }
         if !lastWeek.isEmpty { groups.append(("Previous 7 Days", lastWeek)) }
@@ -101,81 +99,84 @@ struct MainView: View {
     private var sidebarContent: some View {
         List(selection: $selectedID) {
             if filteredConversations.isEmpty && !searchText.isEmpty {
-                ContentUnavailableView("No Chats Found", systemImage: "magnifyingglass")
+                emptySearchView
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             } else if filteredConversations.isEmpty {
-                ContentUnavailableView("Start a Conversation", systemImage: "bubble.left", description: Text("Your chats will appear here"))
+                emptyStateView
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             } else {
                 ForEach(groupedConversations, id: \.title) { group in
                     Section {
                         ForEach(group.items) { conversation in
-                            ConversationRow(conversation: conversation)
-                                .tag(conversation.id)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        deleteConversation(conversation)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                    .accessibilityLabel("Delete")
+                            ConversationRow(
+                                conversation: conversation,
+                                isSelected: selectedID == conversation.id
+                            )
+                            .tag(conversation.id)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
+                            .listRowBackground(Color.clear)
+                            .contextMenu {
+                                Button {
+                                    renamingID = conversation.id
+                                    renameText = conversation.title
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
                                 }
-                                .swipeActions(edge: .leading) {
-                                    Button {
-                                        togglePin(conversation)
-                                    } label: {
-                                        Label(
-                                            conversation.isPinned ? "Unpin" : "Pin",
-                                            systemImage: conversation.isPinned ? "pin.slash" : "pin"
-                                        )
-                                    }
-                                    .tint(conversation.isPinned ? .gray : .orange)
+
+                                Button {
+                                    togglePin(conversation)
+                                } label: {
+                                    Label(
+                                        conversation.isPinned ? "Unpin" : "Pin",
+                                        systemImage: conversation.isPinned ? "pin.slash" : "pin"
+                                    )
                                 }
-                                .contextMenu {
-                                    Button {
-                                        renamingID = conversation.id
-                                        renameText = conversation.title
-                                    } label: {
-                                        Label("Rename", systemImage: "pencil")
-                                    }
 
-                                    Button {
-                                        togglePin(conversation)
-                                    } label: {
-                                        Label(
-                                            conversation.isPinned ? "Unpin" : "Pin",
-                                            systemImage: conversation.isPinned ? "pin.slash" : "pin"
-                                        )
-                                    }
+                                Divider()
 
-                                    Divider()
-
-                                    Button(role: .destructive) {
-                                        deleteConversation(conversation)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                    .accessibilityLabel("Delete")
+                                Button(role: .destructive) {
+                                    deleteConversation(conversation)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
+                                .accessibilityLabel("Delete")
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    deleteConversation(conversation)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .accessibilityLabel("Delete")
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    togglePin(conversation)
+                                } label: {
+                                    Label(
+                                        conversation.isPinned ? "Unpin" : "Pin",
+                                        systemImage: conversation.isPinned ? "pin.slash" : "pin"
+                                    )
+                                }
+                                .tint(conversation.isPinned ? .gray : .orange)
+                            }
                         }
                     } header: {
-                        HStack(spacing: 5) {
-                            if group.title == "Pinned" {
-                                Image(systemName: "pin.fill")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.orange)
-                            }
-                            Text(group.title)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .textCase(nil)
-                        }
+                        sidebarSectionHeader(group.title)
                     }
                 }
             }
         }
-        .listStyle(.sidebar)
+        .listStyle(.plain)
+        .scrollIndicators(.hidden)
+        .background {
+            sidebarAmbientGradient
+        }
         .navigationTitle("Chats")
+        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         .searchable(text: $searchText, prompt: "Search chats")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -185,23 +186,105 @@ struct MainView: View {
                     Image(systemName: "gearshape")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("Settings")
+                        .frame(width: 32, height: 32)
+                        .glassEffect(.regular.interactive(), in: .circle)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     startNewChat()
                 } label: {
-                    Image(systemName: "square.and.pencil")
+                    Image(systemName: "plus")
                         .font(.body.weight(.medium))
-                        .accessibilityLabel("New Chat")
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .glassEffect(.regular.interactive(), in: .circle)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Chat")
                 .keyboardShortcut("n", modifiers: .command)
             }
         }
     }
 
+    // MARK: - Section Header
+
+    private func sidebarSectionHeader(_ title: String) -> some View {
+        HStack(spacing: 5) {
+            if title == "Pinned" {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 7))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.3))
+                .tracking(0.8)
+            Spacer()
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Ambient Gradient
+
+    private var sidebarAmbientGradient: some View {
+        LinearGradient(
+            stops: [
+                .init(color: Color(
+                    hue: 0.58,
+                    saturation: 0.12,
+                    brightness: 0.10
+                ), location: 0),
+                .init(color: .clear, location: 0.45)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Empty States
+
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            LogoAnimationView(size: 80)
+
+            VStack(spacing: 8) {
+                Text("Start a Conversation")
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.5))
+
+                Text("Your chats will appear here")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.25))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, 60)
+    }
+
+    private var emptySearchView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 24))
+                .foregroundStyle(.white.opacity(0.12))
+
+            Text("No Chats Found")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.35))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+
     // MARK: - Detail
+
     private var detailContent: some View {
         ZStack {
             Group {
@@ -214,7 +297,11 @@ struct MainView: View {
                         }
                     )
                 } else {
-                    ContentUnavailableView("Select a Chat", systemImage: "bubble.left", description: Text("Choose a conversation or start a new one"))
+                    ContentUnavailableView(
+                        "Select a Chat",
+                        systemImage: "bubble.left",
+                        description: Text("Choose a conversation or start a new one")
+                    )
                 }
             }
 
@@ -299,7 +386,7 @@ struct MainView: View {
             }
         }
         try? modelContext.save()
-        
+
         let tmpDir = FileManager.default.temporaryDirectory
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: tmpDir,
@@ -328,6 +415,7 @@ struct MainView: View {
 
 struct ConversationRow: View {
     let conversation: Conversation
+    var isSelected: Bool = false
 
     private var relativeTime: String {
         let formatter = RelativeDateTimeFormatter()
@@ -335,79 +423,73 @@ struct ConversationRow: View {
         return formatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
     }
 
-    private var firstUserMessage: String? {
-        conversation.messages
-            .sorted(by: { $0.timestamp < $1.timestamp })
-            .first(where: { $0.role == .user })?.content
-    }
-
-    private var lastMessagePreview: String? {
-        conversation.messages
-            .sorted(by: { $0.timestamp < $1.timestamp })
-            .last?.content
-    }
-
     private var previewText: String? {
-        if let first = firstUserMessage, !first.isEmpty {
-            return String(first.prefix(80))
+        let sorted = conversation.messages.sorted(by: { $0.timestamp < $1.timestamp })
+        if let first = sorted.first(where: { $0.role == .user }),
+           !first.content.isEmpty {
+            return String(first.content.prefix(80))
         }
-        return lastMessagePreview.map { String($0.prefix(80)) }
+        if let last = sorted.last, !last.content.isEmpty {
+            return String(last.content.prefix(80))
+        }
+        return nil
     }
 
-    private var messageCount: Int {
-        conversation.messages.count
+    private var avatarLetter: String {
+        let title = conversation.title
+        return title.isEmpty ? "?" : String(title.prefix(1)).uppercased()
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(0.06))
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Image(systemName: "bubble.left.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    )
+            // Monospace letter avatar
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(isSelected ? 0.10 : 0.05))
+                    .frame(width: 34, height: 34)
 
-                if conversation.isPinned {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 7))
-                        .foregroundStyle(.white)
-                        .padding(2)
-                        .background(.orange)
-                        .clipShape(Circle())
-                        .offset(x: 3, y: 3)
-                }
+                Text(avatarLetter)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(isSelected ? 0.7 : 0.45))
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            // Text content
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .top) {
-                    Text(conversation.title)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        if conversation.isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 7))
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
+                        Text(conversation.title)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                            .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                    }
                     Spacer(minLength: 8)
                     Text(relativeTime)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.white.opacity(0.2))
                         .lineLimit(1)
                 }
+
                 if let preview = previewText {
-                    HStack(spacing: 4) {
-                        Text(preview)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                        if messageCount > 0 {
-                            Text("· \(messageCount)")
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.quaternary)
-                        }
-                    }
+                    Text(preview)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.2))
+                        .lineLimit(1)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(isSelected ? 0.06 : 0.0))
+                .animation(.easeOut(duration: 0.15), value: isSelected)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityLabel("\(conversation.title), \(relativeTime)")
     }
 }
