@@ -31,7 +31,45 @@ struct ChatView: View {
                 scrollToBottomButton
             }
         }
-        .background(LamoTheme.Colors.background)
+        .background {
+            if viewModel.messages.isEmpty {
+                ZStack {
+                    LamoTheme.Colors.background
+
+                    // Full-screen shifting gradient from the very top
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color(
+                                hue: 0.6 + 0.12 * CGFloat(sin(gradientPhase)),
+                                saturation: 0.3 + 0.1 * CGFloat(cos(gradientPhase * 0.5)),
+                                brightness: 0.35 + 0.08 * CGFloat(sin(gradientPhase * 0.8))
+                            ), location: 0),
+                            .init(color: Color(
+                                hue: 0.7 + 0.1 * CGFloat(cos(gradientPhase * 0.6)),
+                                saturation: 0.2 + 0.08 * CGFloat(sin(gradientPhase * 0.4)),
+                                brightness: 0.22 + 0.05 * CGFloat(cos(gradientPhase))
+                            ), location: 0.3),
+                            .init(color: Color(
+                                hue: 0.75 + 0.08 * CGFloat(sin(gradientPhase * 0.3)),
+                                saturation: 0.1,
+                                brightness: 0.12
+                            ), location: 0.55),
+                            .init(color: .clear, location: 0.8)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea(edges: .top)
+                }
+            } else {
+                LamoTheme.Colors.background
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 10).repeatForever(autoreverses: true)) {
+                gradientPhase = .pi * 2
+            }
+        }
         .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -148,6 +186,8 @@ struct ChatView: View {
         .padding(.bottom, 80)
         .transition(.opacity.combined(with: .scale))
     }
+
+    @State private var gradientPhase: CGFloat = 0
 
     // MARK: - Empty State
 

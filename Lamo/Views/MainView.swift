@@ -202,7 +202,6 @@ struct MainView: View {
     }
 
     // MARK: - Detail
-
     private var detailContent: some View {
         ZStack {
             Group {
