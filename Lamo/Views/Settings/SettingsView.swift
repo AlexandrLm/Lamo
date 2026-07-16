@@ -5,6 +5,7 @@ struct SettingsView: View {
     @StateObject private var vm = SettingsViewModel()
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var benchmark = DeviceBenchmark()
+    @ObservedObject private var memory = MemoryService.shared
     @State private var navigateToResults = false
     @Environment(\.modelContext) private var modelContext
     @State private var isImportingModel = false
@@ -108,6 +109,7 @@ struct SettingsView: View {
                     if let model = modelToDelete {
                         downloadManager.deleteModel(model)
                     }
+                    modelToDelete = nil
                 }
                 Button("Cancel", role: .cancel) { modelToDelete = nil }
             } message: {
@@ -253,7 +255,7 @@ struct SettingsView: View {
                 gridCard(
                     icon: "brain",
                     title: "Memory",
-                    subtitle: "\(MemoryService.shared.totalEntries) facts"
+                    subtitle: "\(memory.totalEntries) facts"
                 )
             }
 
@@ -519,7 +521,7 @@ struct SettingsView: View {
     }
 
     private func modelLibraryRow(model: PresetModel) -> some View {
-        let isActive = vm.selectedModel?.contains(model.filename.replacingOccurrences(of: ".litertlm", with: "")) == true
+        let isActive = vm.selectedModel.map { ($0 as NSString).lastPathComponent == model.filename } ?? false
 
         return HStack(spacing: 12) {
             Button {
@@ -556,7 +558,8 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             Button(role: .destructive) {
-                downloadManager.deleteModel(model)
+                modelToDelete = model
+                showDeleteModelAlert = true
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.2))
@@ -600,14 +603,16 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             Button(role: .destructive) {
+                guard !isActive else { return } // Block deleting active model
                 try? FileManager.default.removeItem(atPath: path)
                 vm.refreshModels()
                 vm.loadModelInfo()
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.2))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(isActive ? 0.05 : 0.2))
             }
             .buttonStyle(.plain)
+            .disabled(isActive)
             .padding(.trailing, 4)
         }
         .padding(.horizontal, LamoTheme.Spacing.md).padding(.vertical, 12)
@@ -882,7 +887,7 @@ struct SettingsView: View {
                                 .font(.system(.subheadline, design: .monospaced))
                                 .foregroundStyle(.white)
                             Spacer()
-                            Text("\(MemoryService.shared.totalEntries)")
+                            Text("\(memory.totalEntries)")
                                 .font(.system(.subheadline, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.8))
                         }
@@ -891,7 +896,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
 
-                    let facts = MemoryService.shared.allFacts
+                    let facts = memory.allFacts
                     if !facts.isEmpty {
                         // What AI Remembers
                         VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
@@ -920,7 +925,7 @@ struct SettingsView: View {
                                     }
                                     Spacer()
                                     Button {
-                                        MemoryService.shared.deleteFact(fact)
+                                        memory.deleteFact(fact)
                                     } label: {
                                         Image(systemName: "trash")
                                             .font(.system(.caption2, design: .monospaced))
@@ -957,7 +962,7 @@ struct SettingsView: View {
 
                     // Clear All Facts
                     Button(role: .destructive) {
-                        MemoryService.shared.clearAll()
+                        memory.clearAll()
                     } label: {
                         Label("Clear All Facts", systemImage: "trash")
                             .font(.system(.subheadline, design: .monospaced))

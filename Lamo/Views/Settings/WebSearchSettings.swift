@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct WebSearchSettings: View {
-    @State private var apiKey: String = UserDefaults.standard.string(forKey: "brave_search_api_key") ?? ""
+    @State private var apiKey: String = KeychainHelper.load(key: "brave_search_api_key") ?? ""
     @State private var autoFetch: Bool = UserDefaults.standard.object(forKey: "web_auto_fetch") as? Bool ?? true
     @State private var showAPIKey = false
     @State private var testResult: String?
@@ -43,7 +43,6 @@ struct WebSearchSettings: View {
                             TextField("BRAVE_API_KEY", text: $apiKey)
                                 .font(.system(.subheadline, design: .monospaced))
                                 .foregroundStyle(.white)
-                                .textContentType(.password)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         } else {
@@ -170,7 +169,11 @@ struct WebSearchSettings: View {
     }
 
     private func saveAPIKey() {
-        UserDefaults.standard.set(apiKey.isEmpty ? nil : apiKey, forKey: "brave_search_api_key")
+        if apiKey.isEmpty {
+            KeychainHelper.delete(key: "brave_search_api_key")
+        } else {
+            KeychainHelper.save(key: "brave_search_api_key", value: apiKey)
+        }
     }
 
     private func testSearch() {
@@ -183,10 +186,11 @@ struct WebSearchSettings: View {
                 if results.isEmpty {
                     testResult = "No results returned"
                 } else {
-                    testResult = "Found \(results.count) results"
+                    var text = "Found \(results.count) results"
                     if let first = results.first, let title = first["title"] {
-                        testResult = testResult! + "\nFirst: \(title)"
+                        text += "\nFirst: \(title)"
                     }
+                    testResult = text
                 }
             } catch {
                 testResult = "Error: \(error.localizedDescription)"

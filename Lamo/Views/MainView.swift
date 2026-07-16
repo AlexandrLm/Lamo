@@ -296,6 +296,7 @@ struct MainView: View {
                             startNewChat()
                         }
                     )
+                    .id(conversation.id)
                 } else {
                     ContentUnavailableView(
                         "Select a Chat",
@@ -371,6 +372,9 @@ struct MainView: View {
             for path in message.imagePaths {
                 try? FileManager.default.removeItem(atPath: path)
             }
+            for path in message.attachedFilePaths {
+                try? FileManager.default.removeItem(atPath: path)
+            }
         }
         if selectedID == conversation.id {
             selectedID = nil
@@ -386,21 +390,6 @@ struct MainView: View {
             }
         }
         try? modelContext.save()
-
-        let tmpDir = FileManager.default.temporaryDirectory
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: tmpDir,
-            includingPropertiesForKeys: [.creationDateKey],
-            options: .skipsHiddenFiles
-        ) else { return }
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        for file in files where file.lastPathComponent.hasPrefix("img_") && file.pathExtension == "jpg" {
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
-               let created = attrs[.creationDate] as? Date,
-               created < oneHourAgo {
-                try? FileManager.default.removeItem(at: file)
-            }
-        }
     }
 
     private func resetLeftoverStreamingState() {

@@ -34,7 +34,8 @@ struct MarkdownRenderer: View {
             return cached as! [Block]
         }
         let blocks = parseBlocksStatic(text)
-        blockCache.setObject(blocks as NSArray, forKey: text as NSString)
+        let cost = text.utf8.count
+        blockCache.setObject(blocks as NSArray, forKey: text as NSString, cost: cost)
         return blocks
     }
 

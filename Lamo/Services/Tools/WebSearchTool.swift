@@ -231,7 +231,7 @@ actor SearchProvider {
     private var instanceHealth: [String: (failures: Int, lastFail: Date)] = [:]
     private var currentInstanceIndex = 0
 
-    var braveAPIKey: String? { UserDefaults.standard.string(forKey: "brave_search_api_key") }
+    var braveAPIKey: String? { KeychainHelper.load(key: "brave_search_api_key") }
 
     func search(query: String, maxResults: Int) async throws -> [[String: String]] {
         let cacheKey = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)

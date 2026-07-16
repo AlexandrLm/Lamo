@@ -22,7 +22,7 @@ final class ProviderManager: ObservableObject {
 
     /// Brave Search API key (optional, falls back to DuckDuckGo).
     var braveAPIKey: String? {
-        UserDefaults.standard.string(forKey: "brave_search_api_key")
+        KeychainHelper.load(key: "brave_search_api_key")
     }
     /// Whether the device is under memory pressure.
     @Published var isMemoryPressure: Bool = false

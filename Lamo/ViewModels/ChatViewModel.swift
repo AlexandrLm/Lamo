@@ -26,6 +26,12 @@ final class ChatViewModel {
     private let provider: any LLMProvider
     private var streamingMessageID: UUID?
     private var streamingTask: Task<Void, Never>?
+    /// Accumulated text buffer during streaming — avoids per-token SwiftData writes.
+    private var streamingBuffer: String = ""
+    private var streamingThinkingBuffer: String = ""
+    /// Timer for throttled SwiftData flushes during streaming.
+    private var lastFlushTime: Date = .distantPast
+    private let flushInterval: TimeInterval = 0.15 // 150ms throttle
 
     init(
         conversation: Conversation,
@@ -65,7 +71,7 @@ final class ChatViewModel {
                         imagePaths.append(contentsOf: paths)
                     }
                 } else if file.isAudio {
-                    let tmpURL = FileManager.default.temporaryDirectory
+                    let tmpURL = ChatViewModel.attachmentsDirectory
                         .appendingPathComponent("audio_\(UUID().uuidString).\(file.url.pathExtension)")
                     do {
                         try FileManager.default.copyItem(at: file.url, to: tmpURL)
@@ -83,7 +89,7 @@ final class ChatViewModel {
                         do {
                             let extracted = try await FileContentExtractor.extract(from: file.url)
                             fileTextParts.append(extracted)
-                            let tmpURL = FileManager.default.temporaryDirectory
+                            let tmpURL = ChatViewModel.attachmentsDirectory
                                 .appendingPathComponent("file_\(UUID().uuidString).pdf")
                             try? FileManager.default.copyItem(at: file.url, to: tmpURL)
                             filePaths.append(tmpURL.path)
@@ -108,7 +114,7 @@ final class ChatViewModel {
                     do {
                         let extracted = try await FileContentExtractor.extract(from: file.url)
                         fileTextParts.append(extracted)
-                        let tmpURL = FileManager.default.temporaryDirectory
+                        let tmpURL = ChatViewModel.attachmentsDirectory
                             .appendingPathComponent("file_\(UUID().uuidString).\(file.url.pathExtension)")
                         try? FileManager.default.copyItem(at: file.url, to: tmpURL)
                         filePaths.append(tmpURL.path)
@@ -232,18 +238,18 @@ final class ChatViewModel {
                 guard !Task.isCancelled else { break }
                 switch token {
                 case .delta(let delta):
-                    guard let id = self.streamingMessageID,
-                          let index = self.messages.firstIndex(where: { $0.id == id }) else { continue }
-                    self.messages[index].content += delta
+                    self.streamingBuffer += delta
+                    self.flushStreamingBuffer()
                 case .thinkingDelta(let thought):
-                    guard let id = self.streamingMessageID,
-                          let index = self.messages.firstIndex(where: { $0.id == id }) else { continue }
-                    self.messages[index].thinkingContent += thought
+                    self.streamingThinkingBuffer += thought
+                    self.flushStreamingBuffer()
                 case .benchmark(let data):
                     self.pendingBenchmark = data
                 case .loopDetected:
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
+                        self.streamingBuffer = ""
+                        self.streamingThinkingBuffer = ""
                         if let id = self.streamingMessageID,
                            let index = self.messages.firstIndex(where: { $0.id == id }) {
                             self.messages[index].content = ""
@@ -275,12 +281,36 @@ final class ChatViewModel {
         }
     }
 
+    /// Flush accumulated streaming text to the SwiftData model, throttled to avoid disk thrashing.
+    private func flushStreamingBuffer(force: Bool = false) {
+        let now = Date()
+        guard force || now.timeIntervalSince(lastFlushTime) >= flushInterval else { return }
+        guard !streamingBuffer.isEmpty || !streamingThinkingBuffer.isEmpty else { return }
+        guard let id = streamingMessageID,
+              let index = messages.firstIndex(where: { $0.id == id }) else { return }
+
+        if !streamingBuffer.isEmpty {
+            messages[index].content += streamingBuffer
+            streamingBuffer = ""
+        }
+        if !streamingThinkingBuffer.isEmpty {
+            messages[index].thinkingContent += streamingThinkingBuffer
+            streamingThinkingBuffer = ""
+        }
+        lastFlushTime = now
+    }
+
     /// Finalize streaming state. Called on completion, error, or cancellation.
     private func finalizeStreaming(success: Bool? = nil, error: Error? = nil) {
+        // Flush any remaining buffered text to the SwiftData model
+        flushStreamingBuffer(force: true)
+
         guard let id = streamingMessageID,
               let index = messages.firstIndex(where: { $0.id == id }) else {
             isStreaming = false
             streamingMessageID = nil
+            streamingBuffer = ""
+            streamingThinkingBuffer = ""
             return
         }
         if success == false, let error {
@@ -293,6 +323,8 @@ final class ChatViewModel {
         messages[index].isStreaming = false
         streamingMessageID = nil
         isStreaming = false
+        streamingBuffer = ""
+        streamingThinkingBuffer = ""
         conversation.updatedAt = .now
         save()
         Task { await refreshContextTracker() }
@@ -462,14 +494,16 @@ final class ChatViewModel {
         startStreaming(chatMessages: history)
     }
 
-    /// Save UIImages to tmp directory as JPEG (resized to max 1024px), return file paths.
+    /// Save UIImages to Documents/Attachments as JPEG (resized to max 1024px), return file paths.
+    /// Stored in Documents so they persist until the conversation is explicitly deleted.
     private func saveImagesToTmp(_ images: [UIImage]) -> [String] {
+        let attachmentsDir = Self.attachmentsDirectory
         var paths: [String] = []
         for image in images {
             let resized = image.resizedForModel(maxDimension: 1024)
             guard let data = resized.jpegData(compressionQuality: 0.8) else { continue }
             let filename = "img_\(UUID().uuidString).jpg"
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            let url = attachmentsDir.appendingPathComponent(filename)
             do {
                 try data.write(to: url)
                 paths.append(url.path)
@@ -479,6 +513,14 @@ final class ChatViewModel {
         }
         return paths
     }
+
+    /// Shared directory for all attachment files (images, audio, documents).
+    static let attachmentsDirectory: URL = {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("Attachments", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
 }
 
 // MARK: - UIImage Resize for Model
