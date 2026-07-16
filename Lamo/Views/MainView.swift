@@ -219,44 +219,46 @@ struct MainView: View {
                 }
             }
 
-            // Startup gate: show loading overlay until engine is ready
+            // Startup gate: small loading banner instead of full-screen block
             if !providerManager.isEngineReady {
-                ZStack {
-                    LamoTheme.Colors.background.ignoresSafeArea()
-
-                    VStack(spacing: 0) {
-                        Spacer()
-
-                        VStack(spacing: LamoTheme.Spacing.lg) {
-                            if let error = providerManager.engineError {
-                                // Error state
-                                VStack(spacing: 12) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 28))
-                                        .foregroundStyle(.white.opacity(0.4))
-                                    Text("Engine Error")
-                                        .font(.system(.body, design: .monospaced).weight(.medium))
-                                        .foregroundStyle(.white.opacity(0.6))
-                                    Text(error)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundStyle(.white.opacity(0.35))
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(4)
-                                }
-                                .padding(LamoTheme.Spacing.xl)
-                                .frame(maxWidth: 320)
-                                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-
-                            } else {
-                                // Loading state
-                                LoadingView(modelName: providerManager.currentModelDisplayName)
-                            }
+                VStack {
+                    if let error = providerManager.engineError {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.white.opacity(0.5))
+                            Text(error)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .lineLimit(1)
+                            Spacer()
                         }
-
-                        Spacer()
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+                        .padding(.horizontal, LamoTheme.Spacing.lg)
+                        .padding(.top, 8)
+                    } else {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .tint(.white.opacity(0.5))
+                            Text(providerManager.currentModelDisplayName)
+                                .font(.system(.caption, design: .monospaced).weight(.medium))
+                                .foregroundStyle(.white.opacity(0.5))
+                            Spacer()
+                            Text("Loading…")
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+                        .padding(.horizontal, LamoTheme.Spacing.lg)
+                        .padding(.top, 8)
                     }
+                    Spacer()
                 }
-                .transition(.opacity)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
@@ -320,63 +322,6 @@ struct MainView: View {
         guard let streaming = try? modelContext.fetch(descriptor) else { return }
         for msg in streaming { msg.isStreaming = false }
         try? modelContext.save()
-    }
-}
-
-// MARK: - Loading View
-
-private struct LoadingView: View {
-    let modelName: String
-    @State private var phase = 0
-    @State private var pulse = false
-
-    private let phases = [
-        "Validating model",
-        "Mapping memory",
-        "Initializing engine",
-        "Almost ready"
-    ]
-
-    var body: some View {
-        VStack(spacing: LamoTheme.Spacing.lg) {
-            // Pulsing ring
-            ZStack {
-                Circle()
-                    .stroke(.white.opacity(0.08), lineWidth: 2)
-                    .frame(width: 56, height: 56)
-                Circle()
-                    .trim(from: 0, to: 0.6)
-                    .stroke(.white.opacity(0.5), lineWidth: 2)
-                    .frame(width: 56, height: 56)
-                    .rotationEffect(.degrees(pulse ? 360 : 0))
-                    .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: pulse)
-            }
-
-            VStack(spacing: 6) {
-                Text(modelName)
-                    .font(.system(.body, design: .monospaced).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(1)
-
-                Text(phases[phase % phases.count])
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.35))
-                    .animation(.easeInOut, value: phase)
-            }
-        }
-        .padding(LamoTheme.Spacing.xl)
-        .frame(maxWidth: 320)
-        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-        .onAppear {
-            pulse = true
-            startPhaseTimer()
-        }
-    }
-
-    private func startPhaseTimer() {
-        Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { _ in
-            withAnimation { phase += 1 }
-        }
     }
 }
 
