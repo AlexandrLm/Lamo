@@ -50,18 +50,18 @@ final class DownloadManager: ObservableObject {
         }
 
         var downloadedSizeString: String {
-            ByteCountFormatter.string(fromByteCount: bytesWritten, countStyle: .file)
+            Self.formatBytes(bytesWritten)
         }
 
         var totalSizeString: String {
-            ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+            Self.formatBytes(totalBytes)
         }
 
         var speedString: String {
             guard speedBytesPerSec > 0 else { return "" }
             let mbps = speedBytesPerSec / 1_048_576
             if mbps >= 1.0 {
-                return String(format: "%.1f MB/s", mbps)
+                return String(format: "%.0f MB/s", mbps)
             } else {
                 return String(format: "%.0f KB/s", speedBytesPerSec / 1024)
             }
@@ -80,6 +80,16 @@ final class DownloadManager: ObservableObject {
                 let mins = Int(seconds.truncatingRemainder(dividingBy: 3600)) / 60
                 return "~\(hours)h \(mins)m"
             }
+        }
+
+        static func formatBytes(_ bytes: Int64) -> String {
+            if bytes < 1024 { return "\(bytes) bytes" }
+            let kb = Double(bytes) / 1024
+            if kb < 1024 { return String(format: "%.0f KB", kb) }
+            let mb = kb / 1024
+            if mb < 1024 { return String(format: "%.0f MB", mb) }
+            let gb = mb / 1024
+            return String(format: "%.2f GB", gb)
         }
     }
 
@@ -369,6 +379,11 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         Task { @MainActor in
             let now = Date()
             var state = DownloadManager.shared.activeDownloads[filename] ?? DownloadManager.DownloadState()
+
+            // Throttle UI updates — only publish every 0.3s to avoid jitter
+            let timeSinceLastUI = now.timeIntervalSince(state.lastSpeedUpdateTime)
+            guard timeSinceLastUI >= 0.3 else { return }
+
             state.bytesWritten = totalBytesWritten
 
             // Use server-reported total if valid (>1MB = real Content-Length)
@@ -382,18 +397,15 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
             }
 
             // Smoothed speed calculation
-            let elapsed = now.timeIntervalSince(state.lastSpeedUpdateTime)
-            if elapsed >= 0.5 {
-                let deltaBytes = totalBytesWritten - state.lastSpeedUpdateBytes
-                if deltaBytes > 0 && elapsed > 0 {
-                    let instantSpeed = Double(deltaBytes) / elapsed
-                    state.speedBytesPerSec = state.speedBytesPerSec > 0
-                        ? state.speedBytesPerSec * 0.7 + instantSpeed * 0.3
-                        : instantSpeed
-                }
-                state.lastSpeedUpdateTime = now
-                state.lastSpeedUpdateBytes = totalBytesWritten
+            let deltaBytes = totalBytesWritten - state.lastSpeedUpdateBytes
+            if deltaBytes > 0 && timeSinceLastUI > 0 {
+                let instantSpeed = Double(deltaBytes) / timeSinceLastUI
+                state.speedBytesPerSec = state.speedBytesPerSec > 0
+                    ? state.speedBytesPerSec * 0.7 + instantSpeed * 0.3
+                    : instantSpeed
             }
+            state.lastSpeedUpdateTime = now
+            state.lastSpeedUpdateBytes = totalBytesWritten
 
             DownloadManager.shared.activeDownloads[filename] = state
         }
