@@ -23,7 +23,6 @@ final class ChatViewModel {
 
     private let modelContext: ModelContext
     private let conversation: Conversation
-    private let provider: any LLMProvider
     private var streamingMessageID: UUID?
     private var streamingTask: Task<Void, Never>?
     /// Accumulated text buffer during streaming — avoids per-token SwiftData writes.
@@ -35,12 +34,10 @@ final class ChatViewModel {
 
     init(
         conversation: Conversation,
-        modelContext: ModelContext,
-        provider: any LLMProvider
+        modelContext: ModelContext
     ) {
         self.conversation = conversation
         self.modelContext = modelContext
-        self.provider = provider
         self.messages = conversation.messages.sorted { $0.timestamp < $1.timestamp }
 
         MemoryService.shared.setModelContext(modelContext)
@@ -78,7 +75,7 @@ final class ChatViewModel {
                         filePaths.append(tmpURL.path)
                         fileNames.append(file.name)
                         fileSizes.append(file.formattedSize)
-                        fileTextParts.append("[Аудиофайл: \(file.name)]")
+                        fileTextParts.append("[Audio file: \(file.name)]")
                     } catch {
                         LamoLogger.ui.error("Failed to copy audio file: \(error)")
                     }
@@ -107,7 +104,7 @@ final class ChatViewModel {
                         imagePaths.append(contentsOf: tmpPaths)
                         fileNames.append(file.name)
                         fileSizes.append(file.formattedSize)
-                        fileTextParts.append("[Сканированный PDF: \(file.name) — \(pageImages.count) стр. отправлены как изображения]")
+                        fileTextParts.append("[Scanned PDF: \(file.name) — \(pageImages.count) pages sent as images]")
                     }
                     if accessing { file.url.stopAccessingSecurityScopedResource() }
                 } else {
@@ -121,7 +118,7 @@ final class ChatViewModel {
                         fileNames.append(file.name)
                         fileSizes.append(file.formattedSize)
                     } catch {
-                        fileTextParts.append("[Ошибка чтения файла \(file.name): \(error.localizedDescription)]")
+                        fileTextParts.append("[Error reading file \(file.name): \(error.localizedDescription)]")
                         fileNames.append(file.name)
                         fileSizes.append(file.formattedSize)
                         LamoLogger.ui.error("Failed to extract file content: \(error)")
@@ -261,7 +258,7 @@ final class ChatViewModel {
                     } else {
                         if let id = self.streamingMessageID,
                            let index = self.messages.firstIndex(where: { $0.id == id }) {
-                            self.messages[index].content += "\n\n⚠️ Генерация остановлена — зацикливание не удалось устранить"
+                            self.messages[index].content += "\n\n⚠️ Generation stopped — loop could not be resolved"
                         }
                         self.finalizeStreaming(success: true)
                         return
@@ -441,10 +438,6 @@ final class ChatViewModel {
         let lowerResponse = response.lowercased()
         let hasFetchIntent = Self.fetchIntentPatterns.contains { lowerResponse.contains($0) }
 
-        // Also check if the response is short (< 300 chars) and contains a URL
-        // — likely the model stopped before fetching
-        let looksUnfinished = response.count < 500 && hasFetchIntent
-
         guard hasFetchIntent else { return }
 
         // De-duplicate: skip URLs that appear in very short snippets (< 20 chars around them)
@@ -469,16 +462,16 @@ final class ChatViewModel {
         for url in unfetchedURLs.prefix(2) { // Max 2 URLs to avoid token overflow
             do {
                 let content = try await WebFetcher.fetch(url: url)
-                fetchedContent += "\n\n[Содержимое страницы \(url.absoluteString)]:\n\(content.prefix(3000))"
+                fetchedContent += "\n\n[Page content \(url.absoluteString)]:\n\(content.prefix(3000))"
             } catch {
-                fetchedContent += "\n\n[Не удалось загрузить \(url.absoluteString): \(error.localizedDescription)]"
+                fetchedContent += "\n\n[Failed to load \(url.absoluteString): \(error.localizedDescription)]"
             }
         }
 
         guard !fetchedContent.isEmpty else { return }
 
         let followUp = Message(
-            content: "Вот содержимое страниц, которые вы хотели проверить:\(fetchedContent)\n\nТеперь, основываясь на этой информации, ответьте на вопрос пользователя.",
+            content: "Here is the content of the pages you wanted to check:\(fetchedContent)\n\nNow, based on this information, answer the user's question.",
             role: .user,
             conversation: conversation
         )
@@ -521,24 +514,4 @@ final class ChatViewModel {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
-}
-
-// MARK: - UIImage Resize for Model
-
-private extension UIImage {
-    /// Resize image so the longest side is `maxDimension` pixels.
-    /// Reduces token usage and memory without losing visual quality for the model.
-    func resizedForModel(maxDimension: CGFloat) -> UIImage {
-        let size = self.size
-        let longestSide = max(size.width, size.height)
-        guard longestSide > maxDimension else { return self }
-
-        let scale = maxDimension / longestSide
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        return renderer.image { _ in
-            self.draw(in: CGRect(origin: .zero, size: newSize))
-        }
-    }
 }

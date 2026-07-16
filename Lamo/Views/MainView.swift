@@ -41,7 +41,7 @@ struct MainView: View {
                 today.append(conv)
             } else if cal.isDateInYesterday(updated) {
                 yesterday.append(conv)
-            } else if updated > cal.date(byAdding: .day, value: -7, to: now)! {
+            } else if let weekAgo = cal.date(byAdding: .day, value: -7, to: now), updated > weekAgo {
                 lastWeek.append(conv)
             } else {
                 older.append(conv)
@@ -406,10 +406,14 @@ struct ConversationRow: View {
     let conversation: Conversation
     var isSelected: Bool = false
 
-    private var relativeTime: String {
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
+        return formatter
+    }()
+
+    private var relativeTime: String {
+        Self.relativeFormatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
     }
 
     private var previewText: String? {

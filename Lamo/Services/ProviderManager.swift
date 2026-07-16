@@ -357,6 +357,7 @@ final class ProviderManager: ObservableObject {
             switch preset {
             case .gemma4E4B: requiredMB = 2000  // 2 GB — mmap'd model, only KV-cache + buffers loaded
             case .gemma4E2B: requiredMB = 1200  // 1.2 GB — smaller model, less KV-cache
+            case .qwen3_4B: requiredMB = 1200   // 1.2 GB — mixed INT4, similar to E2B
             }
             if availableMB < requiredMB {
                 // Try to free memory before giving up
@@ -367,7 +368,7 @@ final class ProviderManager: ObservableObject {
                 if newAvailableMB < requiredMB {
                     let availGB = String(format: "%.1f", newAvailableMB / 1024)
                     let reqGB = String(format: "%.1f", requiredMB / 1024)
-                    engineError = "Only \(availGB) GB RAM available but \(preset.displayName) needs ~\(reqGB) GB.\n\nTry:\n• Close other apps (especially Safari, Instagram, games)\n• Restart Lamo after closing apps\n• Use \(PresetModel.gemma4E2B.displayName) instead"
+                    engineError = "Only \(availGB) GB RAM available but \(preset.displayName) needs ~\(reqGB) GB.\n\nTry:\n• Close other apps (especially Safari, Instagram, games)\n• Restart Lamo after closing apps\n• Use \(PresetModel.gemma4E2B.displayName) or \(PresetModel.qwen3_4B.displayName) instead"
                     return
                 }
                 LamoLogger.engine.info("Cleanup freed memory: \(String(format: "%.0f", newAvailableMB))MB now available")

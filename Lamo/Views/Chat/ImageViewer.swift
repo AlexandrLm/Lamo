@@ -24,24 +24,27 @@ struct ImageViewer: View {
 
             TabView(selection: $currentIndex) {
                 ForEach(images.indices, id: \.self) { index in
-                    Image(uiImage: images[index])
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(scale)
-                        .offset(offset)
-                        .gesture(magnificationGesture)
-                        .gesture(panGesture)
-                        .onTapGesture(count: 2) {
-                            withAnimation(.spring(response: 0.3)) {
-                                scale = 1.0
-                                offset = .zero
-                            }
-                        }
-                        .tag(index)
+                    ZoomableImage(
+                        image: images[index],
+                        scale: $scale,
+                        lastScale: $lastScale,
+                        offset: $offset,
+                        lastOffset: $lastOffset
+                    )
+                    .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .onChange(of: currentIndex) {
+                // Reset zoom when swiping to a different image
+                withAnimation(.easeOut(duration: 0.2)) {
+                    scale = 1.0
+                    lastScale = 1.0
+                    offset = .zero
+                    lastOffset = .zero
+                }
+            }
 
             Button {
                 dismiss()
@@ -66,11 +69,41 @@ struct ImageViewer: View {
             }
         }
     }
+}
 
-    private var magnificationGesture: some Gesture {
+// MARK: - Zoomable Image (per-page zoom with limits)
+
+private struct ZoomableImage: View {
+    let image: UIImage
+    @Binding var scale: CGFloat
+    @Binding var lastScale: CGFloat
+    @Binding var offset: CGSize
+    @Binding var lastOffset: CGSize
+
+    private let maxScale: CGFloat = 5.0
+
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .scaleEffect(scale)
+            .offset(offset)
+            .gesture(magnification)
+            .gesture(pan)
+            .onTapGesture(count: 2) {
+                withAnimation(.spring(response: 0.3)) {
+                    scale = 1.0
+                    offset = .zero
+                    lastOffset = .zero
+                    lastScale = 1.0
+                }
+            }
+    }
+
+    private var magnification: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                scale = lastScale * value.magnification
+                scale = min(lastScale * value.magnification, maxScale)
             }
             .onEnded { _ in
                 lastScale = scale
@@ -85,7 +118,7 @@ struct ImageViewer: View {
             }
     }
 
-    private var panGesture: some Gesture {
+    private var pan: some Gesture {
         DragGesture()
             .onChanged { value in
                 if scale > 1.0 {

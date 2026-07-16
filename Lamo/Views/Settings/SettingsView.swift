@@ -6,7 +6,6 @@ struct SettingsView: View {
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var benchmark = DeviceBenchmark()
     @ObservedObject private var memory = MemoryService.shared
-    @State private var navigateToResults = false
     @Environment(\.modelContext) private var modelContext
     @State private var isImportingModel = false
     @State private var importError: String?
@@ -204,7 +203,7 @@ struct SettingsView: View {
     private var statusLabel: String {
         if providerManager.isEngineReady {
             return "Ready"
-        } else if let error = providerManager.engineError {
+        } else if providerManager.engineError != nil {
             return "Error"
         } else {
             return "Loading"

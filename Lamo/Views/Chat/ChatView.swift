@@ -14,11 +14,9 @@ struct ChatView: View {
         modelContext: ModelContext,
         onNewChat: (() -> Void)? = nil
     ) {
-        let provider = ProviderManager.shared.currentProvider
         _viewModel = State(wrappedValue: ChatViewModel(
             conversation: conversation,
-            modelContext: modelContext,
-            provider: provider
+            modelContext: modelContext
         ))
         self.onNewChat = onNewChat
     }

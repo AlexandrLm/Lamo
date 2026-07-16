@@ -396,7 +396,7 @@ struct ChatDropDelegate: DropDelegate {
 
 // MARK: - Image Resize Helper
 
-private extension UIImage {
+extension UIImage {
     func resizedForModel(maxDimension: CGFloat) -> UIImage {
         let size = self.size
         let longestSide = max(size.width, size.height)

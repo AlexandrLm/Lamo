@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 struct MessageBubble: View {
     let message: Message
@@ -219,8 +220,10 @@ struct MessageBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .fullScreenCover(isPresented: $showImageViewer) {
-            let uiImages = message.imagePaths.compactMap { path -> UIImage? in
-                ImageCache.shared.image(forKey: path)
+            let uiImages = message.imagePaths.map { path -> UIImage in
+                // Load at full resolution for the viewer (cache or disk)
+                if let cached = ImageCache.shared.image(forKey: path) { return cached }
+                return UIImage(contentsOfFile: path) ?? UIImage()
             }
             ImageViewer(images: uiImages, startIndex: selectedImageIndex)
                 .ignoresSafeArea()
@@ -412,9 +415,24 @@ private struct AsyncThumbnailView: View {
     private func loadInBackground(_ path: String) async -> UIImage? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let img = UIImage(contentsOfFile: path)
+                let img = Self.downsampledImage(at: path, maxPixelSize: 400)
                 continuation.resume(returning: img)
             }
         }
+    }
+
+    /// Downsample an image file using ImageIO — loads only what's needed for the target size.
+    private static func downsampledImage(at path: String, maxPixelSize: CGFloat) -> UIImage? {
+        let url = URL(fileURLWithPath: path)
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options) else { return nil }
+        let downsampleOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
