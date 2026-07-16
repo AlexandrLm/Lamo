@@ -221,32 +221,42 @@ struct MainView: View {
 
             // Startup gate: show loading overlay until engine is ready
             if !providerManager.isEngineReady {
-                VStack(spacing: 20) {
-                    if let error = providerManager.engineError {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.largeTitle)
-                            .foregroundStyle(.red)
-                        Text("Engine Error")
-                            .font(.headline)
-                        Text(error)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                    } else {
-                        ProgressView()
-                            .scaleEffect(1.3)
-                        VStack(spacing: 4) {
-                            Text("Loading model…")
-                                .font(.subheadline.weight(.medium))
-                            Text("This may take a moment")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                ZStack {
+                    LamoTheme.Colors.background.ignoresSafeArea()
+
+                    VStack(spacing: 0) {
+                        Spacer()
+
+                        VStack(spacing: LamoTheme.Spacing.lg) {
+                            if let error = providerManager.engineError {
+                                // Error state
+                                VStack(spacing: 12) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                    Text("Engine Error")
+                                        .font(.system(.body, design: .monospaced).weight(.medium))
+                                        .foregroundStyle(.white.opacity(0.6))
+                                    Text(error)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.white.opacity(0.35))
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(4)
+                                }
+                                .padding(LamoTheme.Spacing.xl)
+                                .frame(maxWidth: 320)
+                                .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+
+                            } else {
+                                // Loading state
+                                LoadingView(modelName: providerManager.currentModelDisplayName)
+                            }
                         }
+
+                        Spacer()
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(LamoTheme.Colors.background)
+                .transition(.opacity)
             }
         }
     }
@@ -310,6 +320,63 @@ struct MainView: View {
         guard let streaming = try? modelContext.fetch(descriptor) else { return }
         for msg in streaming { msg.isStreaming = false }
         try? modelContext.save()
+    }
+}
+
+// MARK: - Loading View
+
+private struct LoadingView: View {
+    let modelName: String
+    @State private var phase = 0
+    @State private var pulse = false
+
+    private let phases = [
+        "Validating model",
+        "Mapping memory",
+        "Initializing engine",
+        "Almost ready"
+    ]
+
+    var body: some View {
+        VStack(spacing: LamoTheme.Spacing.lg) {
+            // Pulsing ring
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.08), lineWidth: 2)
+                    .frame(width: 56, height: 56)
+                Circle()
+                    .trim(from: 0, to: 0.6)
+                    .stroke(.white.opacity(0.5), lineWidth: 2)
+                    .frame(width: 56, height: 56)
+                    .rotationEffect(.degrees(pulse ? 360 : 0))
+                    .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: pulse)
+            }
+
+            VStack(spacing: 6) {
+                Text(modelName)
+                    .font(.system(.body, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+
+                Text(phases[phase % phases.count])
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .animation(.easeInOut, value: phase)
+            }
+        }
+        .padding(LamoTheme.Spacing.xl)
+        .frame(maxWidth: 320)
+        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+        .onAppear {
+            pulse = true
+            startPhaseTimer()
+        }
+    }
+
+    private func startPhaseTimer() {
+        Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { _ in
+            withAnimation { phase += 1 }
+        }
     }
 }
 

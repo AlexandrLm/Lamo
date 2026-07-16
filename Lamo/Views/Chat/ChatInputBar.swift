@@ -17,6 +17,7 @@ struct ChatInputBar: View {
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var sendTrigger = false
+    @State private var pulseOpacity: Double = 0
     @ObservedObject private var provider = ProviderManager.shared
 
     var body: some View {
@@ -110,8 +111,17 @@ struct ChatInputBar: View {
                 } label: {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(provider.isEngineReady ? .white.opacity(0.6) : .orange)
+                            .fill(provider.isEngineReady ? .white.opacity(0.6) : .white.opacity(0.3))
                             .frame(width: 6, height: 6)
+                            .overlay {
+                                if !provider.isEngineReady {
+                                    Circle()
+                                        .fill(.white.opacity(0.6))
+                                        .frame(width: 6, height: 6)
+                                        .scaleEffect(1.8)
+                                        .opacity(pulseOpacity)
+                                }
+                            }
                         Text(modelDisplayName)
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white.opacity(0.7))
@@ -172,6 +182,15 @@ struct ChatInputBar: View {
         .onDrop(of: [.image, .fileURL], delegate: ChatDropDelegate(pendingImages: $pendingImages, pendingFiles: $pendingFiles))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
         .animation(.easeOut(duration: 0.15), value: canSend)
+        .onChange(of: provider.isEngineReady) { _, ready in
+            if ready { withAnimation { pulseOpacity = 0 } }
+        }
+        .onAppear {
+            guard !provider.isEngineReady else { return }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                pulseOpacity = 1
+            }
+        }
         .sheet(isPresented: $showModelPicker) {
             ModelPickerSheet(isPresented: $showModelPicker)
                 .presentationDetents([.medium])
