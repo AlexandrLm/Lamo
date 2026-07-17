@@ -39,10 +39,10 @@ final class MemoryService: ObservableObject {
     var currentConversationID: UUID?
 
     /// Max facts to inject into system prompt.
-    /// 50 facts × ~60 chars = ~3000 chars ≈ 750 tokens. Fits easily.
+    /// 50 facts × ~30 chars = ~1500 chars ≈ 375 tokens. Half the previous budget.
     private let maxFacts = 50
-    /// Max characters for the memory block in system prompt.
-    private let maxMemoryChars = 3000
+    /// Max chars for memory context injected into system prompt.
+    private let maxMemoryChars = 1500
 
     // MARK: - Init
 

@@ -346,11 +346,36 @@ final class ChatViewModel {
               let index = messages.firstIndex(where: { $0.id == id }) else { return }
         var calls = messages[index].toolCalls
         if let i = calls.lastIndex(where: { $0.name == name && $0.result == nil }) {
-            calls[i].result = result
+            calls[i].result = trimToolResult(result)
             messages[index].toolCalls = calls
             try? modelContext.save()
         }
     }
+
+    /// Truncate large fields in tool result JSON to save storage.
+    private func trimToolResult(_ json: String) -> String {
+        guard let data = json.data(using: .utf8),
+              var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return json
+        }
+        // For search results: truncate "content" in each result item
+        if var results = obj["results"] as? [[String: Any]] {
+            obj["results"] = results.map { item in
+                var m = item
+                if let c = m["content"] as? String, c.count > 300 {
+                    m["content"] = String(c.prefix(300)) + "…"
+                }
+                return m
+            }
+        }
+        // Also handle direct arrays (web_search returns array of results)
+        guard let trimmed = try? JSONSerialization.data(withJSONObject: obj),
+              let str = String(data: trimmed, encoding: .utf8) else {
+            return json
+        }
+        return str
+    }
+
     /// Finalize streaming state. Called on completion, error, or cancellation.
     private func finalizeStreaming(success: Bool? = nil, error: Error? = nil) {
         // Flush any remaining buffered text to the SwiftData model
@@ -371,7 +396,16 @@ final class ChatViewModel {
             messages[index].benchmark = benchmark
             pendingBenchmark = nil
         }
+        // Clear fileContent from older user messages — already processed by model
+        for i in 0..<messages.count {
+            if messages[i].role == .user && messages[i].id != messages.last(where: { $0.role == .user })?.id {
+                messages[i].fileContent = ""
+            }
+        }
         messages[index].isStreaming = false
+        // Free memory: clear fields that are only needed during generation
+        messages[index].thinkingContent = ""
+        messages[index].fileContent = ""
         streamingMessageID = nil
         isStreaming = false
         streamingBuffer = ""
