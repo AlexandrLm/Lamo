@@ -309,7 +309,8 @@ struct ThinkingView: View {
     let isStreaming: Bool
     @State private var isExpanded = false
 
-    private var accentColor: Color { Color(white: 0.55) }
+    /// Warm amber accent — contrasts with the dark theme, immediately visible as "thinking" vs answer.
+    private var accentColor: Color { Color(red: 0.94, green: 0.63, blue: 0.19) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -319,7 +320,7 @@ struct ThinkingView: View {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: "brain.head.profile")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(accentColor)
@@ -346,9 +347,6 @@ struct ThinkingView: View {
                             .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
                 }
-                .padding(.leading, 14)
-                .padding(.trailing, 12)
-                .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -356,9 +354,9 @@ struct ThinkingView: View {
             // Expandable thinking content
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {
-                    accentColor.opacity(0.2)
+                    accentColor.opacity(0.15)
                         .frame(height: 1)
-                        .padding(.horizontal, 14)
+                        .padding(.bottom, 6)
 
                     ScrollView(.vertical, showsIndicators: false) {
                         MarkdownRenderer(
@@ -370,26 +368,19 @@ struct ThinkingView: View {
                         .padding(.top, 2)
                     }
                     .frame(maxHeight: 300)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        // Accent left stripe
-        .background(alignment: .leading) {
-            accentColor.opacity(0.12)
-                .frame(width: 2.5)
-                .clipShape(.capsule)
-                .padding(.vertical, 6)
-                .padding(.leading, 6)
-        }
-        // Subtle background
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(accentColor.opacity(0.06))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.black.opacity(0.2))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(accentColor.opacity(0.35), lineWidth: 1)
+        )
     }
 }
 
