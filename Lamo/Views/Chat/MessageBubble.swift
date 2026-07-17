@@ -309,6 +309,19 @@ struct ThinkingView: View {
     let isStreaming: Bool
     @State private var isExpanded = false
 
+    private var accentColor: Color { Color(white: 0.55) }
+
+    /// Last meaningful line of thinking content — shows the model's most recent thought.
+    private var previewLine: String {
+        let lines = content
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard let last = lines.last else { return "" }
+        return String(last.prefix(120))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header — tap to expand/collapse
@@ -317,34 +330,36 @@ struct ThinkingView: View {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "brain")
+                HStack(spacing: 10) {
+                    Image(systemName: "brain.head.profile")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.white.opacity(0.8))
+                        .foregroundStyle(accentColor)
+                        .symbolEffect(.breathe, value: isStreaming)
 
-                    if isStreaming && !isExpanded {
-                        HStack(spacing: 4) {
-                            ProgressView()
-                                .tint(Color.white.opacity(0.6))
-                                .controlSize(.mini)
-                            Text("Thinking…")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        }
+                    if isStreaming && !isExpanded && !previewLine.isEmpty {
+                        // Live preview of the model's actual reasoning
+                        Text(previewLine)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        ProgressView()
+                            .tint(accentColor)
+                            .controlSize(.mini)
                     } else {
                         Text("Thinking")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                .padding(.horizontal, 12)
+                .padding(.leading, 14)
+                .padding(.trailing, 12)
                 .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
@@ -353,8 +368,9 @@ struct ThinkingView: View {
             // Expandable thinking content
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {
-                    Divider()
-                        .overlay(Color(.separator).opacity(0.1))
+                    accentColor.opacity(0.2)
+                        .frame(height: 1)
+                        .padding(.horizontal, 14)
 
                     ScrollView(.vertical, showsIndicators: false) {
                         MarkdownRenderer(
@@ -363,15 +379,29 @@ struct ThinkingView: View {
                             isStreaming: isStreaming
                         )
                         .font(.footnote)
+                        .padding(.top, 2)
                     }
                     .frame(maxHeight: 300)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: .rect(cornerRadius: 12))
+        // Accent left stripe
+        .background(alignment: .leading) {
+            accentColor.opacity(0.12)
+                .frame(width: 2.5)
+                .clipShape(.capsule)
+                .padding(.vertical, 6)
+                .padding(.leading, 6)
+        }
+        // Subtle background
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accentColor.opacity(0.06))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
