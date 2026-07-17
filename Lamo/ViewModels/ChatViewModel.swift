@@ -266,11 +266,9 @@ final class ChatViewModel {
                     self.streamingThinkingBuffer += thought
                     self.flushStreamingBuffer()
                 case .toolCall(let name, let params):
-                    self.streamingBuffer += "\n\n🔧 **\(name)**\n```json\n\(params)\n```\n"
-                    self.flushStreamingBuffer()
+                    self.addToolCall(name: name, params: params)
                 case .toolResult(let name, let result):
-                    self.streamingBuffer += "\n📋 **\(name)** →\n```\n\(result)\n```\n"
-                    self.flushStreamingBuffer()
+                    self.addToolResult(name: name, result: result)
                 case .benchmark(let data):
                     self.pendingBenchmark = data
                 case .loopDetected:
@@ -323,6 +321,28 @@ final class ChatViewModel {
         lastFlushTime = now
     }
 
+
+    // MARK: - Tool Call Tracking
+
+    private func addToolCall(name: String, params: String) {
+        guard let id = streamingMessageID,
+              let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        var calls = messages[index].toolCalls
+        calls.append(ToolCallRecord(name: name, params: params))
+        messages[index].toolCalls = calls
+        try? modelContext.save()
+    }
+
+    private func addToolResult(name: String, result: String) {
+        guard let id = streamingMessageID,
+              let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        var calls = messages[index].toolCalls
+        if let i = calls.lastIndex(where: { $0.name == name && $0.result == nil }) {
+            calls[i].result = result
+            messages[index].toolCalls = calls
+            try? modelContext.save()
+        }
+    }
     /// Finalize streaming state. Called on completion, error, or cancellation.
     private func finalizeStreaming(success: Bool? = nil, error: Error? = nil) {
         // Flush any remaining buffered text to the SwiftData model

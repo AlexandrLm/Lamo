@@ -239,6 +239,10 @@ struct MessageBubble: View {
                 ThinkingView(content: message.thinkingContent, isStreaming: message.isStreaming)
             }
 
+            if !message.toolCalls.isEmpty {
+                ToolCallsView(calls: message.toolCalls, isStreaming: message.isStreaming)
+            }
+
             MarkdownRenderer(text: message.content, textColor: LamoTheme.Colors.textPrimary, isStreaming: message.isStreaming && message.content.isEmpty)
         }
         .textSelection(.enabled)
@@ -246,7 +250,6 @@ struct MessageBubble: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
     // MARK: - Actions
 
     private func copyContent() {

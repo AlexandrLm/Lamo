@@ -1,6 +1,23 @@
 import Foundation
 import SwiftData
 
+/// A single tool invocation within a message — call and optional result.
+struct ToolCallRecord: Codable, Identifiable {
+    var id: UUID
+    var name: String
+    var params: String
+    var result: String?
+    var timestamp: Date
+
+    init(id: UUID = UUID(), name: String, params: String, result: String? = nil, timestamp: Date = .now) {
+        self.id = id
+        self.name = name
+        self.params = params
+        self.result = result
+        self.timestamp = timestamp
+    }
+}
+
 @Model
 final class Message {
     var id: UUID
@@ -35,8 +52,6 @@ final class Message {
     var benchmarkJSON: String?
 
     /// Cached decoded BenchmarkData — avoids JSON decode on every access.
-    /// @Transient so SwiftData doesn't persist it; no underscore prefix to
-    /// avoid collision with SwiftData's generated backing properties.
     @Transient private var benchmarkCache: BenchmarkData?
 
     var benchmark: BenchmarkData? {
@@ -59,6 +74,32 @@ final class Message {
         }
     }
 
+    /// JSON-encoded array of ToolCallRecord for this response.
+    var toolCallsJSON: String?
+
+    /// Decoded tool calls — cached for performance.
+    @Transient private var toolCallsCache: [ToolCallRecord]?
+
+    var toolCalls: [ToolCallRecord] {
+        get {
+            if let cached = toolCallsCache { return cached }
+            guard let json = toolCallsJSON,
+                  let data = json.data(using: .utf8) else { return [] }
+            let decoded = (try? JSONDecoder().decode([ToolCallRecord].self, from: data)) ?? []
+            toolCallsCache = decoded
+            return decoded
+        }
+        set {
+            toolCallsCache = newValue
+            guard let data = try? JSONEncoder().encode(newValue),
+                  let json = String(data: data, encoding: .utf8) else {
+                toolCallsJSON = nil
+                return
+            }
+            toolCallsJSON = json
+        }
+    }
+
     init(
         id: UUID = UUID(),
         content: String,
@@ -72,7 +113,8 @@ final class Message {
         attachedFileSizes: [String] = [],
         fileContent: String = "",
         conversation: Conversation? = nil,
-        benchmarkJSON: String? = nil
+        benchmarkJSON: String? = nil,
+        toolCallsJSON: String? = nil
     ) {
         self.id = id
         self.content = content
@@ -87,6 +129,7 @@ final class Message {
         self.fileContent = fileContent
         self.conversation = conversation
         self.benchmarkJSON = benchmarkJSON
+        self.toolCallsJSON = toolCallsJSON
     }
 }
 
