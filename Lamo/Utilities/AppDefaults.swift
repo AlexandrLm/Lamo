@@ -92,4 +92,5 @@ enum AppDefaults {
     static var toolShortcuts = UserDefault("tool_shortcuts", default: true)
     static var toolHealth = UserDefault("tool_health", default: true)
     static var toolCalendarAvailability = UserDefault("tool_calendar_availability", default: true)
+    static var toolCreatePlan = UserDefault("tool_create_plan", default: true)
 }

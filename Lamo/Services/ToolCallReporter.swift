@@ -22,9 +22,14 @@ actor ToolCallReporter {
     }
 
     func reportResult(name: String, result: Any) {
+        // Track plan progress (if a plan is active, mark this step)
+        let success = !isError(result)
+        Task { @MainActor in
+            AgenticLoopState.shared.recordToolCompletion(toolName: name, success: success)
+        }
+
         let jsonStr: String
         let cleaned = stripOptionals(result)
-        // Limit individual string values to keep JSON parseable
         let trimmed = trimStringValues(cleaned, maxLength: 2000)
         if let data = try? JSONSerialization.data(withJSONObject: trimmed, options: .prettyPrinted),
            let str = String(data: data, encoding: .utf8) {
@@ -33,6 +38,19 @@ actor ToolCallReporter {
             jsonStr = String(describing: result)
         }
         continuation?.yield(.toolResult(name: name, result: jsonStr))
+    }
+
+    /// Check if a tool result indicates an error.
+    private nonisolated func isError(_ result: Any) -> Bool {
+        if let dict = result as? [String: Any],
+           let error = dict["error"] as? String, !error.isEmpty {
+            return true
+        }
+        if let dict = result as? [String: Any],
+           let success = dict["success"] as? Bool, !success {
+            return true
+        }
+        return false
     }
 
     /// Recursively truncates string values longer than maxLength.

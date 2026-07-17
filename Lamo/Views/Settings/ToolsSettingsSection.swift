@@ -269,5 +269,13 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue },
             setEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue = $0 }
         ),
+        ToolInfo(
+            id: "create_plan",
+            displayName: "Plan Tasks",
+            description: "Break complex tasks into step-by-step plans and execute them in order.",
+            icon: "checklist",
+            isEnabled: { AppDefaults.toolCreatePlan.wrappedValue },
+            setEnabled: { AppDefaults.toolCreatePlan.wrappedValue = $0 }
+        ),
     ]
 }

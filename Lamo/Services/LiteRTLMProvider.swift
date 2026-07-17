@@ -153,6 +153,15 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             }
         }
 
+        // --- Inject plan progress scratchpad from previous turn (two-pass carryover) ---
+        let planSummary = await AgenticLoopState.shared.planSummary
+        if !planSummary.isEmpty {
+            systemPrompt += "\n\n\(planSummary)"
+        }
+        // Reset plan state for this new turn
+        await AgenticLoopState.shared.cancelPlan()
+        await AgenticLoopBudget.shared.reset()
+
         // --- Build LiteRT-LM messages ---
         let systemMessage = LiteRTLM.Message(systemPrompt, role: .system)
         var allMessages: [LiteRTLM.Message] = [systemMessage]
@@ -190,7 +199,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if AppDefaults.toolNotes.wrappedValue { allTools.append(NotesTool()) }
         if AppDefaults.toolShortcuts.wrappedValue { allTools.append(ShortcutsTool()) }
         if AppDefaults.toolHealth.wrappedValue { allTools.append(HealthTool()) }
-        if AppDefaults.toolCalendarAvailability.wrappedValue { allTools.append(CalendarAvailabilityTool()) }
+        if AppDefaults.toolCreatePlan.wrappedValue { allTools.append(PlannerTool()) }
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
         let tools = allTools
 
