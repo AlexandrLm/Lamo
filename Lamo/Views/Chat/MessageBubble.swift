@@ -311,17 +311,6 @@ struct ThinkingView: View {
 
     private var accentColor: Color { Color(white: 0.55) }
 
-    /// Last meaningful line of thinking content — shows the model's most recent thought.
-    private var previewLine: String {
-        let lines = content
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        guard let last = lines.last else { return "" }
-        return String(last.prefix(120))
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header — tap to expand/collapse
@@ -336,20 +325,16 @@ struct ThinkingView: View {
                         .foregroundStyle(accentColor)
                         .symbolEffect(.breathe, value: isStreaming)
 
-                    if isStreaming && !isExpanded && !previewLine.isEmpty {
-                        // Live preview of the model's actual reasoning
-                        Text(previewLine)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .contentTransition(.opacity)
-                            .animation(.easeInOut(duration: 0.12), value: previewLine)
-                            .shimmering(active: true)
-                        Spacer(minLength: 4)
-                        ProgressView()
-                            .tint(accentColor)
-                            .controlSize(.mini)
+                    if isStreaming && !isExpanded {
+                        HStack(spacing: 6) {
+                            Text("Thinking")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            ProgressView()
+                                .tint(accentColor)
+                                .controlSize(.mini)
+                        }
+                        Spacer()
                     } else {
                         Text("Thinking")
                             .font(.caption.weight(.medium))
@@ -408,45 +393,6 @@ struct ThinkingView: View {
     }
 }
 
-// MARK: - Shimmer Effect
-
-/// A moving highlight overlay that gives text a subtle "shiny" feel during streaming.
-struct ShimmerModifier: ViewModifier {
-    let active: Bool
-    @State private var isAnimating = false
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if active {
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .white.opacity(0.12),
-                            .white.opacity(0.18),
-                            .white.opacity(0.12),
-                            .clear,
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .offset(x: isAnimating ? 200 : -200)
-                    .mask(content)
-                    .onAppear {
-                        withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                            isAnimating = true
-                        }
-                    }
-                }
-            }
-    }
-}
-
-extension View {
-    func shimmering(active: Bool) -> some View {
-        modifier(ShimmerModifier(active: active))
-    }
-}
 
 // MARK: - Async Thumbnail Loader
 
