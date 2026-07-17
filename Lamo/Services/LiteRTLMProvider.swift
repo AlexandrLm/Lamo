@@ -184,8 +184,27 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if AppDefaults.toolDeviceInfo.wrappedValue { allTools.append(DeviceInfoTool()) }
         if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
         if AppDefaults.toolCreateReminder.wrappedValue { allTools.append(CreateReminderTool()) }
+        if AppDefaults.toolCodeSandbox.wrappedValue { allTools.append(CodeSandboxTool()) }
+        if AppDefaults.toolCalendar.wrappedValue { allTools.append(CalendarTool()) }
+        if AppDefaults.toolContacts.wrappedValue { allTools.append(ContactsTool()) }
+        if AppDefaults.toolNotes.wrappedValue { allTools.append(NotesTool()) }
+        if AppDefaults.toolShortcuts.wrappedValue { allTools.append(ShortcutsTool()) }
+        if AppDefaults.toolHealth.wrappedValue { allTools.append(HealthTool()) }
+        if AppDefaults.toolCalendarAvailability.wrappedValue { allTools.append(CalendarAvailabilityTool()) }
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
         let tools = allTools
+
+        // --- Configure agentic loop budget (KV-cache guard for multi-tool turns) ---
+        let toolDefTokens = allTools.count * 80  // rough: each tool JSON schema ~80 tokens
+        let conversationTokens = includedMessages.reduce(0) { acc, msg in
+            acc + (msg.content.count / 4)  // fast estimate; real counts already computed above
+        }
+        await AgenticLoopBudget.shared.configure(
+            totalBudget: effectiveMaxTokens,
+            systemOverhead: systemTokens + memoryTokens + toolDefTokens,
+            conversationSkeletonTokens: conversationTokens,
+            maxIterations: 5
+        )
 
         let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,

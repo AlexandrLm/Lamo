@@ -213,5 +213,61 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolThink.wrappedValue },
             setEnabled: { AppDefaults.toolThink.wrappedValue = $0 }
         ),
+        ToolInfo(
+            id: "code_sandbox",
+            displayName: "Code Sandbox",
+            description: "Execute JavaScript code in a secure sandbox for calculations, data analysis, and text processing.",
+            icon: "curlybraces",
+            isEnabled: { AppDefaults.toolCodeSandbox.wrappedValue },
+            setEnabled: { AppDefaults.toolCodeSandbox.wrappedValue = $0 }
+        ),
+        ToolInfo(
+            id: "calendar",
+            displayName: "Calendar",
+            description: "Read and create calendar events. Check your schedule for any date range.",
+            icon: "calendar",
+            isEnabled: { AppDefaults.toolCalendar.wrappedValue },
+            setEnabled: { AppDefaults.toolCalendar.wrappedValue = $0 }
+        ),
+        ToolInfo(
+            id: "contacts",
+            displayName: "Contacts",
+            description: "Search your device contacts by name, phone, email, or organization.",
+            icon: "person.crop.circle",
+            isEnabled: { AppDefaults.toolContacts.wrappedValue },
+            setEnabled: { AppDefaults.toolContacts.wrappedValue = $0 }
+        ),
+        ToolInfo(
+            id: "notes",
+            displayName: "Notes",
+            description: "Manage personal notes stored in Lamo. Create, search, read, and delete notes.",
+            icon: "note.text",
+            isEnabled: { AppDefaults.toolNotes.wrappedValue },
+            setEnabled: { AppDefaults.toolNotes.wrappedValue = $0 }
+        ),
+        ToolInfo(
+            id: "shortcuts",
+            displayName: "Shortcuts",
+            description: "Run Siri Shortcuts to control HomeKit, send messages, or automate tasks.",
+            icon: "bolt.fill",
+            isEnabled: { AppDefaults.toolShortcuts.wrappedValue },
+            setEnabled: { AppDefaults.toolShortcuts.wrappedValue = $0 }
+        ),
+        ToolInfo(
+            id: "health",
+            displayName: "Health",
+            description: "Read steps, heart rate, sleep, and weight from Apple Health (stays on device).",
+            icon: "heart.fill",
+            isEnabled: { AppDefaults.toolHealth.wrappedValue },
+            setEnabled: { AppDefaults.toolHealth.wrappedValue = $0 }
+        ),
+        ToolInfo(
+            id: "calendar_availability",
+            displayName: "Find Free Slots",
+            description: "Find available time slots in your calendar for scheduling meetings or planning.",
+            icon: "clock.badge.checkmark",
+            isEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue },
+            setEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue = $0 }
+        ),
     ]
 }

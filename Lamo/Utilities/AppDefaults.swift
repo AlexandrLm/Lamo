@@ -83,4 +83,13 @@ enum AppDefaults {
     static var toolWeather = UserDefault("tool_weather", default: true)
     static var toolThink = UserDefault("tool_think", default: true)
     static var toolCreateReminder = UserDefault("tool_create_reminder", default: true)
+
+    // MARK: Agent Tools (new)
+    static var toolCodeSandbox = UserDefault("tool_code_sandbox", default: true)
+    static var toolCalendar = UserDefault("tool_calendar", default: true)
+    static var toolContacts = UserDefault("tool_contacts", default: true)
+    static var toolNotes = UserDefault("tool_notes", default: true)
+    static var toolShortcuts = UserDefault("tool_shortcuts", default: true)
+    static var toolHealth = UserDefault("tool_health", default: true)
+    static var toolCalendarAvailability = UserDefault("tool_calendar_availability", default: true)
 }
