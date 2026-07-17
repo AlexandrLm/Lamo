@@ -52,12 +52,18 @@ struct ToolCallBlock: View {
 
     private var icon: String {
         switch call.name {
-        case "web_search": return "globe"; case "fetch_url": return "doc.text.magnifyingglass"
-        case "get_current_time": return "clock"; case "calculator": return "function"
-        case "open_url": return "safari"; case "wikipedia": return "book.closed"
-        case "get_location": return "location.fill"; case "device_info": return "iphone.gen3"
-        case "weather": return "cloud.sun.fill"; case "create_reminder": return "bell.badge.fill"
-        case "update_memory": return "brain.fill"; default: return "wrench.fill"
+        case "web_search": return "globe"
+        case "fetch_url": return "doc.text.magnifyingglass"
+        case "get_current_time": return "clock"
+        case "calculator": return "function"
+        case "open_url": return "safari"
+        case "wikipedia": return "book.closed"
+        case "get_location": return "location.fill"
+        case "get_device_info": return "iphone.gen3"
+        case "weather": return "cloud.sun.fill"
+        case "create_reminder": return "bell.badge.fill"
+        case "update_memory": return "brain.fill"
+        default: return "wrench.fill"
         }
     }
     private var name: String { call.name.replacingOccurrences(of: "_", with: " ").capitalized }
@@ -95,7 +101,7 @@ struct ToolResultView: View {
         case "calculator":      CalculatorResult(d: d)
         case "get_current_time": TimeCard(d: d)
         case "get_location":    LocationCard(d: d)
-        case "device_info":     DeviceCard(d: d)
+        case "get_device_info": DeviceCard(d: d)
         case "open_url":        OpenURLResult(d: d)
         case "create_reminder": ReminderResult(d: d)
         case "update_memory":   MemoryResult(d: d)
