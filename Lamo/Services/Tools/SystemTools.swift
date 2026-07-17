@@ -17,7 +17,7 @@ private func reportResult(_ name: String, _ result: Any) async {
 
 struct GetCurrentTimeTool: Tool {
     static let name = "get_current_time"
-    static let description = "Get the current date, time, day of week, timezone, and Unix timestamp. Supports querying any timezone or date. Use when you need to know what time it is — locally or anywhere in the world."
+    static let description = "Call when user asks about current time, date, day of week, today's date, or time in another timezone. Returns date, time, weekday, timezone, and Unix timestamp. Supports querying any timezone or future/past dates."
 
     @ToolParam(description: "IANA timezone name like 'Asia/Tokyo', 'Europe/London', 'America/New_York'. Leave empty for device timezone.")
     var timezone: String?
@@ -82,11 +82,10 @@ struct GetCurrentTimeTool: Tool {
 struct CalculatorTool: Tool {
     static let name = "calculator"
     static let description = """
-        Evaluate a mathematical expression. Supports +, -, *, /, %, ** (power), ! (factorial), \
-        sqrt, sin, cos, tan, asin, acos, atan, log, log2, ln, abs, ceil, floor, round, pi, e. \
-        Also supports percentages (e.g. "200 * 15%") and scientific notation (e.g. "1e6"). \
-        Example expressions: "2 + 3 * 4", "sqrt(144)", "sin(pi / 2)", "log(1000)", "5!", "200 * 15%", "1e6 / 2". \
-        Returns the numeric result. Use for any calculation to ensure accuracy.
+        Call when user asks to calculate, compute, evaluate math, or convert numbers. \
+        Supports +, -, *, /, %, ** (power), ! (factorial), sqrt, sin, cos, tan, asin, acos, atan, \
+        log, log2, ln, abs, ceil, floor, round, pi, e. Percentages: "200 * 15%". \
+        Scientific notation: "1e6". Example: "2 + 3 * 4", "sqrt(144)", "5!".
         """
 
     @ToolParam(description: "The mathematical expression to evaluate.")
@@ -476,10 +475,9 @@ struct GetLocationTool: Tool {
 struct WeatherTool: Tool {
     static let name = "weather"
     static let description = """
-        Get current weather conditions and forecast. Uses Open-Meteo (free, no API key). \
-        If no city is provided, auto-detects your GPS location. \
-        Returns temperature, humidity, wind speed, conditions, sunrise/sunset, \
-        and daily forecast with highs/lows and precipitation chance.
+        Call when user asks about weather, temperature, forecast, rain, snow, wind, humidity, or climate. \
+        Returns current conditions and multi-day forecast from Open-Meteo (free, no API key). \
+        If no city provided, auto-detects your GPS location.
         """
 
     @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
@@ -621,10 +619,10 @@ private enum WeatherError: LocalizedError {
 struct CreateReminderTool: Tool {
     static let name = "create_reminder"
     static let description = """
-        Create a reminder in the system Reminders app. Use when the user asks to be reminded about something. \
-        Requires calendar access permission — will ask on first use. \
+        Call when user asks to be reminded, set a reminder, alarm, or notification. \
+        Creates a reminder in the system Reminders app. \
         Date can be ISO 8601 (e.g. "2026-07-17T18:00:00") or relative \
-        (e.g. "tomorrow 10am", "in 30 minutes", "next Friday 3pm", "in 2 hours").
+        (e.g. "tomorrow 10am", "in 30 minutes", "next Friday 3pm").
         """
 
     @ToolParam(description: "The reminder title — what to remind about.")

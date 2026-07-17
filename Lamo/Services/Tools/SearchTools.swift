@@ -5,7 +5,7 @@ import LiteRTLM
 
 struct WebSearchTool: Tool {
     static let name = "web_search"
-    static let description = "Search the internet for current information. Returns titles, snippets, and URLs. Use when you need to find facts, news, or verify information. Supports time range filtering for recent results."
+    static let description = "Call when user asks about news, current events, facts, or information you don't know. Searches the internet. Returns titles, snippets, and URLs. Supports time range filtering for recent results."
 
     @ToolParam(description: "The search query to look up on the internet.")
     var query: String

@@ -274,17 +274,25 @@ final class ChatViewModel {
                 case .loopDetected:
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
+                        // Delete the botched partial message
                         if let msgIdx = messages.firstIndex(where: { $0.id == streamingMessageID }) {
                             modelContext.delete(messages[msgIdx])
                             messages.remove(at: msgIdx)
                         }
+                        // Reset streaming state
                         streamingTask?.cancel()
+                        streamingBuffer = ""
+                        streamingThinkingBuffer = ""
                         streamingMessageID = nil
                         isStreaming = false
+                        // Create a fresh message for the retry
+                        let retryMsg = Message(content: "[Retrying…]", role: .assistant, isStreaming: true, conversation: conversation)
+                        addMessage(retryMsg)
+                        streamingMessageID = retryMsg.id
                         startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
                         return
                     } else {
-                        finalizeStreaming(success: false, error: LamoError.engineInitFailed("Model stuck in a loop"))
+                        finalizeStreaming(success: false, error: LamoError.modelStuckInLoop)
                         return
                     }
                 case .done:

@@ -302,7 +302,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         let extraContext: [String: Any]? = ProviderManager.shared.thinkingMode
             ? ["enable_thinking": "true"] : nil
 
-        let repDetector = RepetitionDetector()
+        let repDetector = RepetitionDetector(windowSize: 2000, minBufferSize: 100, checkFrequency: 5)
 
         for try await chunk in conversation.sendMessageStream(message, extraContext: extraContext) {
             guard !Task.isCancelled else {
