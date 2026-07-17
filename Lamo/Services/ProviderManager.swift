@@ -49,6 +49,24 @@ final class ProviderManager: ObservableObject {
 
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
+        // Detect model size to estimate KV-cache memory per token
+        let kvMBPer1K: Double
+        if let fileAttrs = try? FileManager.default.attributesOfItem(atPath: modelPath),
+           let fileSize = fileAttrs[.size] as? Int64 {
+            let fileSizeGB = Double(fileSize) / 1_073_741_824
+            if litertLMUseGPU {
+                // GPU: model weights loaded into GPU memory, KV-cache extra
+                // E2B (2.6GB): ~280 MB/1K, E4B (3.7GB): ~600 MB/1K
+                kvMBPer1K = fileSizeGB < 3.0 ? 280.0 : 600.0
+            } else {
+                // CPU: model heavily memory-mapped, more room for KV-cache
+                kvMBPer1K = 150.0
+            }
+        } else {
+            // Fallback: conservative GPU estimate
+            kvMBPer1K = litertLMUseGPU ? 500.0 : 200.0
+        }
+
         let safetyFactor: Double
         if availableMB < 1500 {
             safetyFactor = 0.25
@@ -61,7 +79,7 @@ final class ProviderManager: ObservableObject {
         }
 
         let usableMB = availableMB * safetyFactor
-        let maxTokensFromMemory = max(512, Int(usableMB / 300.0 * 1024))
+        let maxTokensFromMemory = max(512, Int(usableMB / kvMBPer1K * 1024))
 
         let requested: Int
         if kvCacheAuto {
@@ -71,9 +89,8 @@ final class ProviderManager: ObservableObject {
         }
 
         let capped = min(requested, maxTokensFromMemory)
-
         let result = (capped / 256) * 256
-        LamoLogger.engine.debug("safeMaxTokens: available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor * 100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
+        LamoLogger.engine.debug("safeMaxTokens: kv=\(String(format: "%.0f", kvMBPer1K))MB/1K, available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor*100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
         return result
     }
 
