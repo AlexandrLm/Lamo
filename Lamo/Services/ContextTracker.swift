@@ -15,6 +15,7 @@ struct ContextTracker {
         let isInContext: Bool     // false = dropped (too old to fit in KV-cache)
         let tokenOffset: Int      // running token offset from start
         let isStreaming: Bool     // true = this message is being sent via sendMessageStream right now
+        let preview: String       // first ~80 chars of message content
     }
 
     let systemPromptTokens: Int
@@ -127,11 +128,10 @@ struct ContextTracker {
                 role: msg.role == .user ? "user" : "assistant",
                 charCount: msg.content.count,
                 tokenCount: tokens,
-                // Last message is always "in context" — it's sent via sendMessageStream.
-                // Other messages are in context only if they fit in the KV-cache budget.
                 isInContext: isLast || includedIDs.contains(msg.id),
                 tokenOffset: runningOffset,
-                isStreaming: isLast
+                isStreaming: isLast,
+                preview: String(msg.content.prefix(80))
             ))
             if !isLast { runningOffset += tokens }
         }

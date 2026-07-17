@@ -46,18 +46,8 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if viewModel.isStreaming {
-                    Button(action: { viewModel.stopGeneration() }) {
-                        Image(systemName: "stop.fill")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    ContextBarView(tracker: viewModel.contextTracker) {
-                        showContextDetail = true
-                    }
+                ContextBarView(tracker: viewModel.contextTracker) {
+                    showContextDetail = true
                 }
             }
         }
