@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @State private var vm = SettingsViewModel()
     @StateObject private var downloadManager = DownloadManager.shared
-    @StateObject private var benchmark = DeviceBenchmark()
     @ObservedObject private var memory = MemoryService.shared
     @Environment(\.modelContext) private var modelContext
     @State private var showResetAlert = false
@@ -60,7 +59,6 @@ struct SettingsView: View {
         case generation = "Inference"
         case memory = "Memory"
         case tools = "Tools"
-        case device = "Device"
     }
 
     // MARK: - Hero Card
@@ -92,17 +90,6 @@ struct SettingsView: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.35))
 
-            if let result = benchmark.result {
-                HStack(spacing: LamoTheme.Spacing.md) {
-                    deviceStat(value: result.chipName, label: "CHIP")
-                    deviceStat(
-                        value: String(format: "%.0f GB", result.ramGB),
-                        label: "RAM"
-                    )
-                    Spacer()
-                    tierBadge(result)
-                }
-            }
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,17 +123,6 @@ struct SettingsView: View {
         }
     }
 
-    private func deviceStat(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.system(.caption, design: .monospaced).bold())
-                .foregroundStyle(.white.opacity(0.8))
-            Text(label)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.3))
-                .textCase(.uppercase)
-        }
-    }
 
     // MARK: - Action Grid
 
@@ -188,9 +164,6 @@ struct SettingsView: View {
                 gridCard(icon: "wrench.and.screwdriver.fill", title: "Tools", subtitle: toolsSubtitle)
             }
 
-            NavigationLink(value: SettingsSection.device) {
-                gridCard(icon: "iphone", title: "Device", subtitle: gridSubtitle_device)
-            }
         }
     }
 
@@ -201,12 +174,6 @@ struct SettingsView: View {
         return "Select model"
     }
 
-    private var gridSubtitle_device: String {
-        if let result = benchmark.result {
-            return "\(result.chipName) · \(String(format: "%.0f", result.ramGB)) GB"
-        }
-        return "Not benchmarked"
-    }
     private var gridSubtitle_generation: String {
         "T:\(String(format: "%.1f", vm.temperature)) · K:\(vm.topK) · P:\(String(format: "%.2f", vm.topP))"
     }
@@ -335,8 +302,6 @@ struct SettingsView: View {
             MemorySettingsSection(vm: vm)
         case .tools:
             ToolsSettingsSection()
-        case .device:
-            DeviceSettingsSection()
         }
     }
 
@@ -346,29 +311,4 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
-    @ViewBuilder
-    private func tierBadge(_ result: DeviceBenchmark.BenchmarkResult) -> some View {
-        let color = tierColor(result.aiTierColor)
-
-        HStack(spacing: 4) {
-            Image(systemName: result.aiTierIcon)
-                .font(.caption)
-            Text(result.aiTierLabel)
-                .font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(color.opacity(0.15))
-        .foregroundStyle(color)
-        .clipShape(Capsule())
-    }
-
-    private func tierColor(_ colorString: String) -> Color {
-        switch colorString {
-        case "green": return .green
-        case "blue": return .blue
-        case "orange": return .orange
-        default: return .red
-        }
-    }
 }
