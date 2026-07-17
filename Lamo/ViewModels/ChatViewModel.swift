@@ -409,8 +409,7 @@ final class ChatViewModel {
         streamingThinkingBuffer = ""
         conversation.updatedAt = .now
         save()
-        // Free memory AFTER save: clear transient generation-only fields
-        messages[index].thinkingContent = ""
+        // Free memory AFTER save: clear fileContent (transient), keep thinking visible
         messages[index].fileContent = ""
         Task { await refreshContextTracker() }
         if success == true {
