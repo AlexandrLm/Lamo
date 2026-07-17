@@ -131,7 +131,10 @@ final class ProviderManager: ObservableObject {
 
     var cpuThreadCount: Int {
         get { AppDefaults.cpuThreadCount.wrappedValue }
-        set { AppDefaults.cpuThreadCount.wrappedValue = newValue }
+        set {
+            AppDefaults.cpuThreadCount.wrappedValue = newValue
+            invalidateEngine()
+        }
     }
 
     var topK: Int {
@@ -161,13 +164,21 @@ final class ProviderManager: ObservableObject {
         get { AppDefaults.kvCacheAuto.wrappedValue }
         set {
             AppDefaults.kvCacheAuto.wrappedValue = newValue
+            if newValue {
+                AppDefaults.maxNumTokens.wrappedValue = 0
+            } else if AppDefaults.maxNumTokens.wrappedValue == 0 {
+                AppDefaults.maxNumTokens.wrappedValue = 4096
+            }
             invalidateEngine()
         }
     }
 
     var speculativeDecoding: Bool {
         get { AppDefaults.speculativeDecoding.wrappedValue }
-        set { AppDefaults.speculativeDecoding.wrappedValue = newValue }
+        set {
+            AppDefaults.speculativeDecoding.wrappedValue = newValue
+            invalidateEngine()
+        }
     }
 
     var visualTokenBudget: Int {

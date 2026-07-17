@@ -6,6 +6,20 @@ struct GenerationComputeSection: View {
     @Bindable var vm: SettingsViewModel
     @State private var showSystemPrompt = false
 
+    // Mirror VM toggles/values so conditional content + sliders re-render reliably.
+    // @Observable computed properties backed by UserDefaults don't always
+    // trigger view updates through the Binding projection.
+    @State private var contextAuto: Bool
+    @State private var gpuOn: Bool
+    @State private var contextTokens: Double
+
+    init(vm: SettingsViewModel) {
+        self.vm = vm
+        _contextAuto = State(initialValue: vm.kvCacheAuto)
+        _gpuOn = State(initialValue: vm.useGPU)
+        _contextTokens = State(initialValue: Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens))
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: LamoTheme.Spacing.md) {
@@ -119,10 +133,11 @@ struct GenerationComputeSection: View {
             gpuRow
             thinDivider
 
-            if !vm.useGPU { cpuRow }
-            if !vm.useGPU { thinDivider }
+            if !gpuOn { cpuRow }
+            if !gpuOn { thinDivider }
 
             contextRow
+            if !contextAuto { contextSlider }
             thinDivider
             specDecRow
             thinDivider
@@ -131,8 +146,8 @@ struct GenerationComputeSection: View {
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-        .animation(.easeInOut(duration: 0.2), value: vm.useGPU)
-        .animation(.easeInOut(duration: 0.2), value: vm.kvCacheAuto)
+        .animation(.easeInOut(duration: 0.2), value: gpuOn)
+        .animation(.easeInOut(duration: 0.2), value: contextAuto)
     }
 
     private var gpuRow: some View {
@@ -141,11 +156,14 @@ struct GenerationComputeSection: View {
                 .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(.white)
             Spacer()
-            Toggle("", isOn: $vm.useGPU)
+            Toggle("", isOn: $gpuOn)
                 .labelsHidden()
                 .tint(LamoTheme.Colors.accent)
         }
         .padding(.vertical, 10)
+        .onChange(of: gpuOn) { _, newValue in
+            vm.useGPU = newValue
+        }
     }
 
     private var cpuRow: some View {
@@ -175,44 +193,51 @@ struct GenerationComputeSection: View {
     }
 
     private var contextRow: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Label("Context Window", systemImage: "memorychip")
-                    .font(.system(.subheadline, design: .monospaced))
-                    .foregroundStyle(.white)
-                Spacer()
-                Toggle("", isOn: $vm.kvCacheAuto)
-                    .labelsHidden()
-                    .tint(LamoTheme.Colors.accent)
-                Text(vm.kvCacheAuto ? "Auto" : "\(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens)")
-                    .font(.system(.caption, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .frame(minWidth: 36, alignment: .trailing)
-            }
-
-            if !vm.kvCacheAuto {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Max Tokens")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.4))
-                        Spacer()
-                        Text("\(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens)")
-                            .font(.system(.caption, design: .monospaced).weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-
-                    Slider(value: Binding(
-                        get: { Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens) },
-                        set: { vm.maxNumTokens = Int($0) }
-                    ), in: 1024...16384, step: 256)
-                        .tint(.white.opacity(0.5))
-                }
-                .padding(.bottom, 8)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+        HStack {
+            Label("Context Window", systemImage: "memorychip")
+                .font(.system(.subheadline, design: .monospaced))
+                .foregroundStyle(.white)
+            Spacer()
+            Text(contextAuto ? "Auto" : "\(Int(contextTokens))")
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.white.opacity(contextAuto ? 0.5 : 0.7))
+            Toggle("", isOn: $contextAuto)
+                .labelsHidden()
+                .tint(LamoTheme.Colors.accent)
         }
         .padding(.vertical, 10)
+        .onChange(of: contextAuto) { _, newValue in
+            vm.kvCacheAuto = newValue
+            if !newValue {
+                contextTokens = Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens)
+            }
+        }
+    }
+
+    private var contextSlider: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Slider(value: $contextTokens, in: 1024...16384, step: 256)
+                .tint(.white.opacity(0.5))
+
+            HStack(spacing: 0) {
+                Text("1024")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
+                Spacer()
+                Text("\(Int(contextTokens))")
+                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+                Spacer()
+                Text("16384")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
+            }
+        }
+        .padding(.bottom, 10)
+        .onChange(of: contextTokens) { _, newValue in
+            vm.maxNumTokens = Int(newValue)
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     private var specDecRow: some View {

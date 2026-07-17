@@ -11,13 +11,13 @@ final class SettingsViewModel {
     // MARK: - Engine Settings
 
     var useGPU: Bool {
-        get { AppDefaults.useGPU.wrappedValue }
-        set { AppDefaults.useGPU.wrappedValue = newValue }
+        get { providerManager.litertLMUseGPU }
+        set { providerManager.litertLMUseGPU = newValue }
     }
 
     var cpuThreadCount: Int {
-        get { AppDefaults.cpuThreadCount.wrappedValue }
-        set { AppDefaults.cpuThreadCount.wrappedValue = newValue }
+        get { providerManager.cpuThreadCount }
+        set { providerManager.cpuThreadCount = newValue }
     }
 
     // MARK: - Model
@@ -49,27 +49,20 @@ final class SettingsViewModel {
     // MARK: - KV-Cache
 
     var maxNumTokens: Int {
-        get { AppDefaults.maxNumTokens.wrappedValue }
-        set { AppDefaults.maxNumTokens.wrappedValue = newValue }
+        get { providerManager.maxNumTokens }
+        set { providerManager.maxNumTokens = newValue }
     }
 
-    /// Whether KV-cache is set to auto (use model default).
     var kvCacheAuto: Bool {
-        get { AppDefaults.kvCacheAuto.wrappedValue }
-        set {
-            AppDefaults.kvCacheAuto.wrappedValue = newValue
-            if newValue {
-                // Set a very high value to signal "unlimited"
-                AppDefaults.maxNumTokens.wrappedValue = 0
-            }
-        }
+        get { providerManager.kvCacheAuto }
+        set { providerManager.kvCacheAuto = newValue }
     }
 
     // MARK: - Speculative Decoding
 
     var speculativeDecoding: Bool {
-        get { AppDefaults.speculativeDecoding.wrappedValue }
-        set { AppDefaults.speculativeDecoding.wrappedValue = newValue }
+        get { providerManager.speculativeDecoding }
+        set { providerManager.speculativeDecoding = newValue }
     }
 
     // MARK: - Vision
