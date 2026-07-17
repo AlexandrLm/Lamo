@@ -402,6 +402,7 @@ private enum LocationError: LocalizedError {
 // MARK: - Weather
 
 struct WeatherTool: Tool {
+    static let name = "weather"
     static let description = """
         Get current weather conditions. Uses Open-Meteo (free, no API key). \
         If no city is provided, auto-detects your GPS location. \
@@ -456,20 +457,6 @@ struct WeatherTool: Tool {
             return Coords(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude, name: name)
         }
         throw WeatherError.cityNotFound
-    }
-        """
-
-    @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
-    var city: String = ""
-
-    func run() async throws -> Any {
-        let coords: Coords
-        if city.isEmpty {
-            coords = try await detectLocation()
-        } else {
-            coords = try await geocode(city: city)
-        }
-        return try await fetchWeather(lat: coords.lat, lon: coords.lon, cityName: coords.name)
     }
 
     private func geocode(city: String) async throws -> Coords {
