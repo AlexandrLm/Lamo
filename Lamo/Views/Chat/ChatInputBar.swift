@@ -52,26 +52,15 @@ struct ChatInputBar: View {
             HStack(spacing: 10) {
                 // Plus button — menu with Camera + Photo Library + Files
                 Menu {
-                    Button {
-                        showCamera = true
-                    } label: {
+                    Button { showCamera = true } label: {
                         Label("Camera", systemImage: "camera.fill")
                     }
-                        .accessibilityLabel("Take photo")
-
-                    Button {
-                        showPhotoPicker = true
-                    } label: {
+                    Button { showPhotoPicker = true } label: {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
-                        .accessibilityLabel("Attach image")
-
-                    Button {
-                        showFileImporter = true
-                    } label: {
+                    Button { showFileImporter = true } label: {
                         Label("Files", systemImage: "doc")
                     }
-                        .accessibilityLabel("Attach file")
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "plus")
@@ -92,36 +81,35 @@ struct ChatInputBar: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Attach")
-                .onChange(of: photoPickerItems) {
-                    guard !photoPickerItems.isEmpty else { return }
-                    Task {
-                        for item in photoPickerItems {
-                            if let data = try? await item.loadTransferable(type: Data.self),
-                               let image = UIImage(data: data) {
-                                pendingImages.append(image)
-                            }
-                        }
-                        photoPickerItems = []
-                    }
-                }
 
+                // Thinking mode — clear toggle with colored ring
                 Button {
-                    showModelPicker = true
+                    withAnimation(.spring(response: 0.3)) {
+                        provider.thinkingMode.toggle()
+                    }
                 } label: {
+                    Image(systemName: provider.thinkingMode ? "brain.head.profile.fill" : "brain.head.profile")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(provider.thinkingMode ? .white : .white.opacity(0.3))
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(provider.thinkingMode ? LamoTheme.Colors.accent.opacity(0.2) : Color.white.opacity(0.05))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(provider.thinkingMode ? LamoTheme.Colors.accent.opacity(0.6) : Color.white.opacity(0.1), lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(provider.thinkingMode ? "Thinking on" : "Thinking off")
+
+                // Model picker
+                Button { showModelPicker = true } label: {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(provider.isEngineReady ? .white.opacity(0.6) : .white.opacity(0.3))
                             .frame(width: 6, height: 6)
-                            .overlay {
-                                if !provider.isEngineReady {
-                                    Circle()
-                                        .fill(.white.opacity(0.6))
-                                        .frame(width: 6, height: 6)
-                                        .scaleEffect(1.8)
-                                        .opacity(pulseOpacity)
-                                }
-                            }
                         Text(modelDisplayName)
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white.opacity(0.7))
@@ -132,7 +120,6 @@ struct ChatInputBar: View {
                     .glassEffect(in: .capsule)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(modelDisplayName)
 
                 Spacer()
 
@@ -146,7 +133,6 @@ struct ChatInputBar: View {
                             .background(Color.white, in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Stop")
                     .transition(.scale.combined(with: .opacity))
                 } else if canSend {
                     Button(action: {
@@ -161,7 +147,6 @@ struct ChatInputBar: View {
                             .background(Color.white, in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Send")
                     .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
                     .transition(.scale.combined(with: .opacity))
                 } else {
@@ -190,11 +175,6 @@ struct ChatInputBar: View {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 pulseOpacity = 1
             }
-        }
-        .sheet(isPresented: $showModelPicker) {
-            ModelPickerSheet(isPresented: $showModelPicker)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraView(image: Binding(
@@ -228,15 +208,21 @@ struct ChatInputBar: View {
                 LamoLogger.ui.error("File import failed: \(error)")
             }
         }
-    }
-
-    private var modelDisplayName: String {
-        let name = provider.currentModelDisplayName
-        return name.isEmpty ? "No Model" : name
+        .sheet(isPresented: $showModelPicker) {
+            ModelPickerPopover(isPresented: $showModelPicker)
+        }
     }
 
     private var canSend: Bool {
         provider.isEngineReady && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty)
+    }
+
+    private var modelDisplayName: String {
+        guard let path = provider.litertLMModelPath else { return "No model" }
+        return (path as NSString).lastPathComponent
+            .replacingOccurrences(of: ".litertlm", with: "")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
     }
 
     // MARK: - Pending Images Preview
@@ -412,11 +398,12 @@ extension UIImage {
     }
 }
 
-// MARK: - Model Picker Sheet
+// MARK: - Model Picker
 
-struct ModelPickerSheet: View {
+struct ModelPickerPopover: View {
     @Binding var isPresented: Bool
     @ObservedObject private var provider = ProviderManager.shared
+    @State private var modelInfos: [String: ModelInfo] = [:]
 
     private var availableModels: [(displayName: String, path: String)] {
         ProviderManager.listModels().map { filename in
@@ -430,90 +417,156 @@ struct ModelPickerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !availableModels.isEmpty {
-                    Section {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("Model").font(.headline).foregroundStyle(.primary)
+                Spacer()
+                Button("Done") { isPresented = false }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(LamoTheme.Colors.accent)
+            }
+            .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
+
+            // Model cards
+            ScrollView {
+                VStack(spacing: 10) {
+                    if availableModels.isEmpty {
+                        emptyState
+                    } else {
                         ForEach(availableModels, id: \.path) { model in
-                            Button {
-                                provider.switchModel(modelPath: model.path)
-                                isPresented = false
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "cpu")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 32, height: 32)
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(model.displayName)
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(.primary)
-                                        Text("On-device")
-                                            .font(.caption2)
-                                            .foregroundStyle(.tertiary)
-                                    }
-
-                                    Spacer()
-
-                                    if provider.litertLMModelPath == model.path {
-                                        Image(systemName: "checkmark")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            .tint(.primary)
+                            modelCard(model)
                         }
-                    } header: {
-                        Text("Available Models")
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+
+            // Status bar
+            statusBar
+        }
+        .background(LamoTheme.Colors.background)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Model Card
+
+    private func modelCard(_ model: (displayName: String, path: String)) -> some View {
+        let isSelected = provider.litertLMModelPath == model.path
+        let info = modelInfos[model.path]
+
+        return Button {
+            provider.switchModel(modelPath: model.path)
+            isPresented = false
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    // Model icon
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isSelected ? LamoTheme.Colors.accent.opacity(0.15) : Color.white.opacity(0.05))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "cpu")
+                            .font(.system(size: 18))
+                            .foregroundStyle(isSelected ? LamoTheme.Colors.accent : .secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.displayName)
+                            .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(info?.fileSizeString ?? "On-device")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
+
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(LamoTheme.Colors.accent)
                     }
                 }
 
-                Section {
-                    Toggle(isOn: Binding(
-                        get: { provider.thinkingMode },
-                        set: { provider.thinkingMode = $0 }
-                    )) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Thinking Mode")
-                                Text("Extended reasoning before answering")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        } icon: {
-                            Image(systemName: "brain")
-                                .foregroundStyle(provider.thinkingMode ? .white.opacity(0.7) : .secondary)
-                        }
-                    }
-                    .tint(.white.opacity(0.5))
-                }
-
-                Section {
-                    if provider.isEngineReady {
-                        Label("Model loaded", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else if let error = provider.engineError {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .font(.caption)
-                    } else if provider.litertLMModelPath != nil {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text("Loading…").foregroundStyle(.secondary)
+                // Capability badges
+                if let info {
+                    HStack(spacing: 6) {
+                        ForEach(capabilityBadges(for: info), id: \.self) { badge in
+                            Text(badge)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.06)))
                         }
                     }
                 }
             }
-            .navigationTitle("Model")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { isPresented = false }
-                        .fontWeight(.semibold)
-                }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isSelected ? LamoTheme.Colors.accent.opacity(0.06) : Color.white.opacity(0.03))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isSelected ? LamoTheme.Colors.accent.opacity(0.3) : Color.white.opacity(0.06), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onAppear {
+            if modelInfos[model.path] == nil {
+                modelInfos[model.path] = ModelInfo.from(path: model.path)
             }
         }
+    }
+
+    private func capabilityBadges(for info: ModelInfo) -> [String] {
+        var badges: [String] = []
+        if info.hasSpeculativeDecoding { badges.append("MTP") }
+        return badges
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "tray").font(.system(size: 28)).foregroundStyle(.tertiary)
+            Text("No models downloaded").font(.subheadline).foregroundStyle(.tertiary)
+            Text("Download a model in Settings to get started").font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 60)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Status Bar
+
+    private var statusBar: some View {
+        HStack(spacing: 8) {
+            if provider.isEngineReady {
+                Circle().fill(LamoTheme.Colors.accent).frame(width: 6, height: 6)
+                Text(modelDisplayName).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                Text("· ready").font(.caption2).foregroundStyle(LamoTheme.Colors.accent.opacity(0.7))
+            } else if let error = provider.engineError {
+                Circle().fill(Color.orange).frame(width: 6, height: 6)
+                Text(error).font(.caption2).foregroundStyle(.orange.opacity(0.8)).lineLimit(1)
+            } else if provider.litertLMModelPath != nil {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text("Loading…").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Circle().fill(Color.white.opacity(0.2)).frame(width: 6, height: 6)
+                Text("No model selected").font(.caption2).foregroundStyle(.tertiary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .background(Color.white.opacity(0.03))
+    }
+
+    private var modelDisplayName: String {
+        guard let path = provider.litertLMModelPath else { return "" }
+        return (path as NSString).lastPathComponent
+            .replacingOccurrences(of: ".litertlm", with: "")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
     }
 }
