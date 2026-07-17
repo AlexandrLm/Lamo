@@ -146,7 +146,7 @@ struct DeepResearchTool: Tool {
     static let description = "Perform multi-step research on a topic. Searches multiple queries, reads top sources, and returns structured findings. Use for complex questions, fact-checking, comparisons, or when you need thorough analysis from multiple sources."
 
     @ToolParam(description: "The research question or topic to investigate.")
-    var question: String
+    var question: String?
 
     @ToolParam(description: "Comma-separated search queries to try. Generate 2-4 different queries that approach the topic from different angles.")
     var queries: String
@@ -221,7 +221,7 @@ struct DeepResearchTool: Tool {
         }
 
         return [
-            "question": question,
+            "question": question ?? queryList.first ?? "",
             "queries_used": queryList,
             "sources_found": uniqueResults.count,
             "sources_read": contentMap.count,
