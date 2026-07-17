@@ -50,12 +50,14 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         AsyncStream { continuation in
             let provider = self
             let task = Task {
+                await ToolCallReporter.shared.register(continuation: continuation)
                 do {
                     try await provider.runInference(messages: messages, continuation: continuation)
                 } catch {
                     guard !Task.isCancelled else { return }
                     continuation.yield(.error(error))
                 }
+                await ToolCallReporter.shared.reset()
             }
             continuation.onTermination = { _ in
                 task.cancel()

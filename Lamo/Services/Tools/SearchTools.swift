@@ -14,9 +14,12 @@ struct WebSearchTool: Tool {
     var maxResults: Int = 5
 
     func run() async throws -> Any {
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: "{\"query\": \"\(query)\", \"maxResults\": \(maxResults)}")
+
         let searchResults = try await SearchProvider.shared.search(query: query, maxResults: maxResults)
         let shouldFetch = AppDefaults.webAutoFetch.wrappedValue
 
+        let result: Any
         if shouldFetch && !searchResults.isEmpty {
             let topResults = Array(searchResults.prefix(3))
             let urls = topResults.compactMap { result -> URL? in
@@ -27,43 +30,31 @@ struct WebSearchTool: Tool {
             let fetchedContents = await withTaskGroup(of: (Int, String?).self) { group in
                 for (index, url) in urls.enumerated() {
                     group.addTask {
-                        do {
-                            let content = try await WebFetcher.fetch(url: url)
-                            return (index, content)
-                        } catch {
-                            return (index, nil)
-                        }
+                        do { let c = try await WebFetcher.fetch(url: url); return (index, c) }
+                        catch { return (index, nil) }
                     }
                 }
                 var results: [(Int, String?)] = []
-                for await result in group {
-                    results.append(result)
-                }
+                for await r in group { results.append(r) }
                 return results
             }
 
             var contentMap: [Int: String] = [:]
-            for (index, content) in fetchedContents {
-                if let content { contentMap[index] = content }
-            }
+            for (index, content) in fetchedContents { if let content { contentMap[index] = content } }
 
             var enrichedResults: [[String: Any]] = []
-            for (i, result) in searchResults.enumerated() {
-                var enriched: [String: Any] = [
-                    "title": result["title"] ?? "",
-                    "snippet": result["snippet"] ?? "",
-                    "url": result["url"] ?? "",
-                ]
-                if let content = contentMap[i] {
-                    enriched["content"] = content
-                }
+            for (i, sr) in searchResults.enumerated() {
+                var enriched: [String: Any] = ["title": sr["title"] ?? "", "snippet": sr["snippet"] ?? "", "url": sr["url"] ?? ""]
+                if let content = contentMap[i] { enriched["content"] = content }
                 enrichedResults.append(enriched)
             }
-
-            return enrichedResults
+            result = enrichedResults
+        } else {
+            result = searchResults
         }
 
-        return searchResults
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
+        return result
     }
 }
 
@@ -77,48 +68,38 @@ struct FetchUrlTool: Tool {
     var url: String
 
     func run() async throws -> Any {
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: "{\"url\": \"\(url)\"}")
+
         guard let fetchURL = URL(string: url) else {
+            let err: [String: Any] = ["error": "Invalid URL"]
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(err)")
             throw FetchError.invalidURL
         }
 
-        // Check cache first — avoids re-fetching the same URL within a conversation
         if let cached = URLCacheStore.shared.content(for: url) {
-            return [
-                "content": cached,
-                "url": url,
-                "source": "cache"
-            ] as [String: Any]
+            let result: [String: Any] = ["content": cached, "url": url, "source": "cache"]
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
+            return result
         }
 
         let result = try await WebFetcher.fetchStructured(url: fetchURL)
-
         var output: [String: Any] = [:]
-        if let title = result.title, !title.isEmpty {
-            output["title"] = title
-        }
-        if let description = result.description, !description.isEmpty {
-            output["description"] = description
-        }
-        if let contentType = result.contentType {
-            output["type"] = contentType
-        }
+        if let title = result.title, !title.isEmpty { output["title"] = title }
+        if let description = result.description, !description.isEmpty { output["description"] = description }
+        if let contentType = result.contentType { output["type"] = contentType }
         output["content"] = result.content
         output["url"] = url
 
-        // Cache the fetched content
-        if !result.content.isEmpty {
-            URLCacheStore.shared.setContent(result.content, for: url)
-        }
+        if !result.content.isEmpty { URLCacheStore.shared.setContent(result.content, for: url) }
 
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(output)")
         return output
     }
 }
 
-
 enum FetchError: LocalizedError {
     case invalidURL
     case invalidEncoding
-
     var errorDescription: String? {
         switch self {
         case .invalidURL: return "Invalid URL"

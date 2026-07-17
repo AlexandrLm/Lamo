@@ -27,19 +27,26 @@ struct UpdateMemoryTool: Tool {
         let hasForget = forget != nil && !(forget?.isEmpty ?? true)
         let hasSummary = summary != nil && !(summary?.isEmpty ?? true)
 
+        var parts: [String] = []
+        if let f = facts { parts.append("facts: [\(f.count) items]") }
+        if let f = forget { parts.append("forget: [\(f.count) items]") }
+        if summary != nil { parts.append("summary present") }
+        let paramsDesc = parts.joined(separator: ", ")
+
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: "{\(paramsDesc)}")
+
         guard hasFacts || hasForget || hasSummary else {
-            return ["status": "noop", "info": "No memory changes provided"]
+            let result: [String: Any] = ["status": "noop", "info": "No memory changes provided"]
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
+            return result
         }
 
-        if hasFacts, let facts = facts {
-            await MemoryService.shared.storeFacts(facts)
-        }
-        if hasForget, let forget = forget {
-            await MemoryService.shared.removeFacts(forget)
-        }
-        if hasSummary, let summary = summary {
-            await MemoryService.shared.updateConversationSummary(summary)
-        }
-        return ["status": "saved"]
+        if hasFacts, let facts = facts { await MemoryService.shared.storeFacts(facts) }
+        if hasForget, let forget = forget { await MemoryService.shared.removeFacts(forget) }
+        if hasSummary, let summary = summary { await MemoryService.shared.updateConversationSummary(summary) }
+
+        let result: [String: Any] = ["status": "saved"]
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
+        return result
     }
 }

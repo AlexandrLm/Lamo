@@ -4,6 +4,42 @@ import UIKit
 import EventKit
 import CoreLocation
 
+// MARK: - Helpers
+
+private func report(_ name: String, params: String) async {
+    await ToolCallReporter.shared.reportCall(name: name, params: params)
+}
+
+private func reportResult(_ name: String, _ result: Any) async {
+    let text: String
+    if let dict = result as? [String: Any] {
+        text = formatDict(dict)
+    } else if let arr = result as? [Any] {
+        text = "[\n" + arr.prefix(3).map { "  \($0)" }.joined(separator: ",\n") + "\n]"
+    } else {
+        text = "\(result)"
+    }
+    await ToolCallReporter.shared.reportResult(name: name, result: text)
+}
+
+private func formatDict(_ dict: [String: Any], indent: Int = 0) -> String {
+    let pad = String(repeating: "  ", count: indent)
+    let entries = dict
+        .sorted { $0.key < $1.key }
+        .compactMap { (key, value) -> String? in
+        let val: String
+        if let nested = value as? [String: Any] {
+            val = formatDict(nested, indent: indent + 1)
+        } else if let arr = value as? [Any] {
+            val = "[\n" + arr.prefix(3).map { "\(pad)    \($0)" }.joined(separator: ",\n") + "\n\(pad)  ]"
+        } else {
+            val = "\(value)"
+        }
+        return "\(pad)  \(key): \(val)"
+    }
+    return "{\n" + entries.joined(separator: ",\n") + "\n\(pad)}"
+}
+
 // MARK: - Get Current Time
 
 struct GetCurrentTimeTool: Tool {
@@ -11,6 +47,8 @@ struct GetCurrentTimeTool: Tool {
     static let description = "Get the current date, time, day of week, timezone, and Unix timestamp. Use when you need to know what time it is now."
 
     func run() async throws -> Any {
+        await report(Self.name, params: "{}")
+
         let now = Date()
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -26,17 +64,17 @@ struct GetCurrentTimeTool: Tool {
         let weekday = weekdayFormatter.string(from: now)
 
         let tz = TimeZone.current
-        let tzName = tz.identifier
-        let tzOffset = tz.secondsFromGMT() / 3600
 
-        return [
+        let result: [String: Any] = [
             "iso_date": dateStr,
             "time": timeStr,
             "weekday": weekday,
-            "timezone": tzName,
-            "utc_offset_hours": tzOffset,
+            "timezone": tz.identifier,
+            "utc_offset_hours": tz.secondsFromGMT() / 3600,
             "unix_timestamp": Int(now.timeIntervalSince1970),
-        ] as [String: Any]
+        ]
+        await reportResult(Self.name, result)
+        return result
     }
 }
 
@@ -54,6 +92,8 @@ struct CalculatorTool: Tool {
     var expression: String
 
     func run() async throws -> Any {
+        await report(Self.name, params: "{\"expression\": \"\(expression)\"}")
+
         let cleaned = expression
             .replacingOccurrences(of: "×", with: "*")
             .replacingOccurrences(of: "÷", with: "/")
@@ -61,30 +101,28 @@ struct CalculatorTool: Tool {
             .trimmingCharacters(in: .whitespaces)
 
         guard !cleaned.isEmpty else {
-            return ["error": "Empty expression"]
+            let result: [String: Any] = ["error": "Empty expression"]
+            await reportResult(Self.name, result)
+            return result
         }
 
         do {
-            let result = try evaluateMath(cleaned)
-            return [
-                "expression": expression,
-                "result": result,
-            ] as [String: Any]
+            let value = try evaluateMath(cleaned)
+            let result: [String: Any] = ["expression": expression, "result": value]
+            await reportResult(Self.name, result)
+            return result
         } catch {
-            return [
-                "expression": expression,
-                "error": "\(error)",
-            ] as [String: Any]
+            let result: [String: Any] = ["expression": expression, "error": "\(error)"]
+            await reportResult(Self.name, result)
+            return result
         }
     }
 
     private func evaluateMath(_ expr: String) throws -> Double {
         var prepared = expr
-        // Replace constants
         prepared = prepared.replacingOccurrences(of: "pi", with: "\(Double.pi)")
         prepared = prepared.replacingOccurrences(of: "e", with: "\(M_E)")
 
-        // Replace ** (power) with calls to pow()
         while let range = prepared.range(of: #"(\d+\.?\d*)\s*\*\*\s*(\d+\.?\d*)"#, options: .regularExpression) {
             let match = String(prepared[range])
             let parts = match.components(separatedBy: "**")
@@ -93,37 +131,25 @@ struct CalculatorTool: Tool {
                   let exp = Double(parts[1].trimmingCharacters(in: .whitespaces)) else {
                 throw CalcError.invalidExpression
             }
-            let result = pow(base, exp)
-            prepared.replaceSubrange(range, with: "\(result)")
+            prepared.replaceSubrange(range, with: "\(pow(base, exp))")
         }
 
-        // Replace function calls with computed values
         let functions: [(String, (Double) -> Double)] = [
-            ("sqrt", { sqrt(max(0, $0)) }),
-            ("sin", { sin($0) }),
-            ("cos", { cos($0) }),
-            ("tan", { tan($0) }),
-            ("log", { log10(max(0.000001, $0)) }),
-            ("log2", { log2(max(0.000001, $0)) }),
-            ("ln", { log(max(0.000001, $0)) }),
-            ("abs", { abs($0) }),
-            ("ceil", { ceil($0) }),
-            ("floor", { floor($0) }),
-            ("round", { round($0) }),
+            ("sqrt", { sqrt(max(0, $0)) }), ("sin", sin), ("cos", cos), ("tan", tan),
+            ("log", { log10(max(0.000001, $0)) }), ("log2", { log2(max(0.000001, $0)) }),
+            ("ln", { log(max(0.000001, $0)) }), ("abs", abs), ("ceil", ceil),
+            ("floor", floor), ("round", round),
         ]
-
         for (name, fn) in functions {
             while let range = prepared.range(of: "\(name)\\((.*?)\\)", options: .regularExpression) {
                 let match = String(prepared[range])
                 guard let argStart = match.firstIndex(of: "(") else { break }
                 let argStr = String(match[match.index(after: argStart)..<match.index(before: match.endIndex)])
                 guard let arg = Double(argStr.trimmingCharacters(in: .whitespaces)) else { break }
-                let result = fn(arg)
-                prepared.replaceSubrange(range, with: "\(result)")
+                prepared.replaceSubrange(range, with: "\(fn(arg))")
             }
         }
 
-        // Final evaluation with NSExpression
         let nsExpr = NSExpression(format: prepared)
         guard let result = nsExpr.expressionValue(with: nil, context: nil) as? NSNumber else {
             throw CalcError.invalidExpression
@@ -147,18 +173,19 @@ struct OpenURLTool: Tool {
     var url: String
 
     func run() async throws -> Any {
+        await report(Self.name, params: "{\"url\": \"\(url)\"}")
+
         guard let nsurl = URL(string: url),
               nsurl.scheme == "http" || nsurl.scheme == "https" else {
-            return ["error": "Invalid URL. Must start with http:// or https://"]
+            let result: [String: Any] = ["error": "Invalid URL. Must start with http:// or https://"]
+            await reportResult(Self.name, result)
+            return result
         }
 
-        let opened = await MainActor.run {
-            UIApplication.shared.open(nsurl)
-        }
-        return [
-            "opened": opened,
-            "url": url,
-        ] as [String: Any]
+        let opened = await MainActor.run { UIApplication.shared.open(nsurl) }
+        let result: [String: Any] = ["opened": opened, "url": url]
+        await reportResult(Self.name, result)
+        return result
     }
 }
 
@@ -183,22 +210,25 @@ struct WikipediaTool: Tool {
     var language: String = "en"
 
     func run() async throws -> Any {
+        await report(Self.name, params: "{\"query\": \"\(query)\", \"mode\": \"\(mode)\", \"language\": \"\(language)\"}")
+
         let lang = language.isEmpty ? "en" : language
         let base = "https://\(lang).wikipedia.org"
 
+        let result: [String: Any]
         if mode == "extract" {
-            return try await extractPage(query: query, baseURL: base)
+            result = try await extractPage(query: query, baseURL: base)
         } else {
-            return try await searchArticles(query: query, baseURL: base)
+            result = try await searchArticles(query: query, baseURL: base)
         }
+        await reportResult(Self.name, result)
+        return result
     }
 
     private func searchArticles(query: String, baseURL: String) async throws -> [String: Any] {
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let urlStr = "\(baseURL)/w/api.php?action=query&list=search&srsearch=\(encoded)&format=json&srlimit=5&srprop=snippet"
-        guard let url = URL(string: urlStr) else {
-            return ["error": "Failed to build search URL"]
-        }
+        guard let url = URL(string: urlStr) else { return ["error": "Failed to build search URL"] }
 
         var request = URLRequest(url: url)
         request.setValue("Lamo/1.0 (iOS; on-device AI)", forHTTPHeaderField: "User-Agent")
@@ -214,7 +244,6 @@ struct WikipediaTool: Tool {
         let results: [[String: Any]] = search.map { item in
             let title = item["title"] as? String ?? ""
             var snippet = (item["snippet"] as? String) ?? ""
-            // Clean HTML tags from snippet
             snippet = snippet.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             snippet = HTMLEntityDecoder.decode(snippet)
             return [
@@ -223,19 +252,13 @@ struct WikipediaTool: Tool {
                 "url": "\(baseURL)/wiki/\(title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title)",
             ]
         }
-
-        return [
-            "query": query,
-            "results": results,
-        ] as [String: Any]
+        return ["query": query, "results": results]
     }
 
     private func extractPage(query: String, baseURL: String) async throws -> [String: Any] {
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let urlStr = "\(baseURL)/w/api.php?action=query&titles=\(encoded)&prop=extracts&exintro=true&explaintext=true&format=json&redirects=1"
-        guard let url = URL(string: urlStr) else {
-            return ["error": "Failed to build extract URL"]
-        }
+        guard let url = URL(string: urlStr) else { return ["error": "Failed to build extract URL"] }
 
         var request = URLRequest(url: url)
         request.setValue("Lamo/1.0 (iOS; on-device AI)", forHTTPHeaderField: "User-Agent")
@@ -247,20 +270,14 @@ struct WikipediaTool: Tool {
               let pages = queryResult["pages"] as? [String: [String: Any]] else {
             return ["error": "Failed to parse page data"]
         }
-
         for (_, page) in pages {
             if let extract = page["extract"] as? String {
                 let title = page["title"] as? String ?? query
                 let pageID = page["pageid"] as? Int ?? 0
-                return [
-                    "title": title,
-                    "page_id": pageID,
-                    "extract": extract,
-                    "url": "\(baseURL)/wiki/\(title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title)",
-                ] as [String: Any]
+                return ["title": title, "page_id": pageID, "extract": extract,
+                        "url": "\(baseURL)/wiki/\(title.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title)"]
             }
         }
-
         return ["error": "Page not found. Try a different title or use mode: 'search' first."]
     }
 }
@@ -272,32 +289,30 @@ struct DeviceInfoTool: Tool {
     static let description = "Get information about this device: model name, OS version, battery level, available storage, memory, and uptime. Use when the user asks about their device."
 
     func run() async throws -> Any {
+        await report(Self.name, params: "{}")
+
         let device = UIDevice.current
         device.isBatteryMonitoringEnabled = true
-
-        let totalSpace = totalDiskSpace()
-        let freeSpace = freeDiskSpace()
-
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
-
         let processInfo = ProcessInfo.processInfo
-        let uptime = processInfo.systemUptime
 
-        return [
+        let result: [String: Any] = [
             "device_name": device.name,
             "device_model": device.model,
             "system_name": device.systemName,
             "system_version": device.systemVersion,
             "battery_level": Int(device.batteryLevel * 100),
             "battery_state": batteryStateString(device.batteryState),
-            "total_storage": totalSpace.map { formatter.string(fromByteCount: $0) } ?? "unknown",
-            "free_storage": freeSpace.map { formatter.string(fromByteCount: $0) } ?? "unknown",
+            "total_storage": totalDiskSpace().map { formatter.string(fromByteCount: $0) } ?? "unknown",
+            "free_storage": freeDiskSpace().map { formatter.string(fromByteCount: $0) } ?? "unknown",
             "physical_memory_gb": String(format: "%.1f", Double(processInfo.physicalMemory) / 1_073_741_824),
             "processor_count": processInfo.processorCount,
-            "uptime_seconds": Int(uptime),
+            "uptime_seconds": Int(processInfo.systemUptime),
             "is_low_power_mode": processInfo.isLowPowerModeEnabled,
-        ] as [String: Any]
+        ]
+        await reportResult(Self.name, result)
+        return result
     }
 
     private func batteryStateString(_ state: UIDevice.BatteryState) -> String {
@@ -309,17 +324,11 @@ struct DeviceInfoTool: Tool {
         @unknown default: return "unknown"
         }
     }
-
     private func totalDiskSpace() -> Int64? {
-        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-              let size = attrs[.systemSize] as? Int64 else { return nil }
-        return size
+        (try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()))?[.systemSize] as? Int64
     }
-
     private func freeDiskSpace() -> Int64? {
-        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-              let size = attrs[.systemFreeSize] as? Int64 else { return nil }
-        return size
+        (try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()))?[.systemFreeSize] as? Int64
     }
 }
 
@@ -335,63 +344,86 @@ struct GetLocationTool: Tool {
         """
 
     func run() async throws -> Any {
-        let location = try await requestCurrentLocation()
-        let name = try await reverseGeocode(location)
+        await report(Self.name, params: "{}")
 
-        return [
-            "latitude": location.coordinate.latitude,
-            "longitude": location.coordinate.longitude,
-            "altitude_m": location.altitude,
-            "horizontal_accuracy_m": location.horizontalAccuracy,
-            "location_name": name,
-        ] as [String: Any]
+        let result: [String: Any]
+        if let location = try? await requestCurrentLocation(timeout: 5) {
+            let name = try? await reverseGeocode(location)
+            result = [
+                "source": "gps",
+                "latitude": location.coordinate.latitude,
+                "longitude": location.coordinate.longitude,
+                "altitude_m": location.altitude,
+                "horizontal_accuracy_m": location.horizontalAccuracy,
+                "location_name": name ?? "\(location.coordinate.latitude), \(location.coordinate.longitude)",
+            ]
+        } else {
+            result = try await detectLocationIP()
+        }
+        await reportResult(Self.name, result)
+        return result
     }
 
-    private func requestCurrentLocation() async throws -> CLLocation {
+    private func requestCurrentLocation(timeout: TimeInterval) async throws -> CLLocation {
         let manager = CLLocationManager()
-
-        // Check authorization
         let status = manager.authorizationStatus
         switch status {
+        case .denied, .restricted: throw LocationError.permissionDenied
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
-            // Wait briefly for user to respond — timeout after 15s
             let start = Date()
             while manager.authorizationStatus == .notDetermined {
-                if Date().timeIntervalSince(start) > 15 { throw LocationError.permissionDenied }
+                if Date().timeIntervalSince(start) > 10 { throw LocationError.permissionDenied }
                 try await Task.sleep(for: .milliseconds(500))
             }
             guard manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways else {
                 throw LocationError.permissionDenied
             }
-        case .denied, .restricted:
-            throw LocationError.permissionDenied
-        default:
-            break
+        default: break
         }
 
-        // Use CLLocationUpdate.liveUpdates() (iOS 17+)
-        let updates = CLLocationUpdate.liveUpdates()
-        for try await update in updates {
-            guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
+        return try await withThrowingTaskGroup(of: CLLocation.self) { group in
+            group.addTask {
+                let updates = CLLocationUpdate.liveUpdates()
+                for try await update in updates {
+                    guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
+                    return loc
+                }
+                throw LocationError.unavailable
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeout))
+                throw LocationError.unavailable
+            }
+            let loc = try await group.next()!
+            group.cancelAll()
             return loc
         }
-        throw LocationError.unavailable
     }
 
     private func reverseGeocode(_ location: CLLocation) async throws -> String {
-        let geocoder = CLGeocoder()
-        let placemarks = try await geocoder.reverseGeocodeLocation(location)
+        let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
         guard let place = placemarks.first else { return "\(location.coordinate.latitude), \(location.coordinate.longitude)" }
+        return [place.locality, place.administrativeArea, place.country].compactMap { $0 }.joined(separator: ", ")
+    }
 
-        let parts = [place.locality, place.administrativeArea, place.country].compactMap { $0 }
-        return parts.isEmpty ? "\(location.coordinate.latitude), \(location.coordinate.longitude)" : parts.joined(separator: ", ")
+    private func detectLocationIP() async throws -> [String: Any] {
+        guard let url = URL(string: "https://ipapi.co/json/") else { throw LocationError.unavailable }
+        var request = URLRequest(url: url)
+        request.setValue("Lamo/1.0 (iOS; on-device AI)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 8
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw LocationError.unavailable
+        }
+        return ["source": "ip", "city": json["city"] ?? "", "region": json["region"] ?? "",
+                "country": json["country_name"] ?? "", "latitude": json["latitude"] ?? 0,
+                "longitude": json["longitude"] ?? 0]
     }
 }
 
 private enum LocationError: LocalizedError {
-    case permissionDenied
-    case unavailable
+    case permissionDenied, unavailable
     var errorDescription: String? {
         switch self {
         case .permissionDenied: return "Location permission denied. Enable in Settings > Privacy > Location Services."
@@ -399,6 +431,7 @@ private enum LocationError: LocalizedError {
         }
     }
 }
+
 // MARK: - Weather
 
 struct WeatherTool: Tool {
@@ -413,151 +446,133 @@ struct WeatherTool: Tool {
     var city: String = ""
 
     func run() async throws -> Any {
+        await report(Self.name, params: city.isEmpty ? "{\"city\": \"(auto-detected)\"}" : "{\"city\": \"\(city)\"}")
+
         let coords: Coords
         if city.isEmpty {
             coords = try await detectLocation()
         } else {
             coords = try await geocode(city: city)
         }
-        return try await fetchWeather(lat: coords.lat, lon: coords.lon, cityName: coords.name)
+        let result = try await fetchWeather(lat: coords.lat, lon: coords.lon, cityName: coords.name)
+        await reportResult(Self.name, result)
+        return result
     }
 
-    private struct Coords {
-        let lat: Double
-        let lon: Double
-        let name: String
-    }
+    private struct Coords { let lat: Double; let lon: Double; let name: String }
 
     private func detectLocation() async throws -> Coords {
+        if let gps = try? await detectLocationGPS(timeout: 5) { return gps }
+        return try await detectLocationIP()
+    }
+
+    private func detectLocationGPS(timeout: TimeInterval) async throws -> Coords? {
         let manager = CLLocationManager()
-        let status = manager.authorizationStatus
-        switch status {
+        switch manager.authorizationStatus {
+        case .denied, .restricted: return nil
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
             let start = Date()
             while manager.authorizationStatus == .notDetermined {
-                if Date().timeIntervalSince(start) > 15 { throw WeatherError.cityNotFound }
+                if Date().timeIntervalSince(start) > 10 { return nil }
                 try await Task.sleep(for: .milliseconds(500))
             }
-            guard manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways else {
-                throw WeatherError.cityNotFound
+            guard manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways else { return nil }
+        default: break
+        }
+        return try await withThrowingTaskGroup(of: Coords?.self) { group in
+            group.addTask {
+                let updates = CLLocationUpdate.liveUpdates()
+                for try await update in updates {
+                    guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
+                    let placemarks = try await CLGeocoder().reverseGeocodeLocation(loc)
+                    let name = placemarks.first?.locality ?? "\(loc.coordinate.latitude), \(loc.coordinate.longitude)"
+                    return Coords(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude, name: name)
+                }
+                return nil
             }
-        case .denied, .restricted:
-            throw WeatherError.cityNotFound
-        default:
-            break
+            group.addTask { try await Task.sleep(for: .seconds(timeout)); return nil }
+            for try await r in group { if let c = r { return c } }
+            return nil
         }
+    }
 
-        let updates = CLLocationUpdate.liveUpdates()
-        for try await update in updates {
-            guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
-            let geocoder = CLGeocoder()
-            let placemarks = try await geocoder.reverseGeocodeLocation(loc)
-            let name = placemarks.first?.locality ?? "\(loc.coordinate.latitude), \(loc.coordinate.longitude)"
-            return Coords(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude, name: name)
+    private func detectLocationIP() async throws -> Coords {
+        guard let url = URL(string: "https://ipapi.co/json/") else { throw WeatherError.cityNotFound }
+        var request = URLRequest(url: url)
+        request.setValue("Lamo/1.0 (iOS; on-device AI)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 8
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let lat = json["latitude"] as? Double, let lon = json["longitude"] as? Double else {
+            throw WeatherError.cityNotFound
         }
-        throw WeatherError.cityNotFound
+        let city = json["city"] as? String ?? "your location"
+        let country = json["country_name"] as? String ?? ""
+        return Coords(lat: lat, lon: lon, name: country.isEmpty ? city : "\(city), \(country)")
     }
 
     private func geocode(city: String) async throws -> Coords {
         let encoded = city.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? city
         let urlStr = "https://geocoding-api.open-meteo.com/v1/search?name=\(encoded)&count=1&language=en&format=json"
-        guard let url = URL(string: urlStr) else {
-            throw WeatherError.geocodeFailed
-        }
-
+        guard let url = URL(string: urlStr) else { throw WeatherError.geocodeFailed }
         var request = URLRequest(url: url)
         request.setValue("Lamo/1.0 (iOS; on-device AI)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 10
-
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let results = json["results"] as? [[String: Any]],
-              let first = results.first,
-              let lat = first["latitude"] as? Double,
-              let lon = first["longitude"] as? Double else {
+              let results = json["results"] as? [[String: Any]], let first = results.first,
+              let lat = first["latitude"] as? Double, let lon = first["longitude"] as? Double else {
             throw WeatherError.cityNotFound
         }
-
         let name = (first["name"] as? String) ?? city
         let country = first["country"] as? String
-        let displayName = country.map { "\(name), \($0)" } ?? name
-        return Coords(lat: lat, lon: lon, name: displayName)
+        return Coords(lat: lat, lon: lon, name: country.map { "\(name), \($0)" } ?? name)
     }
 
     private func fetchWeather(lat: Double, lon: Double, cityName: String) async throws -> [String: Any] {
         let urlStr = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=1"
-        guard let url = URL(string: urlStr) else {
-            throw WeatherError.fetchFailed
-        }
-
+        guard let url = URL(string: urlStr) else { throw WeatherError.fetchFailed }
         var request = URLRequest(url: url)
         request.setValue("Lamo/1.0 (iOS; on-device AI)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 10
-
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let current = json["current"] as? [String: Any] else {
-            throw WeatherError.fetchFailed
-        }
+              let current = json["current"] as? [String: Any] else { throw WeatherError.fetchFailed }
 
         let temp = current["temperature_2m"] as? Double ?? 0
         let feelsLike = current["apparent_temperature"] as? Double ?? temp
-        let humidity = current["relative_humidity_2m"] as? Int ?? 0
-        let windSpeed = current["wind_speed_10m"] as? Double ?? 0
-        let windDir = current["wind_direction_10m"] as? Int ?? 0
-        let weatherCode = current["weather_code"] as? Int ?? 0
-        let isDay = (current["is_day"] as? Int ?? 1) == 1
-
-        var sunrise: String? = nil
-        var sunset: String? = nil
+        var sunrise: String?, sunset: String?
         if let daily = json["daily"] as? [String: Any] {
-            if let sunrises = daily["sunrise"] as? [String], let first = sunrises.first {
-                sunrise = first
-            }
-            if let sunsets = daily["sunset"] as? [String], let first = sunsets.first {
-                sunset = first
-            }
+            sunrise = (daily["sunrise"] as? [String])?.first
+            sunset = (daily["sunset"] as? [String])?.first
         }
-
-        return [
-            "city": cityName,
-            "temperature_c": temp,
-            "feels_like_c": feelsLike,
-            "humidity_percent": humidity,
-            "wind_speed_kmh": windSpeed,
-            "wind_direction_deg": windDir,
-            "conditions": weatherDescription(code: weatherCode, isDay: isDay),
-            "is_day": isDay,
-            "sunrise": sunrise as Any,
-            "sunset": sunset as Any,
-        ] as [String: Any]
+        return ["city": cityName, "temperature_c": temp, "feels_like_c": feelsLike,
+                "humidity_percent": current["relative_humidity_2m"] as? Int ?? 0,
+                "wind_speed_kmh": current["wind_speed_10m"] as? Double ?? 0,
+                "wind_direction_deg": current["wind_direction_10m"] as? Int ?? 0,
+                "conditions": weatherDesc(current["weather_code"] as? Int ?? 0, (current["is_day"] as? Int ?? 1) == 1),
+                "is_day": (current["is_day"] as? Int ?? 1) == 1,
+                "sunrise": sunrise as Any, "sunset": sunset as Any]
     }
 
-    private func weatherDescription(code: Int, isDay: Bool) -> String {
+    private func weatherDesc(_ code: Int, _ isDay: Bool) -> String {
         switch code {
         case 0: return isDay ? "Clear sky" : "Clear night"
-        case 1, 2, 3: return isDay ? "Partly cloudy" : "Partly cloudy"
-        case 45, 48: return "Foggy"
-        case 51, 53, 55: return "Drizzle"
-        case 56, 57: return "Freezing drizzle"
-        case 61, 63, 65: return "Rain"
-        case 66, 67: return "Freezing rain"
-        case 71, 73, 75: return "Snow"
-        case 77: return "Snow grains"
-        case 80, 81, 82: return "Rain showers"
-        case 85, 86: return "Snow showers"
-        case 95: return "Thunderstorm"
-        case 96, 99: return "Thunderstorm with hail"
+        case 1,2,3: return isDay ? "Partly cloudy" : "Partly cloudy"
+        case 45,48: return "Foggy"
+        case 51,53,55: return "Drizzle"; case 56,57: return "Freezing drizzle"
+        case 61,63,65: return "Rain"; case 66,67: return "Freezing rain"
+        case 71,73,75: return "Snow"; case 77: return "Snow grains"
+        case 80,81,82: return "Rain showers"; case 85,86: return "Snow showers"
+        case 95: return "Thunderstorm"; case 96,99: return "Thunderstorm with hail"
         default: return "Unknown"
         }
     }
 }
 
 private enum WeatherError: LocalizedError {
-    case geocodeFailed
-    case cityNotFound
-    case fetchFailed
+    case geocodeFailed, cityNotFound, fetchFailed
     var errorDescription: String? {
         switch self {
         case .geocodeFailed: return "Failed to geocode city name"
@@ -586,38 +601,36 @@ struct CreateReminderTool: Tool {
     var dueDate: String?
 
     func run() async throws -> Any {
-        let store = EKEventStore()
+        await report(Self.name, params: "{\"title\": \"\(title)\"\(notes.map { ", \"notes\": \"\($0)\"" } ?? "")\(dueDate.map { ", \"dueDate\": \"\($0)\"" } ?? "")}")
 
-        // Request access
+        let store = EKEventStore()
         let granted: Bool
         if #available(iOS 17.0, *) {
             granted = try await store.requestFullAccessToReminders()
         } else {
             granted = try await store.requestAccess(to: .reminder)
         }
-
         guard granted else {
-            return ["error": "Reminders access denied. Enable in Settings > Privacy > Reminders."]
+            let result: [String: Any] = ["error": "Reminders access denied. Enable in Settings > Privacy > Reminders."]
+            await reportResult(Self.name, result)
+            return result
         }
 
         return try await MainActor.run {
             let reminder = EKReminder(eventStore: store)
             reminder.title = title
-            if let notes = notes, !notes.isEmpty {
-                reminder.notes = notes
-            }
-            if let dueDate = dueDate {
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                reminder.dueDateComponents = formatter.date(from: dueDate).map { date in
-                    Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            if let notes, !notes.isEmpty { reminder.notes = notes }
+            if let dueDate {
+                let fmtr = ISO8601DateFormatter()
+                fmtr.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                reminder.dueDateComponents = fmtr.date(from: dueDate).map {
+                    Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: $0)
                 }
-                // Retry without fractional seconds
                 if reminder.dueDateComponents == nil {
-                    let formatter2 = ISO8601DateFormatter()
-                    formatter2.formatOptions = [.withInternetDateTime]
-                    reminder.dueDateComponents = formatter2.date(from: dueDate).map { date in
-                        Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+                    let fmtr2 = ISO8601DateFormatter()
+                    fmtr2.formatOptions = [.withInternetDateTime]
+                    reminder.dueDateComponents = fmtr2.date(from: dueDate).map {
+                        Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: $0)
                     }
                 }
             }
@@ -625,14 +638,13 @@ struct CreateReminderTool: Tool {
 
             do {
                 try store.save(reminder, commit: true)
-                return [
-                    "status": "created",
-                    "title": title,
-                    "due_date": dueDate as Any,
-                    "reminder_id": reminder.calendarItemIdentifier,
-                ] as [String: Any]
+                let result: [String: Any] = ["status": "created", "title": title, "due_date": dueDate as Any, "reminder_id": reminder.calendarItemIdentifier]
+                Task { await reportResult(Self.name, result) }
+                return result
             } catch {
-                return ["error": "Failed to save reminder: \(error.localizedDescription)"]
+                let result: [String: Any] = ["error": "Failed to save reminder: \(error.localizedDescription)"]
+                Task { await reportResult(Self.name, result) }
+                return result
             }
         }
     }

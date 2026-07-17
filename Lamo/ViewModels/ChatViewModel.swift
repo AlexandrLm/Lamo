@@ -265,40 +265,35 @@ final class ChatViewModel {
                 case .thinkingDelta(let thought):
                     self.streamingThinkingBuffer += thought
                     self.flushStreamingBuffer()
+                case .toolCall(let name, let params):
+                    self.streamingBuffer += "\n\n🔧 **\(name)**\n```json\n\(params)\n```\n"
+                    self.flushStreamingBuffer()
+                case .toolResult(let name, let result):
+                    self.streamingBuffer += "\n📋 **\(name)** →\n```\n\(result)\n```\n"
+                    self.flushStreamingBuffer()
                 case .benchmark(let data):
                     self.pendingBenchmark = data
                 case .loopDetected:
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
-                        // Delete the entire assistant message and create a fresh one.
-                        // Content already flushed to SwiftData survives buffer clears, so
-                        // we must remove the message from the model entirely.
-                        if let oldID = self.streamingMessageID,
-                           let index = self.messages.firstIndex(where: { $0.id == oldID }) {
-                            let oldMsg = self.messages[index]
-                            self.messages.remove(at: index)
-                            self.modelContext.delete(oldMsg)
+                        if let msgIdx = messages.firstIndex(where: { $0.id == streamingMessageID }) {
+                            modelContext.delete(messages[msgIdx])
+                            messages.remove(at: msgIdx)
                         }
-                        self.streamingBuffer = ""
-                        self.streamingThinkingBuffer = ""
-                        let newMsg = Message(content: "", role: .assistant, isStreaming: true, conversation: self.conversation)
-                        self.addMessage(newMsg)
-                        self.streamingMessageID = newMsg.id
-                        self.startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
+                        streamingTask?.cancel()
+                        streamingMessageID = nil
+                        isStreaming = false
+                        startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
                         return
                     } else {
-                        if let id = self.streamingMessageID,
-                           let index = self.messages.firstIndex(where: { $0.id == id }) {
-                            self.messages[index].content += "\n\n⚠️ Generation stopped — loop could not be resolved"
-                        }
-                        self.finalizeStreaming(success: true)
+                        finalizeStreaming(success: false, error: LamoError.engineInitFailed("Model stuck in a loop"))
                         return
                     }
                 case .done:
                     self.finalizeStreaming(success: true)
                     return
-                case .error(let error):
-                    self.finalizeStreaming(success: false, error: error)
+                case .error(let err):
+                    self.finalizeStreaming(success: false, error: err)
                     return
                 }
             }

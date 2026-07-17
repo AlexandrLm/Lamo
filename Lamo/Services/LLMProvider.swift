@@ -12,6 +12,8 @@ struct BenchmarkData: Codable, Sendable {
 enum StreamingToken: @unchecked Sendable {
     case delta(String)
     case thinkingDelta(String)
+    case toolCall(name: String, params: String)
+    case toolResult(name: String, result: String)
     case benchmark(BenchmarkData)
     case loopDetected
     case done
