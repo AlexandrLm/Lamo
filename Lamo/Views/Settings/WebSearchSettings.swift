@@ -2,7 +2,7 @@ import SwiftUI
 
 struct WebSearchSettings: View {
     @State private var apiKey: String = KeychainHelper.load(key: "brave_search_api_key") ?? ""
-    @State private var autoFetch: Bool = UserDefaults.standard.object(forKey: "web_auto_fetch") as? Bool ?? true
+    @State private var autoFetch: Bool = AppDefaults.webAutoFetch.wrappedValue
     @State private var showAPIKey = false
     @State private var testResult: String?
     @State private var isTesting = false
@@ -107,7 +107,7 @@ struct WebSearchSettings: View {
                     }
                     .tint(.white.opacity(0.7))
                     .onChange(of: autoFetch) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: "web_auto_fetch")
+                        AppDefaults.webAutoFetch.wrappedValue = newValue
                     }
                 }
                 .padding(LamoTheme.Spacing.lg)

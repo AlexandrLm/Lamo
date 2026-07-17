@@ -3,7 +3,7 @@ import SwiftUI
 /// Memory settings section — toggle, fact list, clear all.
 /// Extracted from SettingsView for maintainability.
 struct MemorySettingsSection: View {
-    @ObservedObject var vm: SettingsViewModel
+    @Bindable var vm: SettingsViewModel
     @ObservedObject private var memory = MemoryService.shared
 
     var body: some View {

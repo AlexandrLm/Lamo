@@ -29,7 +29,8 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     private let engine: LiteRTLM.Engine?
 
     /// Cached SamplerConfig — avoids redundant UserDefaults reads.
-    private var cachedSamplerConfig: (topK: Int, topP: Double, temperature: Double, seed: Int, config: LiteRTLM.SamplerConfig)?
+    /// Cache key excludes seed (changes every call). Uses Float for comparison accuracy.
+    private var cachedSamplerConfig: (topK: Int, topP: Float, temperature: Float, seed: Int, config: LiteRTLM.SamplerConfig)?
 
     init(
         modelPath: String? = nil,
@@ -250,25 +251,25 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     private func buildSamplerConfig() throws -> LiteRTLM.SamplerConfig {
         let pm = ProviderManager.shared
         let safeTopK = max(1, min(pm.topK, 100))
-        let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
         let safeTopP: Float = max(0.0, min(Float(pm.topP), 1.0))
-        let seed = Int.random(in: 0..<Int(Int32.max))
+        let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
 
-        // Return cached config if all params are unchanged
+        // Return cached config if params are unchanged (seed excluded — changes every call).
         if let cached = cachedSamplerConfig,
            cached.topK == safeTopK,
-           cached.topP == Double(safeTopP),
-           cached.temperature == Double(safeTemp) {
+           cached.topP == safeTopP,
+           cached.temperature == safeTemp {
             return cached.config
         }
 
+        let seed = Int.random(in: 0..<Int(Int32.max))
         let config = try LiteRTLM.SamplerConfig(
             topK: safeTopK,
             topP: safeTopP,
             temperature: safeTemp,
             seed: seed
         )
-        cachedSamplerConfig = (topK: safeTopK, topP: Double(safeTopP), temperature: Double(safeTemp), seed: seed, config: config)
+        cachedSamplerConfig = (topK: safeTopK, topP: safeTopP, temperature: safeTemp, seed: seed, config: config)
         return config
     }
 

@@ -77,10 +77,10 @@ final class ProviderManager: ObservableObject {
         return result
     }
 
-    // MARK: - Settings (persisted via UserDefaults)
+    // MARK: - Settings (persisted via AppDefaults)
 
     var litertLMModelPath: String? {
-        get { UserDefaults.standard.string(forKey: "litertLMModelPath") }
+        get { AppDefaults.modelPath.wrappedValue }
         set {
             // #8: Validate model path before setting
             if let newValue = newValue {
@@ -99,79 +99,73 @@ final class ProviderManager: ObservableObject {
                     }
                 }
             }
-            UserDefaults.standard.set(newValue, forKey: "litertLMModelPath")
+            AppDefaults.modelPath.wrappedValue = newValue
             if !suppressInvalidation { invalidateEngine() }
         }
     }
 
     var litertLMUseGPU: Bool {
-        get { UserDefaults.standard.object(forKey: "litertLMUseGPU") as? Bool ?? true }
+        get { AppDefaults.useGPU.wrappedValue }
         set {
-            UserDefaults.standard.set(newValue, forKey: "litertLMUseGPU")
+            AppDefaults.useGPU.wrappedValue = newValue
             invalidateEngine()
         }
     }
 
     var cpuThreadCount: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4 }
-        set {
-            UserDefaults.standard.set(newValue, forKey: "litertLMCpuThreadCount")
-            // Non-critical: applied at next inference, no engine reload needed.
-        }
+        get { AppDefaults.cpuThreadCount.wrappedValue }
+        set { AppDefaults.cpuThreadCount.wrappedValue = newValue }
     }
 
     var topK: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMTopK") as? Int ?? 64 }
-        set { UserDefaults.standard.set(newValue, forKey: "litertLMTopK") }
+        get { AppDefaults.topK.wrappedValue }
+        set { AppDefaults.topK.wrappedValue = newValue }
     }
 
     var topP: Double {
-        get { UserDefaults.standard.object(forKey: "litertLMTopP") as? Double ?? 0.95 }
-        set { UserDefaults.standard.set(newValue, forKey: "litertLMTopP") }
+        get { AppDefaults.topP.wrappedValue }
+        set { AppDefaults.topP.wrappedValue = newValue }
     }
 
     var temperature: Double {
-        get { UserDefaults.standard.object(forKey: "litertLMTemperature") as? Double ?? 1.0 }
-        set { UserDefaults.standard.set(newValue, forKey: "litertLMTemperature") }
+        get { AppDefaults.temperature.wrappedValue }
+        set { AppDefaults.temperature.wrappedValue = newValue }
     }
 
     var maxNumTokens: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096 }
+        get { AppDefaults.maxNumTokens.wrappedValue }
         set {
-            UserDefaults.standard.set(newValue, forKey: "litertLMMaxNumTokens")
+            AppDefaults.maxNumTokens.wrappedValue = newValue
             invalidateEngine()
         }
     }
 
     var kvCacheAuto: Bool {
-        get { UserDefaults.standard.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true }
+        get { AppDefaults.kvCacheAuto.wrappedValue }
         set {
-            UserDefaults.standard.set(newValue, forKey: "litertLMKvCacheAuto")
+            AppDefaults.kvCacheAuto.wrappedValue = newValue
             invalidateEngine()
         }
     }
 
     var speculativeDecoding: Bool {
-        get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? true }
-        set {
-            UserDefaults.standard.set(newValue, forKey: "litertLMSpeculativeDecoding")
-            // Non-critical: applied at next inference, no engine reload needed.
-        }
+        get { AppDefaults.speculativeDecoding.wrappedValue }
+        set { AppDefaults.speculativeDecoding.wrappedValue = newValue }
     }
 
     var visualTokenBudget: Int {
-        get { UserDefaults.standard.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560 }
-        set { UserDefaults.standard.set(newValue, forKey: "litertLMVisualTokenBudget") }
+        get { AppDefaults.visualTokenBudget.wrappedValue }
+        set { AppDefaults.visualTokenBudget.wrappedValue = newValue }
     }
 
     var systemPrompt: String {
-        get { UserDefaults.standard.string(forKey: "litertLMSystemPrompt") ?? defaultSystemPrompt }
-        set { UserDefaults.standard.set(newValue, forKey: "litertLMSystemPrompt") }
+        get { AppDefaults.systemPrompt.wrappedValue }
+        set { AppDefaults.systemPrompt.wrappedValue = newValue }
     }
 
     var thinkingMode: Bool {
-        get { UserDefaults.standard.object(forKey: "litertLMThinkingMode") as? Bool ?? false }
-        set { UserDefaults.standard.set(newValue, forKey: "litertLMThinkingMode") }
+        get { AppDefaults.thinkingMode.wrappedValue }
+        set { AppDefaults.thinkingMode.wrappedValue = newValue }
     }
 
     /// Default system prompt that teaches the model to use markdown formatting.

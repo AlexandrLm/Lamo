@@ -159,7 +159,10 @@ struct MarkdownRenderer: View {
     // MARK: - Block Parsing
 
     /// Cached regex for ordered list detection.
-    private static let orderedListPattern = try! NSRegularExpression(pattern: #"^\d+\.\s"#)
+    /// Cached regex for ordered list detection.
+    private static let orderedListPattern: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"^\d+\.\s"#)
+    }()
 
     private static func parseBlocksStatic(_ text: String) -> [Block] {
         var blocks: [Block] = []

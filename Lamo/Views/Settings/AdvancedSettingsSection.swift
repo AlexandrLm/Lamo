@@ -4,7 +4,7 @@ import LiteRTLM
 /// Advanced settings section — GPU, CPU threads, KV-cache, speculative decoding, vision, system prompt.
 /// Extracted from SettingsView for maintainability.
 struct AdvancedSettingsSection: View {
-    @ObservedObject var vm: SettingsViewModel
+    @Bindable var vm: SettingsViewModel
 
     var body: some View {
         ScrollView {

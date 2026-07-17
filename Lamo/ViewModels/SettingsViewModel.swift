@@ -1,109 +1,109 @@
 import Foundation
 import LiteRTLM
 import SwiftUI
-import Combine
 
 /// ViewModel for the settings screen. Manages all LiteRT-LM parameters.
 @MainActor
-final class SettingsViewModel: ObservableObject {
-    private let defaults = UserDefaults.standard
+@Observable
+final class SettingsViewModel {
     private let providerManager = ProviderManager.shared
 
     // MARK: - Engine Settings
 
-    @Published var useGPU: Bool {
-        didSet { defaults.set(useGPU, forKey: "litertLMUseGPU") }
+    var useGPU: Bool {
+        get { AppDefaults.useGPU.wrappedValue }
+        set { AppDefaults.useGPU.wrappedValue = newValue }
     }
 
-    @Published var cpuThreadCount: Int {
-        didSet { defaults.set(cpuThreadCount, forKey: "litertLMCpuThreadCount") }
+    var cpuThreadCount: Int {
+        get { AppDefaults.cpuThreadCount.wrappedValue }
+        set { AppDefaults.cpuThreadCount.wrappedValue = newValue }
     }
 
     // MARK: - Model
 
-    @Published var selectedModel: String? {
-        didSet { providerManager.litertLMModelPath = selectedModel }
+    var selectedModel: String? {
+        get { providerManager.litertLMModelPath }
+        set { providerManager.litertLMModelPath = newValue }
     }
 
-    @Published var availableModels: [String] = []
+    var availableModels: [String] = []
 
     // MARK: - Sampler
 
-    @Published var topK: Int {
-        didSet { defaults.set(topK, forKey: "litertLMTopK") }
+    var topK: Int {
+        get { AppDefaults.topK.wrappedValue }
+        set { AppDefaults.topK.wrappedValue = newValue }
     }
 
-    @Published var topP: Double {
-        didSet { defaults.set(topP, forKey: "litertLMTopP") }
+    var topP: Double {
+        get { AppDefaults.topP.wrappedValue }
+        set { AppDefaults.topP.wrappedValue = newValue }
     }
 
-    @Published var temperature: Double {
-        didSet { defaults.set(temperature, forKey: "litertLMTemperature") }
+    var temperature: Double {
+        get { AppDefaults.temperature.wrappedValue }
+        set { AppDefaults.temperature.wrappedValue = newValue }
     }
 
     // MARK: - KV-Cache
 
-    @Published var maxNumTokens: Int {
-        didSet { defaults.set(maxNumTokens, forKey: "litertLMMaxNumTokens") }
+    var maxNumTokens: Int {
+        get { AppDefaults.maxNumTokens.wrappedValue }
+        set { AppDefaults.maxNumTokens.wrappedValue = newValue }
     }
 
     /// Whether KV-cache is set to auto (use model default).
-    @Published var kvCacheAuto: Bool {
-        didSet {
-            defaults.set(kvCacheAuto, forKey: "litertLMKvCacheAuto")
-            if kvCacheAuto {
+    var kvCacheAuto: Bool {
+        get { AppDefaults.kvCacheAuto.wrappedValue }
+        set {
+            AppDefaults.kvCacheAuto.wrappedValue = newValue
+            if newValue {
                 // Set a very high value to signal "unlimited"
-                defaults.set(0, forKey: "litertLMMaxNumTokens")
+                AppDefaults.maxNumTokens.wrappedValue = 0
             }
         }
     }
 
     // MARK: - Speculative Decoding
 
-    @Published var speculativeDecoding: Bool {
-        didSet { defaults.set(speculativeDecoding, forKey: "litertLMSpeculativeDecoding") }
+    var speculativeDecoding: Bool {
+        get { AppDefaults.speculativeDecoding.wrappedValue }
+        set { AppDefaults.speculativeDecoding.wrappedValue = newValue }
     }
 
     // MARK: - Vision
 
-    @Published var visualTokenBudget: Int {
-        didSet { defaults.set(visualTokenBudget, forKey: "litertLMVisualTokenBudget") }
+    var visualTokenBudget: Int {
+        get { AppDefaults.visualTokenBudget.wrappedValue }
+        set { AppDefaults.visualTokenBudget.wrappedValue = newValue }
     }
 
     // MARK: - System Prompt
 
-    @Published var systemPrompt: String {
-        didSet { defaults.set(systemPrompt, forKey: "litertLMSystemPrompt") }
+    var systemPrompt: String {
+        get { AppDefaults.systemPrompt.wrappedValue }
+        set { AppDefaults.systemPrompt.wrappedValue = newValue }
     }
 
     // MARK: - Memory
 
-    @Published var memoryEnabled: Bool {
-        didSet {
-            MemoryService.shared.isEnabled = memoryEnabled
+    var memoryEnabled: Bool {
+        get { AppDefaults.memoryEnabled.wrappedValue }
+        set {
+            AppDefaults.memoryEnabled.wrappedValue = newValue
+            MemoryService.shared.isEnabled = newValue
         }
     }
 
     // MARK: - Model Info
 
-    @Published var modelInfo: ModelInfo?
+    var modelInfo: ModelInfo?
 
     // MARK: - Init
 
     init() {
-        self.useGPU = defaults.object(forKey: "litertLMUseGPU") as? Bool ?? true
-        self.cpuThreadCount = defaults.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4
-        self.selectedModel = providerManager.litertLMModelPath
-        self.topK = defaults.object(forKey: "litertLMTopK") as? Int ?? 64
-        self.topP = defaults.object(forKey: "litertLMTopP") as? Double ?? 0.95
-        self.temperature = defaults.object(forKey: "litertLMTemperature") as? Double ?? 1.0
-        self.maxNumTokens = defaults.object(forKey: "litertLMMaxNumTokens") as? Int ?? 4096
-        self.kvCacheAuto = defaults.object(forKey: "litertLMKvCacheAuto") as? Bool ?? true
-        self.speculativeDecoding = defaults.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? true
-        self.visualTokenBudget = defaults.object(forKey: "litertLMVisualTokenBudget") as? Int ?? 560
-        self.systemPrompt = defaults.string(forKey: "litertLMSystemPrompt") ?? "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
-        self.memoryEnabled = defaults.object(forKey: "memoryEnabled") as? Bool ?? true
-        refreshModels()
+        availableModels = ProviderManager.listModels()
     }
 
     // MARK: - Actions
@@ -137,7 +137,7 @@ final class SettingsViewModel: ObservableObject {
         speculativeDecoding = true
         visualTokenBudget = 560
         memoryEnabled = true
-        systemPrompt = "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
+        systemPrompt = AppDefaults.systemPrompt.defaultValue
     }
 
     /// Current SamplerConfig built from published values.

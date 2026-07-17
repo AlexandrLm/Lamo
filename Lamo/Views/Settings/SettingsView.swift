@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
-    @StateObject private var vm = SettingsViewModel()
+    @State private var vm = SettingsViewModel()
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var benchmark = DeviceBenchmark()
     @ObservedObject private var memory = MemoryService.shared

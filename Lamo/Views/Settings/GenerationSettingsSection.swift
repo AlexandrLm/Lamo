@@ -3,7 +3,7 @@ import SwiftUI
 /// Generation settings section — temperature, top-k, top-p, reset.
 /// Extracted from SettingsView for maintainability.
 struct GenerationSettingsSection: View {
-    @ObservedObject var vm: SettingsViewModel
+    @Bindable var vm: SettingsViewModel
 
     var body: some View {
         ScrollView {

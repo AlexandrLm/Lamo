@@ -29,11 +29,11 @@ final class DownloadManager: ObservableObject {
     private(set) var isConstrained = false // true = low-data mode / data cap
 
     /// Directory for persisting resume data across app launches.
-    private var resumeDataURL: URL {
+    private static let resumeDataURL: URL = {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("models")
             .appendingPathComponent(".resume_data")
-    }
+    }()
 
     struct DownloadState {
         var progress: Double = 0
@@ -126,9 +126,9 @@ final class DownloadManager: ObservableObject {
 
     /// Loads any persisted resume data from ~/Documents/models/.resume_data/
     private func loadPersistedResumeData() {
-        guard FileManager.default.fileExists(atPath: resumeDataURL.path) else { return }
+        guard FileManager.default.fileExists(atPath: Self.resumeDataURL.path) else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: resumeDataURL, includingPropertiesForKeys: [.creationDateKey]
+            at: Self.resumeDataURL, includingPropertiesForKeys: [.creationDateKey]
         ) else { return }
 
         for file in files where file.pathExtension == "resume" {
@@ -142,9 +142,9 @@ final class DownloadManager: ObservableObject {
 
     /// Removes resume data files older than 7 days.
     private func cleanupOldResumeData() {
-        guard FileManager.default.fileExists(atPath: resumeDataURL.path) else { return }
+        guard FileManager.default.fileExists(atPath: Self.resumeDataURL.path) else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: resumeDataURL, includingPropertiesForKeys: [.creationDateKey]
+            at: Self.resumeDataURL, includingPropertiesForKeys: [.creationDateKey]
         ) else { return }
 
         let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
@@ -160,15 +160,15 @@ final class DownloadManager: ObservableObject {
 
     /// Persists resume data to ~/Documents/models/.resume_data/
     private func persistResumeData(_ data: Data, for filename: String) {
-        try? FileManager.default.createDirectory(at: resumeDataURL, withIntermediateDirectories: true)
-        let fileURL = resumeDataURL.appendingPathComponent(filename + ".resume")
+        try? FileManager.default.createDirectory(at: Self.resumeDataURL, withIntermediateDirectories: true)
+        let fileURL = Self.resumeDataURL.appendingPathComponent(filename + ".resume")
         try? data.write(to: fileURL)
         LamoLogger.download.info("Persisted resume data for \(filename)")
     }
 
     /// Removes persisted resume data for a filename.
     private func removePersistedResumeData(for filename: String) {
-        let fileURL = resumeDataURL.appendingPathComponent(filename + ".resume")
+        let fileURL = Self.resumeDataURL.appendingPathComponent(filename + ".resume")
         try? FileManager.default.removeItem(at: fileURL)
     }
 

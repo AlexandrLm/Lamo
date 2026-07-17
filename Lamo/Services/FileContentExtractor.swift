@@ -178,7 +178,9 @@ enum FileContentExtractor {
 
     // MARK: - XML Helpers
 
-    private static let xmlTextPattern = try! NSRegularExpression(pattern: ">([^<]+)<", options: [])
+    private static let xmlTextPattern: NSRegularExpression = {
+        try! NSRegularExpression(pattern: ">([^<]+)<", options: [])
+    }()
 
     private static func extractTextFromOOXML(_ data: Data) -> String {
         guard let xml = String(data: data, encoding: .utf8) else { return "" }
@@ -199,8 +201,12 @@ enum FileContentExtractor {
 
     // MARK: - XLSX Helpers
 
-    private static let xlsxRowPattern = try! NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])
-    private static let xlsxCellPattern = try! NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])
+    private static let xlsxRowPattern: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])
+    }()
+    private static let xlsxCellPattern: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])
+    }()
 
     private static func parseXLSXSheet(_ data: Data, sharedStrings: [String]) -> String {
         guard let xml = String(data: data, encoding: .utf8) else { return "" }

@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 /// Models section — library, catalog, import, storage.
 /// Extracted from SettingsView for maintainability.
 struct ModelsSettingsSection: View {
-    @ObservedObject var vm: SettingsViewModel
+    var vm: SettingsViewModel
     @ObservedObject var downloadManager = DownloadManager.shared
     @Environment(\.modelContext) private var modelContext
     @State private var isImportingModel = false

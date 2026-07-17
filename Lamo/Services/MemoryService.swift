@@ -16,9 +16,9 @@ import os
 final class MemoryService: ObservableObject {
     static let shared = MemoryService()
 
-    @Published var isEnabled: Bool {
+    @Published var isEnabled: Bool = AppDefaults.memoryEnabled.wrappedValue {
         didSet {
-            UserDefaults.standard.set(isEnabled, forKey: "memoryEnabled")
+            AppDefaults.memoryEnabled.wrappedValue = isEnabled
         }
     }
 
@@ -47,7 +47,7 @@ final class MemoryService: ObservableObject {
     // MARK: - Init
 
     private init() {
-        self.isEnabled = UserDefaults.standard.object(forKey: "memoryEnabled") as? Bool ?? true
+        // isEnabled is already initialized via AppDefaults in the property declaration
     }
 
     func setModelContext(_ context: ModelContext) {
