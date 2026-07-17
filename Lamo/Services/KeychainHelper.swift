@@ -5,7 +5,7 @@ import Security
 enum KeychainHelper {
     private static let service = "com.lamo.keys"
 
-    static func save(key: String, value: String) {
+    nonisolated static func save(key: String, value: String) {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -17,7 +17,7 @@ enum KeychainHelper {
         SecItemAdd(query as CFDictionary, nil)
     }
 
-    static func load(key: String) -> String? {
+    nonisolated static func load(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -31,7 +31,7 @@ enum KeychainHelper {
         return String(data: data, encoding: .utf8)
     }
 
-    static func delete(key: String) {
+    nonisolated static func delete(key: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

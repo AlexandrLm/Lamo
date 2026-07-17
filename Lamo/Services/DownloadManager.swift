@@ -106,8 +106,9 @@ final class DownloadManager: ObservableObject {
         cleanupOldResumeData()
 
         networkMonitor.pathUpdateHandler = { [weak self] path in
+            let isExpensive = path.isExpensive
             Task { @MainActor in
-                self?.isExpensive = path.isExpensive
+                self?.isExpensive = isExpensive
             }
         }
         networkMonitor.start(queue: networkQueue)

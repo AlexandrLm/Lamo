@@ -36,8 +36,8 @@ final class ProviderManager: ObservableObject {
 
     /// Tokenization cache — avoids re-tokenizing unchanged messages.
     /// Key: message content (String), Value: token count.
-    private var tokenCache: [String: Int] = [:]
-    private let tokenCacheLock = NSLock()
+    /// State is held inside OSAllocatedUnfairLock for async-safe access.
+    private let tokenCacheLock = OSAllocatedUnfairLock(initialState: [String: Int]())
 
     private func safeMaxTokens(modelPath: String) -> Int? {
         let availableBytes: UInt64
@@ -193,19 +193,13 @@ final class ProviderManager: ObservableObject {
     /// Tokenize a string using the engine's real tokenizer.
     /// Uses tokenization cache to avoid re-tokenizing identical strings.
     func tokenizeCount(_ text: String) async -> Int {
-        tokenCacheLock.lock()
-        if let cached = tokenCache[text] {
-            tokenCacheLock.unlock()
-            return cached
-        }
-        tokenCacheLock.unlock()
+        let cached = tokenCacheLock.withLock { $0[text] }
+        if let cached { return cached }
 
         guard let engine = cachedEngine else { return text.count / 4 }
         let count = (try? await engine.tokenize(text))?.count ?? (text.count / 4)
 
-        tokenCacheLock.lock()
-        tokenCache[text] = count
-        tokenCacheLock.unlock()
+        tokenCacheLock.withLock { $0[text] = count }
 
         return count
     }
@@ -221,20 +215,16 @@ final class ProviderManager: ObservableObject {
 
         var counts: [UUID: Int] = [:]
         for msg in messages {
-            tokenCacheLock.lock()
-            if let cached = tokenCache[msg.content] {
-                tokenCacheLock.unlock()
+            let cached = tokenCacheLock.withLock { $0[msg.content] }
+            if let cached {
                 counts[msg.id] = cached
                 continue
             }
-            tokenCacheLock.unlock()
 
             if let tokens = try? await engine.tokenize(msg.content) {
                 let count = tokens.count
                 counts[msg.id] = count
-                tokenCacheLock.lock()
-                tokenCache[msg.content] = count
-                tokenCacheLock.unlock()
+                tokenCacheLock.withLock { $0[msg.content] = count }
             } else {
                 counts[msg.id] = msg.content.count / 4
             }
@@ -244,9 +234,7 @@ final class ProviderManager: ObservableObject {
 
     /// Clear tokenization cache (e.g., when engine changes).
     func clearTokenCache() {
-        tokenCacheLock.lock()
-        tokenCache.removeAll()
-        tokenCacheLock.unlock()
+        tokenCacheLock.withLock { $0.removeAll() }
     }
 
     /// Debounce: prevents rapid re-initialization when settings change quickly.

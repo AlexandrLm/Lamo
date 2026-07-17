@@ -126,7 +126,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         )
 
         // --- Auto-summarization when context is full ---
-        var includedMessages = budgetResult.included
+        let includedMessages = budgetResult.included
         if budgetResult.needsSummary,
            !budgetResult.dropped.isEmpty,
            let sumEngine = self.engine ?? pm.engineForSummarization {
@@ -138,7 +138,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                 // Inject summary into system prompt
                 systemPrompt += "\n\n<earlier_context_summary>\n\(summary)\n</earlier_context_summary>"
                 // Persist summary for future conversations
-                if let convID = MemoryService.shared.currentConversationID {
+                if MemoryService.shared.currentConversationID != nil {
                     await MemoryService.shared.updateConversationSummary(summary)
                 }
             }

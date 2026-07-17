@@ -390,8 +390,8 @@ final class DeviceBenchmark: ObservableObject {
                 }
                 for i in startRow..<endRow {
                     for k in 0..<size {
-                        let aik = a[i * size + k]
-                        for j in 0..<size {
+                        let _ = a[i * size + k]
+                        for _ in 0..<size {
                         }
                     }
                 }
@@ -417,7 +417,7 @@ final class DeviceBenchmark: ObservableObject {
                     for k in 0..<size {
                         let aik = a[i * size + k]
                         for j in 0..<size {
-                            results[i * size + j] += aik * b[k * size + j]
+                            results.advanced(by: i * size + j).pointee += aik * b[k * size + j]
                         }
                     }
                 }
