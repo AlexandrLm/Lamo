@@ -23,18 +23,31 @@ actor ToolCallReporter {
 
     func reportResult(name: String, result: Any) {
         let jsonStr: String
-        // Recursively strip Optionals before serialization
         let cleaned = stripOptionals(result)
-        if let data = try? JSONSerialization.data(withJSONObject: cleaned, options: .prettyPrinted),
+        // Limit individual string values to keep JSON parseable
+        let trimmed = trimStringValues(cleaned, maxLength: 2000)
+        if let data = try? JSONSerialization.data(withJSONObject: trimmed, options: .prettyPrinted),
            let str = String(data: data, encoding: .utf8) {
             jsonStr = str
         } else {
             jsonStr = String(describing: result)
         }
-        let truncated = jsonStr.count > 3000
-            ? String(jsonStr.prefix(3000)) + "\n… [truncated]"
-            : jsonStr
-        continuation?.yield(.toolResult(name: name, result: truncated))
+        continuation?.yield(.toolResult(name: name, result: jsonStr))
+    }
+
+    /// Recursively truncates string values longer than maxLength.
+    private nonisolated func trimStringValues(_ value: Any, maxLength: Int) -> Any {
+        if let str = value as? String, str.count > maxLength {
+            return String(str.prefix(maxLength)) + "…"
+        }
+        if var dict = value as? [String: Any] {
+            for (k, v) in dict { dict[k] = trimStringValues(v, maxLength: maxLength) }
+            return dict
+        }
+        if let arr = value as? [Any] {
+            return arr.map { trimStringValues($0, maxLength: maxLength) }
+        }
+        return value
     }
 
     /// Recursively replaces Optional values with their unwrapped value or NSNull.
