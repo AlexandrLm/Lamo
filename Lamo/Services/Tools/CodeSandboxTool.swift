@@ -6,7 +6,7 @@ import LiteRTLM
 
 struct CodeSandboxTool: Tool {
     static let name = "code_sandbox"
-    static let description = "Execute JavaScript code in a secure sandbox. Use for calculations, data analysis, text processing, generating test data, or any computation that requires code. No network or file system access."
+    static let description = "Run JavaScript code in a secure sandbox. Use for calculations, data analysis, and text processing."
 
     @ToolParam(description: "JavaScript code to execute. Use `result` variable to return output.")
     var code: String

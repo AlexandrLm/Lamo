@@ -6,7 +6,7 @@ import Contacts
 
 struct ContactsTool: Tool {
     static let name = "contacts"
-    static let description = "Search your device contacts. Find people by name, phone, email, or organization. Returns matching contacts with their details."
+    static let description = "Search contacts by name, phone, or email."
 
     @ToolParam(description: "Name, phone number, email, or organization to search for.")
     var query: String

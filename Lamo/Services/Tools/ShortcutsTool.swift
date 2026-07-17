@@ -6,7 +6,7 @@ import UIKit
 
 struct ShortcutsTool: Tool {
     static let name = "shortcuts"
-    static let description = "Run a Siri Shortcut by name. Shortcuts can control HomeKit, send messages, get directions, or automate anything in the Shortcuts app. The shortcut must exist on your device. Returns the shortcut's output."
+    static let description = "Run a Siri Shortcut by name."
 
     @ToolParam(description: "Exact name of the shortcut to run.")
     var name: String

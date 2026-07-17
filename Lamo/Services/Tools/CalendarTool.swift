@@ -15,7 +15,7 @@ private func reportResult(_ name: String, _ result: Any) async {
 
 struct CalendarTool: Tool {
     static let name = "calendar"
-    static let description = "Manage calendar events. Three modes: 'list' — events for a date range, 'create' — add a new event, 'search' — find events by text query."
+    static let description = "List, create, or search calendar events."
 
     @ToolParam(description: "Operation mode: 'list', 'create', or 'search'. Default 'list'.")
     var mode: String = "list"

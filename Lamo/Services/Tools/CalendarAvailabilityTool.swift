@@ -6,7 +6,7 @@ import EventKit
 
 struct CalendarAvailabilityTool: Tool {
     static let name = "calendar_availability"
-    static let description = "Find available time slots in your calendar. Specify duration, date range, and working hours to get a list of free windows. Perfect for scheduling meetings or planning your day."
+    static let description = "Find free time slots in your calendar."
 
     @ToolParam(description: "Desired slot duration in minutes. Default 60 (1 hour).")
     var durationMinutes: Int = 60

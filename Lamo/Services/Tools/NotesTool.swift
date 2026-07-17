@@ -5,7 +5,7 @@ import LiteRTLM
 
 struct NotesTool: Tool {
     static let name = "notes"
-    static let description = "Manage your personal notes stored in Lamo. Five modes: 'list' — show all notes, 'search' — find notes by text, 'read' — read a note by title, 'create' — add a note, 'delete' — remove a note."
+    static let description = "Create, search, read, or delete personal notes."
 
     @ToolParam(description: "Operation mode: 'list', 'search', 'read', 'create', or 'delete'.")
     var mode: String

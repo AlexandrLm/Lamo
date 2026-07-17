@@ -194,8 +194,15 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
         let tools = allTools
 
+        // --- Smart tool filtering: only include relevant tools for this query ---
+        let lastUserQuery = messages.last(where: { $0.role == .user })?.content ?? ""
+        let toolNames = allTools.map { type(of: $0).name }
+        let filteredNames = Set(ToolFilter.filter(toolNames: toolNames, query: lastUserQuery))
+        let relevantTools = allTools.filter { filteredNames.contains(type(of: $0).name) }
+        LamoLogger.engine.debug("ToolFilter: \(allTools.count) → \(relevantTools.count) tools for query: \(lastUserQuery.prefix(50))")
+
         // --- Configure agentic loop budget (KV-cache guard for multi-tool turns) ---
-        let toolDefTokens = allTools.count * 80  // rough: each tool JSON schema ~80 tokens
+        let toolDefTokens = relevantTools.count * 80  // rough: each tool JSON schema ~80 tokens
         let conversationTokens = includedMessages.reduce(0) { acc, msg in
             acc + (msg.content.count / 4)  // fast estimate; real counts already computed above
         }
@@ -208,7 +215,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,
-            tools: tools,
+            tools: relevantTools,
             samplerConfig: samplerConfig
         )
 

@@ -6,7 +6,7 @@ import LiteRTLM
 
 struct HealthTool: Tool {
     static let name = "health"
-    static let description = "Read your health data from Apple Health. Modes: 'steps' — step count, 'heart_rate' — heart rate stats, 'sleep' — sleep duration, 'weight' — latest weight, 'summary' — today's activity overview. All data stays on device."
+    static let description = "Read steps, heart rate, sleep, or weight from Apple Health."
 
     @ToolParam(description: "What to read: 'steps', 'heart_rate', 'sleep', 'weight', or 'summary'.")
     var mode: String

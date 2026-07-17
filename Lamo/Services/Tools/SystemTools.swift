@@ -17,7 +17,7 @@ private func reportResult(_ name: String, _ result: Any) async {
 
 struct GetCurrentTimeTool: Tool {
     static let name = "get_current_time"
-    static let description = "Call when user asks about current time, date, day of week, today's date, or time in another timezone. Returns date, time, weekday, timezone, and Unix timestamp. Supports querying any timezone or future/past dates."
+    static let description = "Get current date, time, weekday, timezone, and Unix timestamp."
 
     @ToolParam(description: "IANA timezone name like 'Asia/Tokyo', 'Europe/London', 'America/New_York'. Leave empty for device timezone.")
     var timezone: String?
@@ -81,12 +81,7 @@ struct GetCurrentTimeTool: Tool {
 
 struct CalculatorTool: Tool {
     static let name = "calculator"
-    static let description = """
-        Call when user asks to calculate, compute, evaluate math, or convert numbers. \
-        Supports +, -, *, /, %, ** (power), ! (factorial), sqrt, sin, cos, tan, asin, acos, atan, \
-        log, log2, ln, abs, ceil, floor, round, pi, e. Percentages: "200 * 15%". \
-        Scientific notation: "1e6". Example: "2 + 3 * 4", "sqrt(144)", "5!".
-        """
+    static let description = "Evaluate math expressions. Supports +, -, *, /, %, **, sqrt, sin, cos, log, abs, round, pi, e."
 
     @ToolParam(description: "The mathematical expression to evaluate.")
     var expression: String
@@ -224,7 +219,7 @@ private enum CalcError: LocalizedError {
 
 struct OpenURLTool: Tool {
     static let name = "open_url"
-    static let description = "Open a URL in the appropriate system app — browser for http/https, Mail for mailto, Maps for maps, Phone for tel, or FaceTime for facetime. Use when the user asks to open a link, email, map location, or make a call."
+    static let description = "Open a URL in browser, Mail, Maps, Phone, or FaceTime."
 
     @ToolParam(description: "The URL to open. Supported schemes: http, https, mailto, maps, tel, facetime.")
     var url: String
@@ -262,12 +257,7 @@ struct OpenURLTool: Tool {
 
 struct WikipediaTool: Tool {
     static let name = "wikipedia"
-    static let description = """
-        Search Wikipedia for articles and get summaries. \
-        Use to look up facts, definitions, biographies, historical events, and general knowledge. \
-        Two modes: "search" returns article titles and snippets; "extract" returns the summary of a specific article. \
-        Language defaults to "en" (English). Use fullExtract=true for the full article instead of just the intro.
-        """
+    static let description = "Search Wikipedia articles or get article summaries."
 
     @ToolParam(description: "The search query or article title.")
     var query: String
@@ -370,7 +360,7 @@ struct WikipediaTool: Tool {
 
 struct DeviceInfoTool: Tool {
     static let name = "get_device_info"
-    static let description = "Get information about this device: real model name, OS version, battery level, available storage, memory, and uptime. Use when the user asks about their device."
+    static let description = "Get device model, OS version, battery, storage, and memory."
 
     func run() async throws -> Any {
         await report(Self.name, params: "{}")
@@ -438,12 +428,7 @@ struct DeviceInfoTool: Tool {
 
 struct GetLocationTool: Tool {
     static let name = "get_location"
-    static let description = """
-        Get your current GPS location using device sensors. \
-        Returns city, coordinates, and address. \
-        First use will prompt for location permission. \
-        Use when you need to know exactly where the user is for weather, navigation, or local information.
-        """
+    static let description = "Get GPS or IP-based current location (city, coordinates)."
 
     @ToolParam(description: "If true, skip GPS and use IP-based location only (faster, less accurate). Default false.")
     var ipOnly: Bool = false
@@ -474,11 +459,7 @@ struct GetLocationTool: Tool {
 
 struct WeatherTool: Tool {
     static let name = "weather"
-    static let description = """
-        Call when user asks about weather, temperature, forecast, rain, snow, wind, humidity, or climate. \
-        Returns current conditions and multi-day forecast from Open-Meteo (free, no API key). \
-        If no city provided, auto-detects your GPS location.
-        """
+    static let description = "Get current weather and multi-day forecast for any city."
 
     @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
     var city: String = ""
@@ -618,12 +599,7 @@ private enum WeatherError: LocalizedError {
 
 struct CreateReminderTool: Tool {
     static let name = "create_reminder"
-    static let description = """
-        Call when user asks to be reminded, set a reminder, alarm, or notification. \
-        Creates a reminder in the system Reminders app. \
-        Date can be ISO 8601 (e.g. "2026-07-17T18:00:00") or relative \
-        (e.g. "tomorrow 10am", "in 30 minutes", "next Friday 3pm").
-        """
+    static let description = "Create a reminder in the Reminders app with optional due date."
 
     @ToolParam(description: "The reminder title — what to remind about.")
     var title: String

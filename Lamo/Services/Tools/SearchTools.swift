@@ -5,7 +5,7 @@ import LiteRTLM
 
 struct WebSearchTool: Tool {
     static let name = "web_search"
-    static let description = "Call when user asks about news, current events, facts, or information you don't know. Searches the internet. Returns titles, snippets, and URLs. Supports time range filtering for recent results."
+    static let description = "Search the internet. Returns titles, snippets, and URLs."
 
     @ToolParam(description: "The search query to look up on the internet.")
     var query: String
@@ -94,7 +94,7 @@ struct WebSearchTool: Tool {
 
 struct FetchUrlTool: Tool {
     static let name = "fetch_url"
-    static let description = "Fetch and read the content of a specific URL. Returns page title, description, and main content. Use to read articles, documentation, or any specific webpage."
+    static let description = "Fetch and extract content from a URL."
 
     @ToolParam(description: "The URL to fetch content from.")
     var url: String
