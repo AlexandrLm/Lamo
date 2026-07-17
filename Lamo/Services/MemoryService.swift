@@ -29,6 +29,10 @@ final class MemoryService: ObservableObject {
     private var cacheLoaded = false
     /// Cached result of buildMemoryContext() — invalidated on any fact change.
     private var memoryContextCache: String?
+    /// Cached word sets for duplicate detection — computed on load, updated on mutation.
+    private var wordSetsCache: [UUID: Set<String>] = [:]
+    /// Cache for the full system prompt including memory — invalidated on fact/summary change.
+    private var systemPromptCache: (base: String, conversationID: UUID?, result: String)?
 
     /// Current conversation ID — set by ChatViewModel before each message.
     /// Used by UpdateMemoryTool to update conversation summary.
@@ -67,9 +71,10 @@ final class MemoryService: ObservableObject {
             )
             context.insert(entry)
             factsCache.append(entry)
+            wordSetsCache[entry.id] = Set(trimmed.lowercased().split(separator: " ").map(String.init))
         }
 
-        memoryContextCache = nil
+        invalidateCaches()
 
         if factsCache.count > maxFacts * 2 {
             pruneOldest(keepCount: maxFacts)
@@ -106,13 +111,14 @@ final class MemoryService: ObservableObject {
                 if entryText.contains(removeText) || removeText.contains(entryText) {
                     context.delete(entry)
                     factsCache.removeAll { $0.id == entry.id }
+                    wordSetsCache.removeValue(forKey: entry.id)
                     didRemove = true
                     break
                 }
             }
         }
 
-        if didRemove { memoryContextCache = nil }
+        if didRemove { invalidateCaches() }
 
         do {
             try context.save()
@@ -153,13 +159,31 @@ final class MemoryService: ObservableObject {
 
         context += "</memory>"
         memoryContextCache = context
+
+        // Increment usageCount for included facts (async save, non-blocking)
+        Task { @MainActor in
+            guard let ctx = modelContext else { return }
+            for fact in sorted.prefix(maxFacts) {
+                fact.usageCount += 1
+            }
+            try? ctx.save()
+        }
+
         return context
     }
 
     /// Build the full system prompt with memory + conversation summary injected.
     /// Single source of truth — used by both ChatViewModel.refreshContextTracker
     /// and LiteRTLMProvider.buildConversation.
+    /// Results are cached and invalidated when facts, summary, or base prompt change.
     func buildFullSystemPrompt(base: String, conversationID: UUID?) -> String {
+        // Return cached result if inputs haven't changed
+        if let cached = systemPromptCache,
+           cached.base == base,
+           cached.conversationID == conversationID {
+            return cached.result
+        }
+
         var fullSystem = base
 
         if isEnabled {
@@ -179,6 +203,7 @@ final class MemoryService: ObservableObject {
             }
         }
 
+        systemPromptCache = (base: base, conversationID: conversationID, result: fullSystem)
         return fullSystem
     }
 
@@ -195,7 +220,8 @@ final class MemoryService: ObservableObject {
         guard let context = modelContext else { return }
         context.delete(entry)
         factsCache.removeAll { $0.id == entry.id }
-        memoryContextCache = nil
+        wordSetsCache.removeValue(forKey: entry.id)
+        invalidateCaches()
         do {
             try context.save()
             updateEntryCount()
@@ -210,8 +236,9 @@ final class MemoryService: ObservableObject {
             try context.delete(model: MemoryEntry.self)
             try context.save()
             factsCache.removeAll()
+            wordSetsCache.removeAll()
             cacheLoaded = false
-            memoryContextCache = nil
+            invalidateCaches()
             updateEntryCount()
         } catch {
             LamoLogger.memory.error("Clear error: \(error)")
@@ -229,8 +256,9 @@ final class MemoryService: ObservableObject {
             for entry in old { context.delete(entry) }
             try context.save()
             factsCache.removeAll()
+            wordSetsCache.removeAll()
             cacheLoaded = false
-            memoryContextCache = nil
+            invalidateCaches()
             updateEntryCount()
         } catch {
             LamoLogger.memory.error("Prune error: \(error)")
@@ -240,14 +268,20 @@ final class MemoryService: ObservableObject {
     // MARK: - Private
 
     /// Check if a fact is too similar to any existing fact.
+    /// Uses cached word sets for O(1) lookup without re-splitting.
     private func isDuplicate(_ newFact: String) -> Bool {
         let newWords = Set(newFact.lowercased().split(separator: " ").map(String.init))
+        guard !newWords.isEmpty else { return true }
 
         for existing in factsCache {
-            let existingWords = Set(existing.text.lowercased().split(separator: " ").map(String.init))
+            guard let existingWords = wordSetsCache[existing.id] else {
+                // Fallback: compute on the fly if cache is missing
+                let computed = Set(existing.text.lowercased().split(separator: " ").map(String.init))
+                wordSetsCache[existing.id] = computed
+                continue
+            }
             let intersection = newWords.intersection(existingWords)
             let union = newWords.union(existingWords)
-
             guard !union.isEmpty else { continue }
             let similarity = Float(intersection.count) / Float(union.count)
             if similarity > 0.6 { return true }
@@ -266,9 +300,14 @@ final class MemoryService: ObservableObject {
         }
 
         let toRemove = sorted.prefix(sorted.count - keepCount)
+        let removeIDs = Set(toRemove.map { $0.id })
+
         for entry in toRemove {
             context.delete(entry)
-            factsCache.removeAll { $0.id == entry.id }
+        }
+        factsCache.removeAll { removeIDs.contains($0.id) }
+        for id in removeIDs {
+            wordSetsCache.removeValue(forKey: id)
         }
     }
 
@@ -278,7 +317,18 @@ final class MemoryService: ObservableObject {
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
         factsCache = (try? context.fetch(descriptor)) ?? []
+        // Pre-compute word sets for all cached facts
+        wordSetsCache.removeAll(keepingCapacity: true)
+        for entry in factsCache {
+            wordSetsCache[entry.id] = Set(entry.text.lowercased().split(separator: " ").map(String.init))
+        }
         cacheLoaded = true
+    }
+
+    /// Invalidate all caches that depend on memory facts.
+    private func invalidateCaches() {
+        memoryContextCache = nil
+        systemPromptCache = nil
     }
 
     private func updateEntryCount() {

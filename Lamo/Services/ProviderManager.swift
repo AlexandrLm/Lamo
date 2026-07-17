@@ -408,6 +408,8 @@ final class ProviderManager: ObservableObject {
                 )
                 cachedProvider = provider
                 isEngineReady = true
+                // Restore URLCache that was cleared during preload cleanup
+                restoreURLCache()
                 return
             } catch {
                 lastEngineError = LamoError.engineInitFailed(error.localizedDescription).errorDescription ?? "Engine init failed: \(error.localizedDescription)"
@@ -431,6 +433,11 @@ final class ProviderManager: ObservableObject {
             Task { @MainActor in
                 self.isMemoryPressure = true
                 self.clearTokenCache()
+                // Auto-reset memory pressure after 30 seconds
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(30))
+                    self.isMemoryPressure = false
+                }
             }
         }
         source.resume()
@@ -467,9 +474,16 @@ final class ProviderManager: ObservableObject {
 
     // MARK: - Memory Cleanup
 
+    /// Original URLCache capacities — restored after engine loads.
+    private var savedURLCacheMemory: Int = 0
+    private var savedURLCacheDisk: Int = 0
+
     /// Aggressive cleanup before engine load — frees everything we can
     /// so the OS has maximum contiguous memory for the mmap'd model.
     private func performPreloadCleanup() {
+        // Save and clear URLCache
+        savedURLCacheMemory = URLCache.shared.memoryCapacity
+        savedURLCacheDisk = URLCache.shared.diskCapacity
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared.memoryCapacity = 0
         URLCache.shared.diskCapacity = 0
@@ -499,6 +513,16 @@ final class ProviderManager: ObservableObject {
         #else
         LamoLogger.engine.info("Preload cleanup done (macOS — pressure trick skipped)")
         #endif
+    }
+
+    /// Restore URLCache after engine loads successfully.
+    private func restoreURLCache() {
+        if savedURLCacheMemory > 0 {
+            URLCache.shared.memoryCapacity = savedURLCacheMemory
+        }
+        if savedURLCacheDisk > 0 {
+            URLCache.shared.diskCapacity = savedURLCacheDisk
+        }
     }
 
     /// Allocate a large anonymous block, touch every page, then release it.

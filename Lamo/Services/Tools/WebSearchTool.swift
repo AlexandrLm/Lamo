@@ -2,6 +2,30 @@ import Foundation
 import LiteRTLM
 import os
 
+// MARK: - URL Content Cache
+
+/// Simple in-memory cache for fetched URL contents to avoid re-fetching the same URL within a conversation.
+final class URLCacheStore {
+    static let shared = URLCacheStore()
+    private let cache = NSCache<NSString, NSString>()
+    private init() {
+        cache.countLimit = 50
+        cache.totalCostLimit = 10 * 1024 * 1024 // 10MB
+    }
+
+    func content(for url: String) -> String? {
+        cache.object(forKey: url as NSString) as String?
+    }
+
+    func setContent(_ content: String, for url: String) {
+        cache.setObject(content as NSString, forKey: url as NSString, cost: content.utf8.count)
+    }
+
+    func clear() {
+        cache.removeAllObjects()
+    }
+}
+
 // MARK: - Web Search Tool
 
 struct WebSearchTool: Tool {
@@ -82,6 +106,15 @@ struct FetchUrlTool: Tool {
             throw FetchError.invalidURL
         }
 
+        // Check cache first — avoids re-fetching the same URL within a conversation
+        if let cached = URLCacheStore.shared.content(for: url) {
+            return [
+                "content": cached,
+                "url": url,
+                "source": "cache"
+            ] as [String: Any]
+        }
+
         let result = try await WebFetcher.fetchStructured(url: fetchURL)
 
         var output: [String: Any] = [:]
@@ -96,6 +129,11 @@ struct FetchUrlTool: Tool {
         }
         output["content"] = result.content
         output["url"] = url
+
+        // Cache the fetched content
+        if !result.content.isEmpty {
+            URLCacheStore.shared.setContent(result.content, for: url)
+        }
 
         return output
     }
@@ -230,6 +268,12 @@ actor SearchProvider {
     // Health tracking: instance -> (failures, lastFail)
     private var instanceHealth: [String: (failures: Int, lastFail: Date)] = [:]
     private var currentInstanceIndex = 0
+    /// Cached sorted instance list — recomputed only when health changes.
+    private var healthyOrderCache: [String] = []
+    /// Monotonically increasing version bumped on every health mutation.
+    private var healthVersion = 0
+    /// The healthVersion at which healthyOrderCache was last computed.
+    private var lastSortedHealthVersion = -1
 
     var braveAPIKey: String? {
         get { KeychainHelper.load(key: "brave_search_api_key") }
@@ -310,8 +354,13 @@ actor SearchProvider {
     // MARK: - Health Tracking
 
     private func healthyInstances() -> [String] {
+        // Use cached order unless health data has changed since last sort
+        if !healthyOrderCache.isEmpty, lastSortedHealthVersion == healthVersion {
+            return healthyOrderCache
+        }
+
         let now = Date()
-        return searxngInstances.sorted { a, b in
+        let sorted = searxngInstances.sorted { a, b in
             let aHealth = instanceHealth[a]
             let bHealth = instanceHealth[b]
             // Instances that failed recently (within 5 min) go last
@@ -323,6 +372,9 @@ actor SearchProvider {
             let bFails = bHealth?.failures ?? 0
             return aFails < bFails
         }
+        healthyOrderCache = sorted
+        lastSortedHealthVersion = healthVersion
+        return sorted
     }
 
     private func markFailed(_ instance: String) {
@@ -331,10 +383,12 @@ actor SearchProvider {
             failures: (current?.failures ?? 0) + 1,
             lastFail: Date()
         )
+        healthVersion += 1
     }
 
     private func markSuccess(_ instance: String) {
         instanceHealth[instance] = (failures: 0, lastFail: Date())
+        healthVersion += 1
     }
 
     // MARK: - SearXNG

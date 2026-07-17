@@ -138,14 +138,15 @@ enum PresetModel: String, CaseIterable, Identifiable {
         isDownloaded && !isFileValid
     }
 
-    /// File exists on disk and has non-zero size.
+    /// File exists on disk and is at least 50% of expected size (catches corrupted/partial downloads).
     var isFileValid: Bool {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
         let fileURL = modelsDir.appendingPathComponent(filename)
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let size = attrs[.size] as? Int64 else { return false }
-        return size > 0
+        let minValidBytes = Int64(fileSizeGB * 0.5 * 1_073_741_824)
+        return size >= max(minValidBytes, 1)
     }
 
     /// Human-readable file size on disk
@@ -156,6 +157,25 @@ enum PresetModel: String, CaseIterable, Identifiable {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let size = attrs[.size] as? Int64 else { return "unknown" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    /// Fetch SHA256 hash in parallel with model download. Returns nil if unavailable.
+    static func fetchSHA256(for model: PresetModel) async -> String? {
+        guard let url = model.downloadURL else { return nil }
+        let sha256URL = URL(string: url.absoluteString + ".sha256")
+        guard let checkURL = sha256URL else { return nil }
+        var request = URLRequest(url: checkURL)
+        request.timeoutInterval = 15
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return nil }
+            return String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: " ").first.map(String.init)
+        } catch {
+            return nil
+        }
     }
 
     /// Fetch the real file size from HuggingFace via HTTP HEAD request.

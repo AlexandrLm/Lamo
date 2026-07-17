@@ -127,7 +127,7 @@ enum FileContentExtractor {
 
     private static func extractDOCX(from url: URL) throws -> String {
         let data = try Data(contentsOf: url)
-        guard let archive = try? ZipArchive(data: data) else {
+        guard var archive = try? ZipArchive(data: data) else {
             throw FileExtractorError.unsupportedFormat("DOCX")
         }
         guard let xmlData = archive.readEntry("word/document.xml") else {
@@ -143,7 +143,7 @@ enum FileContentExtractor {
             return try readTextFile(from: url)
         }
         let data = try Data(contentsOf: url)
-        guard let archive = try? ZipArchive(data: data) else {
+        guard var archive = try? ZipArchive(data: data) else {
             throw FileExtractorError.unsupportedFormat("XLSX")
         }
         var sharedStrings: [String] = []
@@ -160,7 +160,7 @@ enum FileContentExtractor {
 
     private static func extractPPTX(from url: URL) throws -> String {
         let data = try Data(contentsOf: url)
-        guard let archive = try? ZipArchive(data: data) else {
+        guard var archive = try? ZipArchive(data: data) else {
             throw FileExtractorError.unsupportedFormat("PPTX")
         }
         var slides: [String] = []
@@ -265,17 +265,32 @@ enum FileExtractorError: LocalizedError {
 private struct ZipArchive {
     let data: Data
 
+    /// Cached map of entry path → local header offset — avoids O(n²) traversal for repeated lookups.
+    private var entryCache: [String: (offset: Int, compMethod: UInt16, compSize: Int, uncompSize: Int)]?
+
     init(data: Data) throws {
         self.data = data
     }
 
-    func readEntry(_ path: String) -> Data? {
-        guard let eocd = findEndOfCentralDirectory() else { return nil }
+    mutating func readEntry(_ path: String) -> Data? {
+        // Build cache on first access
+        if entryCache == nil {
+            entryCache = buildEntryCache()
+        }
+        guard let cache = entryCache, let entry = cache[path] else { return nil }
+        return readLocalFileData(at: entry.offset, compMethod: entry.compMethod, compSize: entry.compSize, uncompSize: entry.uncompSize)
+    }
+
+    /// Build a cache of all entries in the central directory.
+    /// This is a single O(n) pass instead of O(n) per readEntry call.
+    private mutating func buildEntryCache() -> [String: (offset: Int, compMethod: UInt16, compSize: Int, uncompSize: Int)] {
+        guard let eocd = findEndOfCentralDirectory() else { return [:] }
         let cdOffset = Int(eocd.centralDirectoryOffset)
         let cdSize = Int(eocd.centralDirectorySize)
         let entryCount = Int(eocd.totalEntries)
-        guard cdOffset + cdSize <= data.count else { return nil }
+        guard cdOffset + cdSize <= data.count else { return [:] }
 
+        var cache: [String: (offset: Int, compMethod: UInt16, compSize: Int, uncompSize: Int)] = [:]
         var offset = cdOffset
         for _ in 0..<entryCount {
             guard offset + 46 <= data.count else { break }
@@ -294,13 +309,11 @@ private struct ZipArchive {
             guard nameStart + nameLen <= data.count else { break }
             let name = String(data: data[nameStart..<nameStart+nameLen], encoding: .utf8) ?? ""
 
-            if name == path {
-                return readLocalFileData(at: localHeaderOffset, compMethod: compMethod, compSize: compSize, uncompSize: uncompSize)
-            }
+            cache[name] = (offset: localHeaderOffset, compMethod: compMethod, compSize: compSize, uncompSize: uncompSize)
 
             offset = nameStart + nameLen + extraLen + commentLen
         }
-        return nil
+        return cache
     }
 
     private func readLocalFileData(at offset: Int, compMethod: UInt16, compSize: Int, uncompSize: Int) -> Data? {

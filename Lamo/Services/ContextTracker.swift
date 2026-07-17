@@ -112,13 +112,15 @@ struct ContextTracker {
         maxNumTokens: Int
     ) -> ContextTracker {
         let effective = max(maxNumTokens, 512)
-        let budget = calculateBudget(
+        let result = calculateIncluded(
             messages: messages,
             tokenCounts: tokenCounts,
             systemPromptTokens: systemPromptTokens,
             memoryTokens: memoryTokens,
             maxNumTokens: maxNumTokens
         )
+
+        let includedIDs = Set(result.included.map { $0.id })
 
         // Build final list in chronological order
         var usages: [MessageUsage] = []
@@ -133,7 +135,7 @@ struct ContextTracker {
                 tokenCount: tokens,
                 // Last message is always "in context" — it's sent via sendMessageStream.
                 // Other messages are in context only if they fit in the KV-cache budget.
-                isInContext: isLast || budget.includedIDs.contains(msg.id),
+                isInContext: isLast || includedIDs.contains(msg.id),
                 tokenOffset: runningOffset,
                 isStreaming: isLast
             ))

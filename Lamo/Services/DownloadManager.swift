@@ -14,6 +14,10 @@ final class DownloadManager: ObservableObject {
     /// Set when a large download is attempted on cellular — UI shows confirmation.
     @Published var pendingCellularDownload: PresetModel? = nil
     private var tasks: [String: URLSessionDownloadTask] = [:]
+
+    /// Pre-fetched SHA256 hashes, populated in parallel with model downloads.
+    private var pendingSHA256: [String: String] = [:]
+
     private var resumeData: [String: Data] = [:]
     private let session: URLSession
     private let backgroundSessionID = "com.lamo.download"
@@ -22,6 +26,7 @@ final class DownloadManager: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "com.lamo.network")
     private(set) var isExpensive = false  // true = cellular or hotspot
+    private(set) var isConstrained = false // true = low-data mode / data cap
 
     /// Directory for persisting resume data across app launches.
     private var resumeDataURL: URL {
@@ -108,8 +113,10 @@ final class DownloadManager: ObservableObject {
 
         networkMonitor.pathUpdateHandler = { [weak self] path in
             let isExpensive = path.isExpensive
+            let isConstrained = path.isConstrained
             Task { @MainActor in
                 self?.isExpensive = isExpensive
+                self?.isConstrained = isConstrained
             }
         }
         networkMonitor.start(queue: networkQueue)
@@ -220,6 +227,14 @@ final class DownloadManager: ObservableObject {
 
         tasks[model.filename] = task
         task.resume()
+
+        // Kick off SHA256 fetch in parallel with the model download
+        Task { @MainActor in
+            if let sha256 = await PresetModel.fetchSHA256(for: model) {
+                self.pendingSHA256[model.filename] = sha256
+                LamoLogger.download.info("SHA256 pre-fetched for \(model.filename)")
+            }
+        }
     }
 
     func cancelDownload(model: PresetModel) {
@@ -305,43 +320,58 @@ final class DownloadManager: ObservableObject {
 
                 if let model = DownloadSessionDelegate.shared.pendingModels[filename],
                    let modelURL = model.downloadURL {
-                    let sha256URL = URL(string: modelURL.absoluteString + ".sha256")
-                    if let sha256URL = sha256URL {
-                        do {
-                            let (sha256Data, response) = try await URLSession.shared.data(from: sha256URL)
-                            let httpResponse = response as? HTTPURLResponse
-                            if httpResponse?.statusCode == 200 {
-                                let expectedHash = String(data: sha256Data, encoding: .utf8)?
-                                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                                    .split(separator: " ").first.map(String.init)
-                                if let expectedHash = expectedHash, expectedHash.count == 64 {
-                                    let computedHash = try computeFileSHA256(at: destination)
-                                    if computedHash != expectedHash {
-                                        LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
-                                        try FileManager.default.removeItem(at: destination)
-                                        self.activeDownloads[filename]?.error = "File integrity check failed. Please re-download."
-                                        self.activeDownloads[filename]?.isDownloading = false
+                    // Use pre-fetched SHA256 if available (fetched in parallel with download)
+                    if let expectedHash = self.pendingSHA256[filename], expectedHash.count == 64 {
+                        let computedHash = try computeFileSHA256(at: destination)
+                        if computedHash != expectedHash {
+                            LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
+                            try FileManager.default.removeItem(at: destination)
+                            self.activeDownloads[filename]?.error = "File integrity check failed. Please re-download."
+                            self.activeDownloads[filename]?.isDownloading = false
+                            self.activeDownloads[filename]?.integrityVerified = false
+                            self.pendingSHA256.removeValue(forKey: filename)
+                            self.tasks.removeValue(forKey: filename)
+                            return
+                        }
+                        LamoLogger.download.info("SHA256 verified for \(filename)")
+                        self.activeDownloads[filename]?.integrityVerified = true
+                    } else {
+                        // Fallback: fetch SHA256 now (slow path, no parallel pre-fetch available)
+                        let sha256URL = URL(string: modelURL.absoluteString + ".sha256")
+                        if let sha256URL = sha256URL {
+                            do {
+                                let (sha256Data, response) = try await URLSession.shared.data(from: sha256URL)
+                                let httpResponse = response as? HTTPURLResponse
+                                if httpResponse?.statusCode == 200 {
+                                    let expectedHash = String(data: sha256Data, encoding: .utf8)?
+                                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                                        .split(separator: " ").first.map(String.init)
+                                    if let expectedHash = expectedHash, expectedHash.count == 64 {
+                                        let computedHash = try computeFileSHA256(at: destination)
+                                        if computedHash != expectedHash {
+                                            LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
+                                            try FileManager.default.removeItem(at: destination)
+                                            self.activeDownloads[filename]?.error = "File integrity check failed. Please re-download."
+                                            self.activeDownloads[filename]?.isDownloading = false
+                                            self.activeDownloads[filename]?.integrityVerified = false
+                                            self.tasks.removeValue(forKey: filename)
+                                            return
+                                        }
+                                        LamoLogger.download.info("SHA256 verified for \(filename)")
+                                        self.activeDownloads[filename]?.integrityVerified = true
+                                    } else {
                                         self.activeDownloads[filename]?.integrityVerified = false
-                                        self.tasks.removeValue(forKey: filename)
-                                        return
                                     }
-                                    LamoLogger.download.info("SHA256 verified for \(filename)")
-                                    self.activeDownloads[filename]?.integrityVerified = true
                                 } else {
-                                    // SHA256 file exists but couldn't be parsed
                                     self.activeDownloads[filename]?.integrityVerified = false
                                 }
-                            } else {
-                                // HTTP error fetching SHA256 — verification skipped
+                            } catch {
+                                LamoLogger.download.warning("SHA256 verification skipped for \(filename): \(error.localizedDescription)")
                                 self.activeDownloads[filename]?.integrityVerified = false
                             }
-                        } catch {
-                            LamoLogger.download.warning("SHA256 verification skipped for \(filename): \(error.localizedDescription)")
+                        } else {
                             self.activeDownloads[filename]?.integrityVerified = false
                         }
-                    } else {
-                        // No SHA256 URL — verification skipped
-                        self.activeDownloads[filename]?.integrityVerified = false
                     }
                 }
 
@@ -351,6 +381,7 @@ final class DownloadManager: ObservableObject {
                 self.activeDownloads[filename]?.retryCount = 0
                 self.activeDownloads[filename]?.lastError = nil
                 self.tasks.removeValue(forKey: filename)
+                self.pendingSHA256.removeValue(forKey: filename)
                 self.removePersistedResumeData(for: filename)
 
                 ProviderManager.shared.reloadEngine()

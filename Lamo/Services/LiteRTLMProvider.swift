@@ -27,6 +27,9 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     /// Lock for thread-safe access to cached conversation
     private let cacheLock = OSAllocatedUnfairLock(initialState: ())
 
+    /// Cached SamplerConfig — avoids redundant UserDefaults reads.
+    private var cachedSamplerConfig: (topK: Int, topP: Double, temperature: Double, seed: Int, config: LiteRTLM.SamplerConfig)?
+
     init(
         modelPath: String? = nil,
         useGPU: Bool = true,
@@ -109,6 +112,8 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             base: pm.systemPrompt,
             conversationID: MemoryService.shared.currentConversationID
         )
+        // Memory context is already embedded in systemPrompt via buildFullSystemPrompt.
+        // We only tokenize it separately to measure token budget accurately.
         let memoryContext = MemoryService.shared.buildMemoryContext()
 
         // --- Token budget calculation (real tokenizer, not char/4) ---
@@ -190,47 +195,46 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
     }
 
-    /// Summarize old context via a temporary conversation.
-    /// The temporary conversation is destroyed after getting the summary,
-    /// freeing its KV-cache allocation.
+    /// Summarize old context via a single prompt (no expensive Conversation prefill).
+    /// Concatenates dropped messages as text and asks the model for a summary,
+    /// avoiding the full KV-cache rebuild that Conversation.createConversation() requires.
     private func summarizeOldContext(
         dropped: [ChatMessage],
         engine: LiteRTLM.Engine
     ) async -> String? {
         guard !dropped.isEmpty else { return nil }
 
+        // Concatenate dropped messages into a single text block
+        let conversationText = dropped.map { msg in
+            let roleLabel = msg.role == .user ? "User" : "Assistant"
+            let content = msg.content.prefix(500) // Truncate each to 500 chars
+            return "[\(roleLabel)]: \(content)"
+        }.joined(separator: "\n\n")
+
+        guard !conversationText.isEmpty else { return nil }
+
         let summaryRequest = """
         Summarize the following conversation history into a concise context block. Preserve: \
         key facts, decisions, user preferences, code changes, file names, and important conclusions. \
         Be brief but complete — this summary replaces the original messages.
+
+        \(conversationText)
         """
 
-        let samplerConfig = try? buildSamplerConfig()
-
-        // Old messages as initial context (prefilled into KV-cache)
-        var initialMessages: [LiteRTLM.Message] = []
-        for msg in dropped {
-            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
-            initialMessages.append(LiteRTLM.Message(msg.content, role: role))
-        }
-
-        let config = LiteRTLM.ConversationConfig(
-            initialMessages: initialMessages,
-            samplerConfig: samplerConfig
-        )
-
         do {
+            let samplerConfig = try? buildSamplerConfig()
+            let config = LiteRTLM.ConversationConfig(
+                initialMessages: [LiteRTLM.Message(summaryRequest)],
+                samplerConfig: samplerConfig
+            )
             let summaryConv = try await engine.createConversation(with: config)
-            // Send summary request as the final message — model responds with summary
             var summaryText = ""
-            let summaryMsg = LiteRTLM.Message(summaryRequest)
-            for try await chunk in summaryConv.sendMessageStream(summaryMsg) {
+            for try await chunk in summaryConv.sendMessageStream(LiteRTLM.Message("")) {
                 let text = chunk.toString
                 if !text.isEmpty {
                     summaryText += text
                 }
             }
-            // Temporary conversation is released here, freeing its KV-cache
             if !summaryText.isEmpty {
                 return summaryText
             }
@@ -241,17 +245,30 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     }
 
     /// Build the sampler config with safe ranges for Gemma 4.
+    /// Results are cached and only recomputed when any parameter changes.
     private func buildSamplerConfig() throws -> LiteRTLM.SamplerConfig {
         let pm = ProviderManager.shared
         let safeTopK = max(1, min(pm.topK, 100))
         let safeTemp: Float = max(0.0, min(Float(pm.temperature), 2.0))
         let safeTopP: Float = max(0.0, min(Float(pm.topP), 1.0))
-        return try LiteRTLM.SamplerConfig(
+        let seed = Int.random(in: 0..<Int(Int32.max))
+
+        // Return cached config if all params are unchanged
+        if let cached = cachedSamplerConfig,
+           cached.topK == safeTopK,
+           cached.topP == Double(safeTopP),
+           cached.temperature == Double(safeTemp) {
+            return cached.config
+        }
+
+        let config = try LiteRTLM.SamplerConfig(
             topK: safeTopK,
             topP: safeTopP,
             temperature: safeTemp,
-            seed: Int.random(in: 0..<Int(Int32.max))
+            seed: seed
         )
+        cachedSamplerConfig = (topK: safeTopK, topP: Double(safeTopP), temperature: Double(safeTemp), seed: seed, config: config)
+        return config
     }
 
     /// Stream the last user message and yield tokens.

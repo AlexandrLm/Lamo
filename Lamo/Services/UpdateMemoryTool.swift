@@ -23,14 +23,22 @@ struct UpdateMemoryTool: Tool {
     var summary: String?
 
     func run() async throws -> Any {
-        if let facts = facts, !facts.isEmpty {
-            await MemoryService.shared.storeFacts(facts)
+        let hasFacts = facts != nil && !facts!.isEmpty
+        let hasForget = forget != nil && !forget!.isEmpty
+        let hasSummary = summary != nil && !summary!.isEmpty
+
+        guard hasFacts || hasForget || hasSummary else {
+            return ["status": "noop", "info": "No memory changes provided"]
         }
-        if let forget = forget, !forget.isEmpty {
-            await MemoryService.shared.removeFacts(forget)
+
+        if hasFacts {
+            await MemoryService.shared.storeFacts(facts!)
         }
-        if let summary = summary, !summary.isEmpty {
-            await MemoryService.shared.updateConversationSummary(summary)
+        if hasForget {
+            await MemoryService.shared.removeFacts(forget!)
+        }
+        if hasSummary {
+            await MemoryService.shared.updateConversationSummary(summary!)
         }
         return ["status": "saved"]
     }

@@ -14,7 +14,8 @@ final class ImageCache {
     }
     
     func setImage(_ image: UIImage, forKey key: String) {
-        let cost = Int(image.size.width * image.size.height * image.scale * 4)
+        let rawCost = Int(image.size.width * image.size.height * image.scale * 4)
+        let cost = rawCost > 0 ? min(rawCost, Int.max / 2) : 1
         cache.setObject(image, forKey: key as NSString, cost: cost)
     }
     
