@@ -211,20 +211,23 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         let relevantTools = allTools.filter { filteredNames.contains(type(of: $0).name) }
         LamoLogger.engine.debug("ToolFilter: \(allTools.count) → \(relevantTools.count) tools for query: \(lastUserQuery.prefix(50))")
 
-        // --- Tokenize tool schemas for accurate budget (not count * 80) ---
+        // --- Tokenize tool schemas using real getSchema() output ---
         var toolSchemaText = ""
         for tool in relevantTools {
-            let name = type(of: tool).name
-            let desc = type(of: tool).description
-            toolSchemaText += "\(name): \(desc)\n"
+            let schema = tool.getSchema()
+            if let data = try? JSONSerialization.data(withJSONObject: schema, options: []),
+               let json = String(data: data, encoding: .utf8) {
+                toolSchemaText += json + "\n"
+            }
         }
-        // ×3 multiplier: JSON boilerplate + parameter schemas + required lists
-        let toolDefTokens = await pm.tokenizeCount(toolSchemaText) * 3
+        let toolDefTokens = await pm.tokenizeCount(toolSchemaText)
         pm.lastToolTokens = toolDefTokens
         pm.lastToolCount = relevantTools.count
         pm.lastToolCountTotal = allTools.count
+
+        // --- Accurate conversation tokens (real tokenizer, conservative fallback) ---
         let conversationTokens = includedMessages.reduce(0) { acc, msg in
-            acc + (messageTokenCounts[msg.id] ?? msg.content.count / 4)
+            acc + (messageTokenCounts[msg.id] ?? max(1, msg.content.count / 2))
         }
         await AgenticLoopBudget.shared.configure(
             totalBudget: effectiveMaxTokens,

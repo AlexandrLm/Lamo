@@ -139,9 +139,11 @@ struct ContextTracker {
             if !isLast { runningOffset += tokens }
         }
 
-        let usedTokens = systemPromptTokens + memoryTokens + toolTokens + usages
+        let rawUsed = systemPromptTokens + memoryTokens + toolTokens + usages
             .filter { $0.isInContext && !$0.isStreaming }
             .reduce(0) { $0 + $1.tokenCount }
+        // 10% safety buffer: chat template tokens, tool call formatting (injected by LiteRT-LM)
+        let usedTokens = rawUsed + rawUsed / 10
 
         return ContextTracker(
             systemPromptTokens: systemPromptTokens,

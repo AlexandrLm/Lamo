@@ -256,10 +256,13 @@ struct ContextDetailView: View {
                 let label = t.toolCountTotal > t.toolCount
                     ? "Tools (\(t.toolCount)/\(t.toolCountTotal) active)"
                     : "Tools (\(t.toolCount))"
-                breakdownRow(icon: "wrench.and.screwdriver", label: label, value: t.toolTokens, isEstimate: true)
+                breakdownRow(icon: "wrench.and.screwdriver", label: label, value: t.toolTokens)
             }
             breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", value: msgTok)
             breakdownRow(icon: "arrowshape.down", label: "Reply buffer", value: t.reservedForReply, isEstimate: true)
+            thinDivider.padding(.vertical, LamoTheme.Spacing.sm)
+            breakdownRow(icon: "sum", label: "Total used", value: t.usedTokens)
+            breakdownRow(icon: "tray.full", label: "Budget limit", value: t.totalLimit)
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
