@@ -323,7 +323,7 @@ struct ThinkingView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "brain.head.profile")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(accentColor)
+                        .foregroundStyle(iconColor)
                         .symbolEffect(.breathe, value: isStreaming)
 
                     if isStreaming && !isExpanded {
@@ -339,7 +339,7 @@ struct ThinkingView: View {
                     } else {
                         Text("Thinking")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(textColor)
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption2.weight(.semibold))
@@ -361,7 +361,7 @@ struct ThinkingView: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         MarkdownRenderer(
                             text: content,
-                            textColor: .secondary,
+                            textColor: isStreaming ? Color(.secondaryLabel) : Color(.tertiaryLabel),
                             isStreaming: isStreaming
                         )
                         .font(.footnote)
@@ -372,15 +372,30 @@ struct ThinkingView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(12)
+        .padding(8)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.2))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.black.opacity(isStreaming ? 0.2 : 0.06))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(accentColor.opacity(0.35), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(borderColor, lineWidth: 1)
         )
+        .animation(.easeOut(duration: 0.6), value: isStreaming)
+    }
+
+    // MARK: - Dimmed appearance after streaming
+
+    private var iconColor: Color {
+        isStreaming ? accentColor : Color(white: 0.5).opacity(0.45)
+    }
+
+    private var borderColor: Color {
+        isStreaming ? accentColor.opacity(0.35) : Color(white: 0.5).opacity(0.12)
+    }
+
+    private var textColor: Color {
+        isStreaming ? Color(.secondaryLabel) : Color(.tertiaryLabel)
     }
 }
 
