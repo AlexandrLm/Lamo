@@ -27,6 +27,8 @@ final class MemoryService: ObservableObject {
     private(set) var modelContext: ModelContext?
     private var factsCache: [MemoryEntry] = []
     private var cacheLoaded = false
+    /// Cached result of buildMemoryContext() — invalidated on any fact change.
+    private var memoryContextCache: String?
 
     /// Current conversation ID — set by ChatViewModel before each message.
     /// Used by UpdateMemoryTool to update conversation summary.
@@ -67,6 +69,8 @@ final class MemoryService: ObservableObject {
             factsCache.append(entry)
         }
 
+        memoryContextCache = nil
+
         if factsCache.count > maxFacts * 2 {
             pruneOldest(keepCount: maxFacts)
         }
@@ -95,16 +99,20 @@ final class MemoryService: ObservableObject {
         guard let context = modelContext else { return }
         let toRemove = factsToRemove.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
 
+        var didRemove = false
         for entry in factsCache {
             let entryText = entry.text.lowercased()
             for removeText in toRemove {
                 if entryText.contains(removeText) || removeText.contains(entryText) {
                     context.delete(entry)
                     factsCache.removeAll { $0.id == entry.id }
+                    didRemove = true
                     break
                 }
             }
         }
+
+        if didRemove { memoryContextCache = nil }
 
         do {
             try context.save()
@@ -117,10 +125,15 @@ final class MemoryService: ObservableObject {
     // MARK: - Context Building
 
     /// Build memory context string for injection into system prompt.
+    /// Results are cached until facts are modified — avoids re-sorting on every call.
     func buildMemoryContext() -> String {
         guard isEnabled else { return "" }
         if !cacheLoaded { loadCache() }
         guard !factsCache.isEmpty else { return "" }
+
+        if let cached = memoryContextCache {
+            return cached
+        }
 
         var context = "<memory>\n"
         var totalChars = 0
@@ -139,7 +152,34 @@ final class MemoryService: ObservableObject {
         }
 
         context += "</memory>"
+        memoryContextCache = context
         return context
+    }
+
+    /// Build the full system prompt with memory + conversation summary injected.
+    /// Single source of truth — used by both ChatViewModel.refreshContextTracker
+    /// and LiteRTLMProvider.buildConversation.
+    func buildFullSystemPrompt(base: String, conversationID: UUID?) -> String {
+        var fullSystem = base
+
+        if isEnabled {
+            fullSystem += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
+
+            if let convID = conversationID,
+               let context = modelContext {
+                let descriptor = FetchDescriptor<Conversation>(predicate: #Predicate { $0.id == convID })
+                if let summary = (try? context.fetch(descriptor).first?.summary), !summary.isEmpty {
+                    fullSystem += "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
+                }
+            }
+
+            let memCtx = buildMemoryContext()
+            if !memCtx.isEmpty {
+                fullSystem += "\n\n" + memCtx
+            }
+        }
+
+        return fullSystem
     }
 
     // MARK: - Maintenance
@@ -155,6 +195,7 @@ final class MemoryService: ObservableObject {
         guard let context = modelContext else { return }
         context.delete(entry)
         factsCache.removeAll { $0.id == entry.id }
+        memoryContextCache = nil
         do {
             try context.save()
             updateEntryCount()
@@ -170,6 +211,7 @@ final class MemoryService: ObservableObject {
             try context.save()
             factsCache.removeAll()
             cacheLoaded = false
+            memoryContextCache = nil
             updateEntryCount()
         } catch {
             LamoLogger.memory.error("Clear error: \(error)")
@@ -188,6 +230,7 @@ final class MemoryService: ObservableObject {
             try context.save()
             factsCache.removeAll()
             cacheLoaded = false
+            memoryContextCache = nil
             updateEntryCount()
         } catch {
             LamoLogger.memory.error("Prune error: \(error)")

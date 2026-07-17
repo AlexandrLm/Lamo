@@ -58,9 +58,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
     }
 
-    /// Invalidate cached conversation (e.g. when model or GPU setting changes).
-    func invalidateConversationCache() {
-    }
+
 
     // MARK: - Private
 
@@ -106,29 +104,17 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     ) async throws -> LiteRTLM.Conversation {
         let pm = ProviderManager.shared
 
-        // --- System prompt + memory ---
-        var systemPrompt = pm.systemPrompt
+        // --- System prompt + memory (single source of truth: MemoryService) ---
+        var systemPrompt = MemoryService.shared.buildFullSystemPrompt(
+            base: pm.systemPrompt,
+            conversationID: MemoryService.shared.currentConversationID
+        )
         let memoryContext = MemoryService.shared.buildMemoryContext()
-        var extraSummaryContext = ""
-
-        if MemoryService.shared.isEnabled {
-            systemPrompt += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
-
-            // Inject existing conversation summary (from previous summarizations)
-            if let convID = MemoryService.shared.currentConversationID,
-               let summary = fetchConversationSummary(convID: convID), !summary.isEmpty {
-                extraSummaryContext = "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
-            }
-            if !memoryContext.isEmpty {
-                systemPrompt += "\n\n" + memoryContext
-            }
-        }
-        systemPrompt += extraSummaryContext
 
         // --- Token budget calculation (real tokenizer, not char/4) ---
         let effectiveMaxTokens = self.maxNumTokens ?? max(pm.maxNumTokens, 2048)
         let systemTokens = await pm.tokenizeCount(systemPrompt)
-        let memoryTokens = await pm.tokenizeCount(memoryContext + extraSummaryContext)
+        let memoryTokens = await pm.tokenizeCount(memoryContext)
 
         // Use ContextTracker for accurate message selection
         let budgetResult = ContextTracker.calculateIncluded(
@@ -345,15 +331,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         } else {
             return LiteRTLM.Message(msg.content)
         }
-    }
-
-    /// Fetch conversation summary from SwiftData.
-    private func fetchConversationSummary(convID: UUID) -> String? {
-        guard let context = MemoryService.shared.modelContext else { return nil }
-        let descriptor = FetchDescriptor<Conversation>(
-            predicate: #Predicate { $0.id == convID }
-        )
-        return try? context.fetch(descriptor).first?.summary
     }
 
     private func resolveModelPath() throws -> String {

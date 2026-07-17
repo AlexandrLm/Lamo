@@ -13,7 +13,7 @@ struct ModelCardView: View {
     }
 
     private var isDownloaded: Bool {
-        model.isDownloaded || downloadState?.isComplete == true
+        model.isFileValid || downloadState?.isComplete == true
     }
 
     private var isDownloading: Bool {

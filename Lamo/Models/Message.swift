@@ -19,8 +19,6 @@ final class Message {
     var attachedFileSizes: [String] = []
     /// Extracted text content from attached files (sent to model separately, not shown in UI).
     var fileContent: String = ""
-    /// JSON-encoded BenchmarkData for this response.
-    var benchmarkJSON: String?
 
     @Relationship(inverse: \Conversation.messages)
     var conversation: Conversation?
@@ -33,13 +31,25 @@ final class Message {
     var hasImages: Bool { !imagePaths.isEmpty }
     var hasAttachedFiles: Bool { !attachedFilePaths.isEmpty }
 
+    /// JSON-encoded BenchmarkData for this response.
+    var benchmarkJSON: String?
+
+    /// Cached decoded BenchmarkData — avoids JSON decode on every access.
+    /// @Transient so SwiftData doesn't persist it; no underscore prefix to
+    /// avoid collision with SwiftData's generated backing properties.
+    @Transient private var benchmarkCache: BenchmarkData?
+
     var benchmark: BenchmarkData? {
         get {
+            if let cached = benchmarkCache { return cached }
             guard let json = benchmarkJSON,
                   let data = json.data(using: .utf8) else { return nil }
-            return try? JSONDecoder().decode(BenchmarkData.self, from: data)
+            let decoded = try? JSONDecoder().decode(BenchmarkData.self, from: data)
+            benchmarkCache = decoded
+            return decoded
         }
         set {
+            benchmarkCache = newValue
             guard let newValue,
                   let data = try? JSONEncoder().encode(newValue) else {
                 benchmarkJSON = nil

@@ -12,6 +12,9 @@ struct MainView: View {
     @State private var renameText = ""
     @State private var conversationToDelete: Conversation?
     @StateObject private var providerManager = ProviderManager.shared
+    /// Cached filtered + grouped conversations — only recomputed when conversations or search text changes.
+    @State private var cachedGroups: [(title: String, items: [Conversation])] = []
+    @State private var cachedHasResults: Bool = true
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -27,9 +30,14 @@ struct MainView: View {
     }
 
     private var groupedConversations: [(title: String, items: [Conversation])] {
+        cachedGroups
+    }
+
+    private func recomputeGroups() {
         let cal = Calendar.current
         let now = Date()
-        let unpinned = filteredConversations.filter { !$0.isPinned }
+        let filtered = filteredConversations
+        let unpinned = filtered.filter { !$0.isPinned }
 
         var today: [Conversation] = []
         var yesterday: [Conversation] = []
@@ -51,13 +59,15 @@ struct MainView: View {
 
         var groups: [(String, [Conversation])] = []
 
-        let pinned = filteredConversations.filter { $0.isPinned }
+        let pinned = filtered.filter { $0.isPinned }
         if !pinned.isEmpty { groups.append(("Pinned", pinned)) }
         if !today.isEmpty { groups.append(("Today", today)) }
         if !yesterday.isEmpty { groups.append(("Yesterday", yesterday)) }
         if !lastWeek.isEmpty { groups.append(("Previous 7 Days", lastWeek)) }
         if !older.isEmpty { groups.append(("Older", older)) }
-        return groups
+
+        cachedGroups = groups
+        cachedHasResults = !filtered.isEmpty
     }
 
     var body: some View {
@@ -108,6 +118,16 @@ struct MainView: View {
                 cleanupEmptyConversations()
                 startNewChat()
             }
+            recomputeGroups()
+        }
+        .onChange(of: conversations.count) {
+            recomputeGroups()
+        }
+        .onChange(of: conversations.map(\.updatedAt)) {
+            recomputeGroups()
+        }
+        .onChange(of: searchText) {
+            recomputeGroups()
         }
     }
 
@@ -115,11 +135,11 @@ struct MainView: View {
 
     private var sidebarContent: some View {
         List(selection: $selectedID) {
-            if filteredConversations.isEmpty && !searchText.isEmpty {
+            if !cachedHasResults && !searchText.isEmpty {
                 emptySearchView
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
-            } else if filteredConversations.isEmpty {
+            } else if !cachedHasResults {
                 emptyStateView
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -333,8 +353,18 @@ struct MainView: View {
                             Text(error)
                                 .font(.system(.caption, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.5))
-                                .lineLimit(1)
+                                .lineLimit(2)
                             Spacer()
+                            Button {
+                                Task { await providerManager.initializeEngineIfNeeded() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Retry engine load")
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)

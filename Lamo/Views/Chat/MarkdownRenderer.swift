@@ -414,6 +414,7 @@ struct CodeBlock: View {
     let code: String
     let language: String
     @State private var isCopied = false
+    @State private var copyTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -427,8 +428,11 @@ struct CodeBlock: View {
                 Button {
                     UIPasteboard.general.string = code
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    copyTask?.cancel()
                     withAnimation { isCopied = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    copyTask = Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        guard !Task.isCancelled else { return }
                         withAnimation { isCopied = false }
                     }
                 } label: {

@@ -39,6 +39,8 @@ final class DownloadManager: ObservableObject {
         var isComplete: Bool = false
         var retryCount: Int = 0
         var lastError: String? = nil
+        /// nil = not yet checked, true = verified, false = verification failed/skipped
+        var integrityVerified: Bool? = nil
 
         var speedBytesPerSec: Double = 0
         var lastSpeedUpdateTime: Date = Date()
@@ -165,7 +167,7 @@ final class DownloadManager: ObservableObject {
         guard let url = model.downloadURL else { return }
         guard activeDownloads[model.filename]?.isDownloading != true else { return }
 
-        if model.isDownloaded {
+        if model.isFileValid {
             activeDownloads[model.filename] = DownloadState(progress: 1.0, isComplete: true)
             return
         }
@@ -313,15 +315,27 @@ final class DownloadManager: ObservableObject {
                                         try FileManager.default.removeItem(at: destination)
                                         self.activeDownloads[filename]?.error = "File integrity check failed. Please re-download."
                                         self.activeDownloads[filename]?.isDownloading = false
+                                        self.activeDownloads[filename]?.integrityVerified = false
                                         self.tasks.removeValue(forKey: filename)
                                         return
                                     }
                                     LamoLogger.download.info("SHA256 verified for \(filename)")
+                                    self.activeDownloads[filename]?.integrityVerified = true
+                                } else {
+                                    // SHA256 file exists but couldn't be parsed
+                                    self.activeDownloads[filename]?.integrityVerified = false
                                 }
+                            } else {
+                                // HTTP error fetching SHA256 — verification skipped
+                                self.activeDownloads[filename]?.integrityVerified = false
                             }
                         } catch {
                             LamoLogger.download.warning("SHA256 verification skipped for \(filename): \(error.localizedDescription)")
+                            self.activeDownloads[filename]?.integrityVerified = false
                         }
+                    } else {
+                        // No SHA256 URL — verification skipped
+                        self.activeDownloads[filename]?.integrityVerified = false
                     }
                 }
 

@@ -48,122 +48,140 @@ final class ChatViewModel {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty else { return }
 
-        var imagePaths = saveImagesToTmp(pendingImages)
+        let imagesToProcess = pendingImages
         pendingImages = []
-
         let filesToProcess = pendingFiles
         pendingFiles = []
 
         Task { @MainActor in
-            var fileTextParts: [String] = []
-            var filePaths: [String] = []
-            var fileNames: [String] = []
-            var fileSizes: [String] = []
-
-            for file in filesToProcess {
-                let accessing = file.url.startAccessingSecurityScopedResource()
-                defer { if accessing { file.url.stopAccessingSecurityScopedResource() } }
-
-                if file.isImage {
-                    if let data = try? Data(contentsOf: file.url),
-                       let image = UIImage(data: data) {
-                        let paths = saveImagesToTmp([image])
-                        imagePaths.append(contentsOf: paths)
-                    }
-                } else if file.isAudio {
-                    let tmpURL = ChatViewModel.attachmentsDirectory
-                        .appendingPathComponent("audio_\(UUID().uuidString).\(file.url.pathExtension)")
-                    do {
-                        try FileManager.default.copyItem(at: file.url, to: tmpURL)
-                        filePaths.append(tmpURL.path)
-                        fileNames.append(file.name)
-                        fileSizes.append(file.formattedSize)
-                        fileTextParts.append("[Audio file: \(file.name)]")
-                    } catch {
-                        LamoLogger.ui.error("Failed to copy audio file: \(error)")
-                    }
-                } else if file.type.conforms(to: .pdf) {
-                    if FileContentExtractor.pdfHasTextLayer(file.url) {
-                        do {
-                            let extracted = try await FileContentExtractor.extract(from: file.url)
-                            fileTextParts.append(extracted)
-                            let tmpURL = ChatViewModel.attachmentsDirectory
-                                .appendingPathComponent("file_\(UUID().uuidString).pdf")
-                            try? FileManager.default.copyItem(at: file.url, to: tmpURL)
-                            filePaths.append(tmpURL.path)
-                            fileNames.append(file.name)
-                            fileSizes.append(file.formattedSize)
-                        } catch {
-                            fileNames.append(file.name)
-                            fileSizes.append(file.formattedSize)
-                            LamoLogger.ui.error("Failed to extract PDF text: \(error)")
-                        }
-                    } else {
-                        // Scanned PDF — render pages as images for the multimodal model
-                        let pageImages = FileContentExtractor.extractPDFImages(from: file.url)
-                        let tmpPaths = saveImagesToTmp(pageImages)
-                        imagePaths.append(contentsOf: tmpPaths)
-                        fileNames.append(file.name)
-                        fileSizes.append(file.formattedSize)
-                        fileTextParts.append("[Scanned PDF: \(file.name) — \(pageImages.count) pages sent as images]")
-                    }
-                } else {
-                    do {
-                        let extracted = try await FileContentExtractor.extract(from: file.url)
-                        fileTextParts.append(extracted)
-                        let tmpURL = ChatViewModel.attachmentsDirectory
-                            .appendingPathComponent("file_\(UUID().uuidString).\(file.url.pathExtension)")
-                        try? FileManager.default.copyItem(at: file.url, to: tmpURL)
-                        filePaths.append(tmpURL.path)
-                        fileNames.append(file.name)
-                        fileSizes.append(file.formattedSize)
-                    } catch {
-                        fileTextParts.append("[Error reading file \(file.name): \(error.localizedDescription)]")
-                        fileNames.append(file.name)
-                        fileSizes.append(file.formattedSize)
-                        LamoLogger.ui.error("Failed to extract file content: \(error)")
-                    }
-                }
-            }
-
-            let extractedFileContent = fileTextParts.joined(separator: "\n\n")
+            let attachments = await processAttachments(
+                images: imagesToProcess,
+                files: filesToProcess
+            )
 
             let userMessage = Message(
                 content: text,
                 role: .user,
-                imagePaths: imagePaths,
-                attachedFilePaths: filePaths,
-                attachedFileNames: fileNames,
-                attachedFileSizes: fileSizes,
-                fileContent: extractedFileContent,
+                imagePaths: attachments.imagePaths,
+                attachedFilePaths: attachments.filePaths,
+                attachedFileNames: attachments.fileNames,
+                attachedFileSizes: attachments.fileSizes,
+                fileContent: attachments.extractedText,
                 conversation: conversation
             )
             addMessage(userMessage)
             inputText = ""
 
-            let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
-            addMessage(assistantMessage)
-            streamingMessageID = assistantMessage.id
-            isStreaming = true
-
             let titleText = text.isEmpty
-                ? (fileNames.first.map { "📎 \($0)" } ?? "New Chat")
+                ? (attachments.fileNames.first.map { "📎 \($0)" } ?? "New Chat")
                 : String(text.prefix(40))
             if conversation.title == "New Chat" {
                 conversation.title = titleText
             }
 
-            let history = self.chatMessages
-
             MemoryService.shared.currentConversationID = conversation.id
-            startStreaming(chatMessages: history)
+            startAssistantResponse()
         }
     }
 
-    func retryLastMessage() {
-        guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
+    /// Process attached images and files — resize images, extract file content, copy to attachments dir.
+    private func processAttachments(
+        images: [UIImage],
+        files: [PendingFile]
+    ) async -> (imagePaths: [String], filePaths: [String], fileNames: [String], fileSizes: [String], extractedText: String) {
+        var imagePaths = saveImagesToTmp(images)
+        var filePaths: [String] = []
+        var fileNames: [String] = []
+        var fileSizes: [String] = []
+        var fileTextParts: [String] = []
 
-        messages.removeLast()
+        for file in files {
+            let accessing = file.url.startAccessingSecurityScopedResource()
+            defer { if accessing { file.url.stopAccessingSecurityScopedResource() } }
+
+            if file.isImage {
+                if let data = try? Data(contentsOf: file.url),
+                   let image = UIImage(data: data) {
+                    let paths = saveImagesToTmp([image])
+                    imagePaths.append(contentsOf: paths)
+                }
+            } else if file.isAudio {
+                let tmpURL = ChatViewModel.attachmentsDirectory
+                    .appendingPathComponent("audio_\(UUID().uuidString).\(file.url.pathExtension)")
+                do {
+                    try FileManager.default.copyItem(at: file.url, to: tmpURL)
+                    filePaths.append(tmpURL.path)
+                    fileNames.append(file.name)
+                    fileSizes.append(file.formattedSize)
+                    fileTextParts.append("[Audio file: \(file.name)]")
+                } catch {
+                    LamoLogger.ui.error("Failed to copy audio file: \(error)")
+                }
+            } else if file.type.conforms(to: .pdf) {
+                if FileContentExtractor.pdfHasTextLayer(file.url) {
+                    do {
+                        let extracted = try await FileContentExtractor.extract(from: file.url)
+                        fileTextParts.append(extracted)
+                        let tmpURL = ChatViewModel.attachmentsDirectory
+                            .appendingPathComponent("file_\(UUID().uuidString).pdf")
+                        try? FileManager.default.copyItem(at: file.url, to: tmpURL)
+                        filePaths.append(tmpURL.path)
+                        fileNames.append(file.name)
+                        fileSizes.append(file.formattedSize)
+                    } catch {
+                        fileNames.append(file.name)
+                        fileSizes.append(file.formattedSize)
+                        LamoLogger.ui.error("Failed to extract PDF text: \(error)")
+                    }
+                } else {
+                    // Scanned PDF — render pages as images for the multimodal model
+                    let pageImages = FileContentExtractor.extractPDFImages(from: file.url)
+                    let tmpPaths = saveImagesToTmp(pageImages)
+                    imagePaths.append(contentsOf: tmpPaths)
+                    fileNames.append(file.name)
+                    fileSizes.append(file.formattedSize)
+                    fileTextParts.append("[Scanned PDF: \(file.name) — \(pageImages.count) pages sent as images]")
+                }
+            } else {
+                do {
+                    let extracted = try await FileContentExtractor.extract(from: file.url)
+                    fileTextParts.append(extracted)
+                    let tmpURL = ChatViewModel.attachmentsDirectory
+                        .appendingPathComponent("file_\(UUID().uuidString).\(file.url.pathExtension)")
+                    try? FileManager.default.copyItem(at: file.url, to: tmpURL)
+                    filePaths.append(tmpURL.path)
+                    fileNames.append(file.name)
+                    fileSizes.append(file.formattedSize)
+                } catch {
+                    fileTextParts.append("[Error reading file \(file.name): \(error.localizedDescription)]")
+                    fileNames.append(file.name)
+                    fileSizes.append(file.formattedSize)
+                    LamoLogger.ui.error("Failed to extract file content: \(error)")
+                }
+            }
+        }
+
+        return (imagePaths, filePaths, fileNames, fileSizes, fileTextParts.joined(separator: "\n\n"))
+    }
+
+    /// Create a new assistant message and start streaming.
+    private func startAssistantResponse() {
+        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
+        addMessage(assistantMessage)
+        streamingMessageID = assistantMessage.id
+        isStreaming = true
+
+        let history = self.chatMessages
+        startStreaming(chatMessages: history)
+    }
+
+    func retryLastMessage() {
+        // Find the last assistant message — not just messages.last.
+        // The last message could be a user message (e.g. after an error).
+        guard let lastAssistantIdx = messages.lastIndex(where: { $0.role == .assistant }) else { return }
+        let lastMsg = messages[lastAssistantIdx]
+
+        messages.remove(at: lastAssistantIdx)
         modelContext.delete(lastMsg)
 
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
@@ -186,13 +204,20 @@ final class ChatViewModel {
         let sorted = messages.sorted(by: { $0.timestamp < $1.timestamp })
         guard let idx = sorted.firstIndex(where: { $0.id == message.id }) else { return }
 
-        // Delete all messages from idx onwards
+        // Delete all messages from idx onwards — including their attachment files
         for i in idx..<sorted.count {
             let msg = sorted[i]
+            // Clean up attachment files (images, documents) to prevent orphans on disk
+            for path in msg.imagePaths {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+            for path in msg.attachedFilePaths {
+                try? FileManager.default.removeItem(atPath: path)
+            }
             messages.removeAll { $0.id == msg.id }
             modelContext.delete(msg)
         }
-        try? modelContext.save()
+        saveWithErrorHandling()
     }
 
     func stopGeneration() {
@@ -252,7 +277,6 @@ final class ChatViewModel {
                             self.messages[index].content = ""
                             self.messages[index].thinkingContent = ""
                         }
-                        (ProviderManager.shared.currentProvider as? LiteRTLMProvider)?.invalidateConversationCache()
                         self.startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
                         return
                     } else {
@@ -348,24 +372,13 @@ final class ChatViewModel {
         let pm = ProviderManager.shared
         let currentChatMessages = self.chatMessages
 
-        // Build full system prompt (mirrors LiteRTLMProvider)
-        var fullSystem = pm.systemPrompt
-        var memTokens = 0
-        if MemoryService.shared.isEnabled {
-            fullSystem += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
-            if let ctx = MemoryService.shared.modelContext {
-                let id = conversation.id
-                let descriptor = FetchDescriptor<Conversation>(predicate: #Predicate { $0.id == id })
-                if let summary = (try? ctx.fetch(descriptor).first?.summary), !summary.isEmpty {
-                    fullSystem += "\n\n<conversation_summary>\n\(summary)\n</conversation_summary>"
-                }
-            }
-            let memCtx = MemoryService.shared.buildMemoryContext()
-            if !memCtx.isEmpty {
-                fullSystem += "\n\n" + memCtx
-                memTokens = await pm.tokenizeCount(memCtx)
-            }
-        }
+        let fullSystem = MemoryService.shared.buildFullSystemPrompt(
+            base: pm.systemPrompt,
+            conversationID: conversation.id
+        )
+
+        let memCtx = MemoryService.shared.buildMemoryContext()
+        let memTokens = memCtx.isEmpty ? 0 : await pm.tokenizeCount(memCtx)
         let sysTokens = await pm.tokenizeCount(fullSystem)
 
         let tokenCounts = await pm.tokenizeMessages(currentChatMessages)
@@ -380,6 +393,11 @@ final class ChatViewModel {
     }
 
     private func save() {
+        saveWithErrorHandling()
+    }
+
+    /// Save with error logging — never silently swallows SwiftData errors.
+    private func saveWithErrorHandling() {
         do {
             try modelContext.save()
         } catch {
@@ -388,9 +406,12 @@ final class ChatViewModel {
     }
 
     /// Generate a basic summary from dropped messages as a fallback.
-    /// The model can override this with a better summary via update_memory(summary:) tool.
+    /// Skipped if the model already provided a summary via update_memory tool.
     private func generateConversationSummary() async {
         guard let tracker = contextTracker else { return }
+        // Skip if the model already generated a summary via update_memory
+        guard conversation.summary.isEmpty else { return }
+
         let droppedIDs = Set(tracker.messageUsages.filter { !$0.isInContext && !$0.isStreaming }.map(\.id))
         guard !droppedIDs.isEmpty else { return }
 
@@ -417,7 +438,15 @@ final class ChatViewModel {
 
     /// After streaming completes, detect URLs the model mentioned but didn't actually fetch.
     /// If found, fetch them automatically and send a follow-up so the model can answer.
+    /// Skipped if the response contains tool call indicators (model already used tools).
     private func autoFetchUnfetchedURLs(from response: String) async {
+        // Skip if the model already used tools — detected by tool call markers in the response.
+        // LiteRT-LM tool calls produce JSON blocks with "name" and "arguments" fields.
+        let toolCallMarkers = ["\"name\":", "\"arguments\":", "web_search", "fetch_url", "deep_research"]
+        let lowerResponse = response.lowercased()
+        let hasToolCall = toolCallMarkers.contains { lowerResponse.contains($0) }
+        guard !hasToolCall else { return }
+
         let urlPattern = #"https?://[^\s<>"'\)\],;:!?"#
         guard let regex = try? NSRegularExpression(pattern: urlPattern) else { return }
         let range = NSRange(response.startIndex..., in: response)
@@ -435,7 +464,7 @@ final class ChatViewModel {
 
         // Check if the response looks like a "failed tool call" — model mentioned
         // a URL and expressed intent to fetch but didn't actually do it
-        let lowerResponse = response.lowercased()
+        // (lowerResponse already declared above for tool call check)
         let hasFetchIntent = Self.fetchIntentPatterns.contains { lowerResponse.contains($0) }
 
         guard hasFetchIntent else { return }
@@ -477,14 +506,7 @@ final class ChatViewModel {
         )
         addMessage(followUp)
 
-        let history = self.chatMessages
-
-        let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
-        addMessage(assistantMessage)
-        streamingMessageID = assistantMessage.id
-        isStreaming = true
-
-        startStreaming(chatMessages: history)
+        startAssistantResponse()
     }
 
     /// Save UIImages to Documents/Attachments as JPEG (resized to max 1024px), return file paths.

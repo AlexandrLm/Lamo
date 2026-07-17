@@ -116,7 +116,7 @@ final class ProviderManager: ObservableObject {
         get { UserDefaults.standard.object(forKey: "litertLMCpuThreadCount") as? Int ?? 4 }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMCpuThreadCount")
-            updateNonCriticalSettings()
+            // Non-critical: applied at next inference, no engine reload needed.
         }
     }
 
@@ -155,7 +155,7 @@ final class ProviderManager: ObservableObject {
         get { UserDefaults.standard.object(forKey: "litertLMSpeculativeDecoding") as? Bool ?? true }
         set {
             UserDefaults.standard.set(newValue, forKey: "litertLMSpeculativeDecoding")
-            updateNonCriticalSettings()
+            // Non-critical: applied at next inference, no engine reload needed.
         }
     }
 
@@ -177,16 +177,6 @@ final class ProviderManager: ObservableObject {
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
         "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
-    }
-
-    // MARK: - Non-Critical Settings (#6)
-
-    /// Updates UserDefaults for non-critical settings without triggering engine invalidation.
-    /// Settings like cpuThreadCount and speculativeDecoding take effect on the next
-    /// inference run without requiring a full engine reload.
-    func updateNonCriticalSettings() {
-        // No-op: these settings are applied at inference time.
-        // The UserDefaults write already happened in the caller's setter.
     }
 
     // MARK: - Internal State
@@ -262,13 +252,15 @@ final class ProviderManager: ObservableObject {
     /// Debounce: prevents rapid re-initialization when settings change quickly.
     private var invalidateTask: Task<Void, Never>?
 
-    /// The currently active provider (LiteRT-LM only).
-    /// Always returns a **cached** provider — never creates a new one on the fly.
+    /// The currently active provider.
+    /// Returns a cached provider if the engine is loaded, or a fallback
+    /// that will produce a user-friendly error when no model is available.
     var currentProvider: any LLMProvider {
         if let cached = cachedProvider {
             return cached
         }
-        return LiteRTLMProvider(modelPath: litertLMModelPath ?? "")
+        // No engine loaded — return a stub that will yield .noModelAvailable.
+        return LiteRTLMProvider(modelPath: litertLMModelPath)
     }
 
     // MARK: - Engine Lifecycle
@@ -450,9 +442,6 @@ final class ProviderManager: ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 self.isMemoryPressure = true
-                if let provider = self.cachedProvider as? LiteRTLMProvider {
-                    provider.invalidateConversationCache()
-                }
                 self.clearTokenCache()
             }
         }
@@ -464,9 +453,6 @@ final class ProviderManager: ObservableObject {
     /// Called automatically when model path or GPU setting changes.
     /// Debounced: rapid changes within 300ms are coalesced.
     func invalidateEngine() {
-        if let provider = cachedProvider as? LiteRTLMProvider {
-            provider.invalidateConversationCache()
-        }
         cachedEngine = nil
         cachedProvider = nil
         isEngineReady = false
@@ -499,10 +485,6 @@ final class ProviderManager: ObservableObject {
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared.memoryCapacity = 0
         URLCache.shared.diskCapacity = 0
-
-        if let provider = cachedProvider as? LiteRTLMProvider {
-            provider.invalidateConversationCache()
-        }
 
         cachedEngine = nil
         cachedProvider = nil

@@ -12,6 +12,7 @@ struct MessageBubble: View {
     @State private var selectedImageIndex = 0
     @State private var showActions = false
     @State private var showShareSheet = false
+    @State private var copyConfirmationTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
@@ -123,7 +124,7 @@ struct MessageBubble: View {
             Image(systemName: icon)
                 .font(.caption2)
                 .foregroundStyle(color)
-                .frame(width: 24, height: 24)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -253,10 +254,14 @@ struct MessageBubble: View {
         #if os(iOS)
         UIPasteboard.general.string = content
         #endif
+        // Cancel any previous reset task to avoid flicker on rapid re-copy
+        copyConfirmationTask?.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             showCopyConfirmation = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        copyConfirmationTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
             withAnimation { showCopyConfirmation = false }
         }
     }
