@@ -4,59 +4,83 @@ import os
 /// Detects when the model gets stuck in a generation loop.
 /// Monitors streamed text for repeating patterns and triggers a stop.
 /// Optimized: checks every N tokens instead of every token.
-final class RepetitionDetector: @unchecked Sendable {
+final class RepetitionDetector: Sendable {
     private let logger = Logger(subsystem: "com.lamo", category: "RepDetector")
 
-    /// Collected output text so far.
-    private var buffer: String = ""
-    /// Cached buffer length to avoid O(n) .count on every call.
-    private var bufferLength: Int = 0
+    /// Mutable state protected by this lock — all mutations go through `withLock`.
+    private let lock: OSAllocatedUnfairLock<State>
+
     /// How many tokens/chars to keep in the sliding window.
     private let windowSize: Int
-    /// Minimum buffer size before detection kicks in (avoid false positives on short output).
+    /// Minimum buffer size before detection kicks in.
     private let minBufferSize: Int
     /// Check frequency: run detection every N tokens.
     private let checkFrequency: Int
-    /// Token counter for batched checking.
-    private var tokenCount: Int = 0
+
+    private struct State {
+        var buffer: String = ""
+        /// Cached buffer length to avoid O(n) .count on every call.
+        var bufferLength: Int = 0
+        /// Token counter for batched checking.
+        var tokenCount: Int = 0
+    }
 
     init(windowSize: Int = 2000, minBufferSize: Int = 200, checkFrequency: Int = 5) {
         self.windowSize = windowSize
         self.minBufferSize = minBufferSize
         self.checkFrequency = checkFrequency
+        self.lock = OSAllocatedUnfairLock(initialState: State())
     }
 
     /// Feed a new chunk of text. Returns `true` if repetition detected.
     /// Only runs detection every `checkFrequency` tokens for performance.
     func feed(_ chunk: String) -> Bool {
-        buffer.append(chunk)
-        bufferLength += chunk.count
-        tokenCount += 1
-        // Keep buffer bounded — use cached length to avoid O(n) .count
-        if bufferLength > windowSize * 3 {
-            buffer = String(buffer.suffix(windowSize * 2))
-            bufferLength = buffer.count  // recalculate after trim
+        lock.withLock { state in
+            state.buffer.append(chunk)
+            state.bufferLength += chunk.count
+            state.tokenCount += 1
+            // Keep buffer bounded — use cached length to avoid O(n) .count
+            if state.bufferLength > windowSize * 3 {
+                state.buffer = String(state.buffer.suffix(windowSize * 2))
+                state.bufferLength = state.buffer.count
+            }
+            guard state.bufferLength >= minBufferSize else { return false }
+
+            // Only check every N tokens — saves ~80% CPU during streaming
+            guard state.tokenCount % checkFrequency == 0 else { return false }
+
+            let text = String(state.buffer.suffix(windowSize))
+            return detectLoop(text: text)
         }
-        guard bufferLength >= minBufferSize else { return false }
+    }
 
-        // Only check every N tokens — saves ~80% CPU during streaming
-        guard tokenCount % checkFrequency == 0 else { return false }
+    /// Total chars generated so far.
+    var totalChars: Int {
+        lock.withLock { $0.buffer.count }
+    }
 
-        return detectLoop()
+    /// Reset for a new generation.
+    func reset() {
+        lock.withLock { state in
+            state.buffer = ""
+            state.bufferLength = 0
+            state.tokenCount = 0
+        }
     }
 
     // MARK: - Detection Strategies
 
-    private func detectLoop() -> Bool {
-        let text = String(buffer.suffix(windowSize))
-        return detectConsecutiveRepeats(text)
+    /// All detection methods are `nonisolated` because they operate only on
+    /// their `text` parameter and a Sendable `Logger` — no actor isolation needed.
+    private nonisolated func detectLoop(text: String) -> Bool {
+        detectConsecutiveRepeats(text)
             || detectNgramFlood(text)
             || detectLineLoop(text)
     }
 
     /// Same substring repeated 3+ times consecutively.
     /// e.g. "abc abc abc abc" or "!!!  !!!  !!!  !!!"
-    private func detectConsecutiveRepeats(_ text: String) -> Bool {
+    private nonisolated func detectConsecutiveRepeats(_ text: String) -> Bool {
         // Check for repeating patterns of various lengths
         for patternLen in stride(from: 5, through: 80, by: 5) {
             guard text.count >= patternLen * 3 else { continue }
@@ -88,7 +112,7 @@ final class RepetitionDetector: @unchecked Sendable {
 
     /// Same short phrase appearing too many times in the window.
     /// e.g. "click the button" appearing 8+ times in 2000 chars
-    private func detectNgramFlood(_ text: String) -> Bool {
+    private nonisolated func detectNgramFlood(_ text: String) -> Bool {
         let words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         guard words.count >= 20 else { return false }
 
@@ -111,7 +135,7 @@ final class RepetitionDetector: @unchecked Sendable {
     }
 
     /// Same line repeated 3+ times (common with code/list generation loops).
-    private func detectLineLoop(_ text: String) -> Bool {
+    private nonisolated func detectLineLoop(_ text: String) -> Bool {
         let lines = text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 6 else { return false }
 
@@ -139,15 +163,5 @@ final class RepetitionDetector: @unchecked Sendable {
             }
         }
         return false
-    }
-
-    /// Total chars generated so far.
-    var totalChars: Int { buffer.count }
-
-    /// Reset for a new generation.
-    func reset() {
-        buffer = ""
-        bufferLength = 0
-        tokenCount = 0
     }
 }

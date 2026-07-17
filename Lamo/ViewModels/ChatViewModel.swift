@@ -270,13 +270,20 @@ final class ChatViewModel {
                 case .loopDetected:
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
+                        // Delete the entire assistant message and create a fresh one.
+                        // Content already flushed to SwiftData survives buffer clears, so
+                        // we must remove the message from the model entirely.
+                        if let oldID = self.streamingMessageID,
+                           let index = self.messages.firstIndex(where: { $0.id == oldID }) {
+                            let oldMsg = self.messages[index]
+                            self.messages.remove(at: index)
+                            self.modelContext.delete(oldMsg)
+                        }
                         self.streamingBuffer = ""
                         self.streamingThinkingBuffer = ""
-                        if let id = self.streamingMessageID,
-                           let index = self.messages.firstIndex(where: { $0.id == id }) {
-                            self.messages[index].content = ""
-                            self.messages[index].thinkingContent = ""
-                        }
+                        let newMsg = Message(content: "", role: .assistant, isStreaming: true, conversation: self.conversation)
+                        self.addMessage(newMsg)
+                        self.streamingMessageID = newMsg.id
                         self.startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
                         return
                     } else {
@@ -472,13 +479,13 @@ final class ChatViewModel {
         // De-duplicate: skip URLs that appear in very short snippets (< 20 chars around them)
         // which usually means the model already fetched and quoted them
         let unfetchedURLs = urls.filter { url in
-            // Check if there's substantial content near the URL (> 100 chars of text around it)
             if let urlRange = response.range(of: url.absoluteString) {
                 let beforeStart = response.index(urlRange.lowerBound, offsetBy: -100, limitedBy: response.startIndex) ?? response.startIndex
                 let afterEnd = response.index(urlRange.upperBound, offsetBy: 100, limitedBy: response.endIndex) ?? response.endIndex
                 let nearbyText = String(response[beforeStart..<afterEnd])
-                // If there's a lot of text around the URL, it was probably fetched
-                return nearbyText.count < 150
+                // If there's substantial content near the URL (>500 chars context),
+                // the model probably already fetched and quoted it.
+                return nearbyText.count < 500
             }
             return true
         }
@@ -488,15 +495,19 @@ final class ChatViewModel {
         LamoLogger.ui.info("Auto-fetching \(unfetchedURLs.count) unfetched URLs")
 
         var fetchedContent = ""
+        var fetchedCount = 0
         for url in unfetchedURLs.prefix(2) { // Max 2 URLs to avoid token overflow
             do {
                 let content = try await WebFetcher.fetch(url: url)
                 fetchedContent += "\n\n[Page content \(url.absoluteString)]:\n\(content.prefix(3000))"
+                fetchedCount += 1
             } catch {
-                fetchedContent += "\n\n[Failed to load \(url.absoluteString): \(error.localizedDescription)]"
+                LamoLogger.ui.warning("Auto-fetch failed for \(url): \(error.localizedDescription)")
             }
         }
 
+        // Don't send follow-up if every fetch failed — error messages would confuse the model
+        guard fetchedCount > 0 else { return }
         guard !fetchedContent.isEmpty else { return }
 
         let followUp = Message(

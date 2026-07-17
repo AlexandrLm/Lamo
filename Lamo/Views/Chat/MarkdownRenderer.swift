@@ -31,21 +31,27 @@ struct MarkdownRenderer: View {
     /// Avoids re-parsing on every SwiftUI body evaluation during streaming.
     private static func parseBlocksCached(_ text: String) -> [Block] {
         if let cached = blockCache.object(forKey: text as NSString) {
-            return cached as! [Block]
+            return cached.blocks
         }
         let blocks = parseBlocksStatic(text)
         let cost = text.utf8.count
-        blockCache.setObject(blocks as NSArray, forKey: text as NSString, cost: cost)
+        blockCache.setObject(CacheValue(blocks), forKey: text as NSString, cost: cost)
         return blocks
     }
 
-    /// NSCache for parsed markdown blocks. Thread-safe, auto-evicts under memory pressure.
-    private static let blockCache: NSCache<NSString, NSArray> = {
-        let cache = NSCache<NSString, NSArray>()
+    /// Type-safe NSCache wrapper — avoids unsafe bridging of Swift enums to NSArray.
+    private static let blockCache: NSCache<NSString, CacheValue> = {
+        let cache = NSCache<NSString, CacheValue>()
         cache.countLimit = 50      // max 50 messages cached
         cache.totalCostLimit = 2 * 1024 * 1024  // 2MB
         return cache
     }()
+
+    /// Thin wrapper so NSCache stores a known type instead of NSArray + force-cast.
+    private final class CacheValue {
+        let blocks: [Block]
+        init(_ blocks: [Block]) { self.blocks = blocks }
+    }
 
     // MARK: - Body (extracted to minimize re-render scope)
 

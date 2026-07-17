@@ -67,7 +67,7 @@ final class MemoryService: ObservableObject {
 
             let entry = MemoryEntry(
                 text: trimmed,
-                conversationID: UUID()
+                conversationID: currentConversationID ?? UUID()
             )
             context.insert(entry)
             factsCache.append(entry)
@@ -104,21 +104,29 @@ final class MemoryService: ObservableObject {
         guard let context = modelContext else { return }
         let toRemove = factsToRemove.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
 
-        var didRemove = false
+        // Collect IDs to remove first — avoids mutating the array during iteration.
+        var idsToRemove = Set<UUID>()
         for entry in factsCache {
             let entryText = entry.text.lowercased()
             for removeText in toRemove {
                 if entryText.contains(removeText) || removeText.contains(entryText) {
-                    context.delete(entry)
-                    factsCache.removeAll { $0.id == entry.id }
-                    wordSetsCache.removeValue(forKey: entry.id)
-                    didRemove = true
+                    idsToRemove.insert(entry.id)
                     break
                 }
             }
         }
 
-        if didRemove { invalidateCaches() }
+        guard !idsToRemove.isEmpty else { return }
+
+        for id in idsToRemove {
+            if let entry = factsCache.first(where: { $0.id == id }) {
+                context.delete(entry)
+            }
+        }
+        factsCache.removeAll { idsToRemove.contains($0.id) }
+        wordSetsCache = wordSetsCache.filter { !idsToRemove.contains($0.key) }
+
+        invalidateCaches()
 
         do {
             try context.save()

@@ -21,14 +21,8 @@ struct ContextTracker {
     let memoryTokens: Int
     let totalLimit: Int          // effectiveMaxTokens
     let messageUsages: [MessageUsage]
-
-    // MARK: - Aggregates
-
-    /// Tokens used by system prompt + memory + history that fit in the KV-cache.
-    /// Excludes the streaming message (it's being sent now, not yet in cache).
-    var usedTokens: Int {
-        systemPromptTokens + memoryTokens + messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }
-    }
+    /// Pre-computed token count — avoids O(n) filter+reduce on every read.
+    let usedTokens: Int
 
     /// Tokens reserved for the model's reply.
     var reservedForReply: Int { Self.reservedForReply }
@@ -142,11 +136,16 @@ struct ContextTracker {
             if !isLast { runningOffset += tokens }
         }
 
+        let usedTokens = systemPromptTokens + memoryTokens + usages
+            .filter { $0.isInContext && !$0.isStreaming }
+            .reduce(0) { $0 + $1.tokenCount }
+
         return ContextTracker(
             systemPromptTokens: systemPromptTokens,
             memoryTokens: memoryTokens,
             totalLimit: effective,
-            messageUsages: usages
+            messageUsages: usages,
+            usedTokens: usedTokens
         )
     }
 

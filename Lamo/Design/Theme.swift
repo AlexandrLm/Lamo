@@ -3,8 +3,16 @@ import SwiftUI
 enum LamoTheme {
     enum Colors {
         static let background = Color.black
-        static let secondaryBackground = Color.black
-        static let tertiaryBackground = Color.black
+        static let secondaryBackground = Color(uiColor: UIColor { tc in
+            tc.userInterfaceStyle == .dark
+                ? UIColor(white: 0.11, alpha: 1)   // #1C1C1C
+                : UIColor.systemGray6
+        })
+        static let tertiaryBackground = Color(uiColor: UIColor { tc in
+            tc.userInterfaceStyle == .dark
+                ? UIColor(white: 0.15, alpha: 1)   // #262626
+                : UIColor.systemGray5
+        })
 
         static let accent = Color(red: 0.06, green: 0.64, blue: 0.50)
 

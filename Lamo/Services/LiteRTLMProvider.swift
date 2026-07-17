@@ -10,6 +10,10 @@ import os
 /// - Conversation is rebuilt each turn, but tokenization is cached for speed.
 /// - When context fills up, old messages are auto-summarized via the model.
 /// - Budget is calculated using the real tokenizer, not char/4 approximation.
+///
+/// @unchecked Sendable: required because LiteRTLM.Engine is imported via
+/// @preconcurrency and Swift cannot verify its Sendable conformance. All
+/// stored properties are `let` constants — no mutable state to protect.
 final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     let name = "LiteRT-LM"
 
@@ -23,9 +27,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     private let maxNumTokens: Int?
     /// Cached engine — injected by ProviderManager to avoid reloading.
     private let engine: LiteRTLM.Engine?
-
-    /// Lock for thread-safe access to cached conversation
-    private let cacheLock = OSAllocatedUnfairLock(initialState: ())
 
     /// Cached SamplerConfig — avoids redundant UserDefaults reads.
     private var cachedSamplerConfig: (topK: Int, topP: Double, temperature: Double, seed: Int, config: LiteRTLM.SamplerConfig)?
@@ -156,7 +157,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         for msg in includedMessages {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
             if msg.role == .user && !msg.fileContent.isEmpty {
-                let fileContext = "Содержимое прикреплённых файлов:\n\n\(msg.fileContent)"
+                let fileContext = "Content of attached files:\n\n\(msg.fileContent)"
                 allMessages.append(LiteRTLM.Message(fileContext, role: .user))
                 if !msg.content.isEmpty {
                     allMessages.append(LiteRTLM.Message(msg.content, role: .user))
@@ -331,7 +332,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if !msg.imagePaths.isEmpty {
             var contents: [LiteRTLM.Content] = msg.imagePaths.map { .imageFile($0) }
             if !msg.fileContent.isEmpty {
-                contents.append(.text("Содержимое прикреплённых файлов:\n\n\(msg.fileContent)"))
+                contents.append(.text("Content of attached files:\n\n\(msg.fileContent)"))
             }
             if !msg.content.isEmpty {
                 contents.append(.text(msg.content))
@@ -340,9 +341,9 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         } else if !msg.fileContent.isEmpty {
             let fullText: String
             if msg.content.isEmpty {
-                fullText = "Проанализируй содержимое прикреплённых файлов:\n\n\(msg.fileContent)"
+                fullText = "Analyze the content of the attached files:\n\n\(msg.fileContent)"
             } else {
-                fullText = "Содержимое прикреплённых файлов:\n\n\(msg.fileContent)\n\n---\n\n\(msg.content)"
+                fullText = "Content of attached files:\n\n\(msg.fileContent)\n\n---\n\n\(msg.content)"
             }
             return LiteRTLM.Message(fullText)
         } else {
