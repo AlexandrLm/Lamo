@@ -15,6 +15,7 @@ struct ModelsSettingsSection: View {
     @State private var showError = false
     @State private var showDeleteModelAlert = false
     @State private var modelToDelete: PresetModel?
+    @State private var showFilesPicker = false
 
     var body: some View {
         ScrollView {
@@ -81,6 +82,9 @@ struct ModelsSettingsSection: View {
             if let model = modelToDelete {
                 Text("Remove \(model.displayName) from your device?")
             }
+        }
+        .sheet(isPresented: $showFilesPicker) {
+            FilesFolderPicker(url: ProviderManager.modelsDirectory)
         }
     }
 
@@ -426,7 +430,9 @@ struct ModelsSettingsSection: View {
     private func openModelsFolder() {
         let modelsDir = ProviderManager.modelsDirectory
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        UIApplication.shared.open(modelsDir)
+        // Use UIDocumentPickerViewController to open the folder in Files app.
+        // UIApplication.shared.open doesn't work for file URLs on iOS.
+        showFilesPicker = true
     }
 
     // MARK: - Storage Helpers
@@ -450,5 +456,47 @@ struct ModelsSettingsSection: View {
             return values.volumeAvailableCapacityForImportantUsage
         }
         return nil
+    }
+}
+
+// MARK: - Files Folder Picker
+
+/// Opens the Files app at a specific folder URL using UIDocumentPickerViewController.
+/// UIApplication.shared.open doesn't work for file URLs on iOS — this is the correct way.
+struct FilesFolderPicker: UIViewControllerRepresentable {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: false)
+        picker.directoryURL = url
+        picker.allowsMultipleSelection = false
+        picker.shouldShowFileExtensions = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss)
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let dismiss: DismissAction
+
+        init(dismiss: DismissAction) {
+            self.dismiss = dismiss
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            // User picked a file — we don't need to do anything, just dismiss.
+            // The folder view itself is the main purpose.
+            dismiss()
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            dismiss()
+        }
     }
 }
