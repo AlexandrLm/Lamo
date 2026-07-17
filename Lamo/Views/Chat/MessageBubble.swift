@@ -24,10 +24,6 @@ struct MessageBubble: View {
                 .padding(.horizontal, 16)
             } else {
                 assistantContent
-                    .background(
-                        RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.bubble)
-                            .fill(Color.white.opacity(0.04))
-                    )
             }
 
             // Info bar (assistant only — always visible)
