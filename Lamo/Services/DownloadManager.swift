@@ -47,7 +47,7 @@ final class DownloadManager: ObservableObject {
         var lastSpeedUpdateBytes: Int64 = 0
 
         var progressPercentage: Int {
-            guard totalBytes > 0 else { return Int(progress * 100) }
+            guard totalBytes > 0 else { return 0 }
             return Int(progress * 100)
         }
 
@@ -56,7 +56,8 @@ final class DownloadManager: ObservableObject {
         }
 
         var totalSizeString: String {
-            Self.formatBytes(totalBytes)
+            guard totalBytes > 0 else { return "—" }
+            return Self.formatBytes(totalBytes)
         }
 
         var speedString: String {
@@ -173,9 +174,14 @@ final class DownloadManager: ObservableObject {
             return
         }
 
-        if isExpensive && model.fileSizeGB > 0.5 {
-            pendingCellularDownload = model
-            return
+        if isExpensive {
+            // Use hardcoded size for cellular check — fast, no network needed.
+            // The real size will come from the server during download.
+            let sizeMB = Int64(model.fileSizeGB * 1024)
+            if sizeMB > 500 {
+                pendingCellularDownload = model
+                return
+            }
         }
 
         startDownload(model: model, url: url)
@@ -199,10 +205,9 @@ final class DownloadManager: ObservableObject {
         let modelsDir = documents.appendingPathComponent("models")
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
 
-        // Expected total bytes from model metadata (fallback when server omits Content-Length)
-        let expectedBytes = Int64(model.fileSizeGB * 1_073_741_824)
-
-        activeDownloads[model.filename] = DownloadState(totalBytes: expectedBytes, isDownloading: true)
+        // Total bytes will be updated from server's Content-Length in the delegate.
+        // Start with 0 so the UI knows the size is unknown until server responds.
+        activeDownloads[model.filename] = DownloadState(totalBytes: 0, isDownloading: true)
 
         let task: URLSessionDownloadTask
         if let data = resumeData.removeValue(forKey: model.filename) {

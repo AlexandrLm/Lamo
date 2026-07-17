@@ -7,6 +7,7 @@ struct ModelCardView: View {
     var onSelect: (() -> Void)?
     @State private var showDeleteConfirmation = false
     @State private var showCellularConfirmation = false
+    @State private var remoteSize: Int64? = nil
 
     private var downloadState: DownloadManager.DownloadState? {
         downloadManager.activeDownloads[model.filename]
@@ -14,10 +15,6 @@ struct ModelCardView: View {
 
     private var isDownloaded: Bool {
         model.isDownloaded || downloadState?.isComplete == true
-    }
-
-    private var isPartial: Bool {
-        model.isPartialDownload && downloadState?.isComplete != true
     }
 
     private var isDownloading: Bool {
@@ -54,15 +51,9 @@ struct ModelCardView: View {
                 Spacer(minLength: 0)
 
                 if isDownloaded && !isActiveModel {
-                    if isPartial {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.orange.opacity(0.7))
-                    } else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.green)
-                    }
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
                 } else if isDownloading {
                     ProgressView()
                         .controlSize(.small)
@@ -71,16 +62,24 @@ struct ModelCardView: View {
 
             HStack(spacing: 16) {
                 specItem(model.parameterCount, "params")
-                specItem(model.isDownloaded ? model.actualFileSizeString : model.fileSizeString, "size")
+                specItem(model.displaySizeString(remoteSize: remoteSize), "size")
                 specItem(model.minRAM, "RAM")
             }
             .padding(.top, 10)
 
-            if isDownloading, let state = downloadState, state.totalBytes > 0 {
+            if isDownloading, let state = downloadState {
                 VStack(spacing: 4) {
-                    ProgressView(value: state.progress)
+                    if state.totalBytes > 0 {
+                        ProgressView(value: state.progress)
+                    } else {
+                        // Server hasn't reported Content-Length yet — indeterminate
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                     HStack {
-                        Text("\(state.downloadedSizeString) / \(state.totalSizeString)")
+                        Text(state.totalBytes > 0
+                             ? "\(state.downloadedSizeString) / \(state.totalSizeString)"
+                             : state.downloadedSizeString)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                         if !state.speedString.isEmpty {
@@ -94,9 +93,11 @@ struct ModelCardView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         Spacer()
-                        Text("\(state.progressPercentage)%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.tertiary)
+                        if state.totalBytes > 0 {
+                            Text("\(state.progressPercentage)%")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
                 .padding(.top, 8)
@@ -125,16 +126,6 @@ struct ModelCardView: View {
                                 .foregroundStyle(.black)
                         }
                         .buttonStyle(.glassProminent)
-                    }
-
-                    if isPartial {
-                        Button {
-                            downloadManager.download(model: model)
-                        } label: {
-                            Label("Re-download", systemImage: "arrow.clockwise.down.circle.fill")
-                                .font(.caption.weight(.medium))
-                        }
-                        .foregroundStyle(.orange.opacity(0.8))
                     }
 
                     Button(role: .destructive) {
@@ -172,6 +163,13 @@ struct ModelCardView: View {
         }
         .padding(14)
         .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .task {
+            // Fetch real file size from HuggingFace for not-yet-downloaded models
+            guard !model.isDownloaded, remoteSize == nil else { return }
+            if let size = await PresetModel.fetchRemoteSize(for: model) {
+                await MainActor.run { remoteSize = size }
+            }
+        }
         .confirmationDialog("Delete \(model.displayName)?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 downloadManager.deleteModel(model)
@@ -187,14 +185,14 @@ struct ModelCardView: View {
                 set: { if !$0 { downloadManager.cancelCellularDownload() } }
             )
         ) {
-            Button("Download (\(model.fileSizeString))") {
+            Button("Download (\(model.displaySizeString(remoteSize: remoteSize)))") {
                 downloadManager.confirmCellularDownload()
             }
             Button("Cancel", role: .cancel) {
                 downloadManager.cancelCellularDownload()
             }
         } message: {
-            Text("\(model.displayName) is \(model.fileSizeString). This may use significant cellular data.")
+            Text("\(model.displayName) is \(model.displaySizeString(remoteSize: remoteSize)). This may use significant cellular data.")
         }
     }
 

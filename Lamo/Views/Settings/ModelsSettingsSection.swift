@@ -166,7 +166,6 @@ struct ModelsSettingsSection: View {
 
     private func libraryRow(model: PresetModel) -> some View {
         let isActive = vm.selectedModel.map { ($0 as NSString).lastPathComponent == model.filename } ?? false
-        let isPartial = model.isPartialDownload
 
         return HStack(spacing: 12) {
             Button {
@@ -187,11 +186,6 @@ struct ModelsSettingsSection: View {
                             Text(model.parameterCount)
                             Text("·").foregroundStyle(.white.opacity(0.15))
                             Text(model.actualFileSizeString)
-                            if isPartial {
-                                Text("·").foregroundStyle(.white.opacity(0.15))
-                                Text("INCOMPLETE")
-                                    .foregroundStyle(.orange.opacity(0.7))
-                            }
                         }
                         .font(.system(.caption2, design: .monospaced)).foregroundStyle(.white.opacity(0.35))
                     }

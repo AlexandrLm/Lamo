@@ -39,9 +39,9 @@ enum PresetModel: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Hardcoded size as fallback string (used when remote size is unknown).
     var fileSizeString: String {
-        let gb = fileSizeGB
-        return String(format: "%.1f GB", gb)
+        String(format: "%.1f GB", fileSizeGB)
     }
 
     var parameterCount: String {
@@ -138,16 +138,14 @@ enum PresetModel: String, CaseIterable, Identifiable {
         isDownloaded && !isFileValid
     }
 
+    /// File exists on disk and has non-zero size.
     var isFileValid: Bool {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
         let fileURL = modelsDir.appendingPathComponent(filename)
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let size = attrs[.size] as? Int64 else { return false }
-        let expectedBytes = Int64(fileSizeGB * 1_073_741_824)
-        // File is valid if it's at least 80% of expected size — allows for
-        // minor size differences between HuggingFace revisions.
-        return size > expectedBytes * 4 / 5
+        return size > 0
     }
 
     /// Human-readable file size on disk
@@ -158,6 +156,39 @@ enum PresetModel: String, CaseIterable, Identifiable {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let size = attrs[.size] as? Int64 else { return "unknown" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    /// Fetch the real file size from HuggingFace via HTTP HEAD request.
+    /// Returns nil if the request fails or Content-Length is missing.
+    static func fetchRemoteSize(for model: PresetModel) async -> Int64? {
+        guard let url = model.downloadURL else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 10
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                // HuggingFace may redirect — check expectedContentLength
+                if httpResponse.expectedContentLength > 0 {
+                    return httpResponse.expectedContentLength
+                }
+            }
+        } catch {
+            // Network error — fall back to hardcoded size
+        }
+        return nil
+    }
+
+    /// Best-effort display size: real file on disk if downloaded, remote size if available,
+    /// hardcoded fallback otherwise.
+    func displaySizeString(remoteSize: Int64? = nil) -> String {
+        if isDownloaded {
+            return actualFileSizeString
+        }
+        if let remote = remoteSize, remote > 0 {
+            return ByteCountFormatter.string(fromByteCount: remote, countStyle: .file)
+        }
+        return fileSizeString
     }
 
     /// Local path after download
