@@ -12,12 +12,20 @@ struct GenerationComputeSection: View {
     @State private var contextAuto: Bool
     @State private var gpuOn: Bool
     @State private var contextTokens: Double
+    @State private var samplerAuto: Bool
+    @State private var samplerTemp: Double
+    @State private var samplerTopK: Double
+    @State private var samplerTopP: Double
 
     init(vm: SettingsViewModel) {
         self.vm = vm
         _contextAuto = State(initialValue: vm.kvCacheAuto)
         _gpuOn = State(initialValue: vm.useGPU)
         _contextTokens = State(initialValue: Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens))
+        _samplerAuto = State(initialValue: vm.temperature == 1.0 && vm.topK == 64 && vm.topP == 0.95)
+        _samplerTemp = State(initialValue: vm.temperature)
+        _samplerTopK = State(initialValue: Double(vm.topK))
+        _samplerTopP = State(initialValue: vm.topP)
     }
 
     var body: some View {
@@ -35,22 +43,49 @@ struct GenerationComputeSection: View {
         .navigationTitle("Inference")
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    // MARK: - Sampling Card
-
     private var samplingCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader(icon: "sparkles", title: "Sampling")
 
-            tempRow
-            thinDivider
-            topKRow
-            thinDivider
-            topPRow
+            samplerAutoRow
+
+            if !samplerAuto {
+                thinDivider
+                tempRow
+                thinDivider
+                topKRow
+                thinDivider
+                topPRow
+            }
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+        .animation(.easeInOut(duration: 0.2), value: samplerAuto)
+    }
+
+    private var samplerAutoRow: some View {
+        HStack {
+            Label("Defaults", systemImage: "slider.horizontal.2.gobackward")
+                .font(.system(.subheadline, design: .monospaced))
+                .foregroundStyle(.white)
+            Spacer()
+            Text("Auto")
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.white.opacity(samplerAuto ? 0.5 : 0.25))
+            Toggle("", isOn: $samplerAuto)
+                .labelsHidden()
+                .tint(LamoTheme.Colors.accent)
+        }
+        .padding(.vertical, 10)
+        .onChange(of: samplerAuto) { _, newValue in
+            if newValue {
+                vm.resetSamplerDefaults()
+                samplerTemp = 1.0
+                samplerTopK = 64
+                samplerTopP = 0.95
+            }
+        }
     }
 
     private var tempRow: some View {
@@ -60,21 +95,24 @@ struct GenerationComputeSection: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(.white)
                 Spacer()
-                tempBadge(vm.temperature)
+                tempBadge(samplerTemp)
             }
 
-            Slider(value: $vm.temperature, in: 0.0...2.0, step: 0.05)
+            Slider(value: $samplerTemp, in: 0.0...2.0, step: 0.05)
                 .tint(tempTint)
 
             HStack(spacing: 0) {
-                rangeLabel("Focused", active: vm.temperature < 0.5)
+                rangeLabel("Focused", active: samplerTemp < 0.5)
                 Spacer()
-                rangeLabel("Balanced", active: vm.temperature >= 0.5 && vm.temperature <= 1.0)
+                rangeLabel("Balanced", active: samplerTemp >= 0.5 && samplerTemp <= 1.0)
                 Spacer()
-                rangeLabel("Creative", active: vm.temperature > 1.0)
+                rangeLabel("Creative", active: samplerTemp > 1.0)
             }
         }
         .padding(.vertical, 10)
+        .onChange(of: samplerTemp) { _, newValue in
+            vm.temperature = newValue
+        }
     }
 
     private var topKRow: some View {
@@ -84,22 +122,22 @@ struct GenerationComputeSection: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(.white)
                 Spacer()
-                valueChip("\(vm.topK)")
+                valueChip("\(Int(samplerTopK))")
             }
 
-            Slider(value: Binding(
-                get: { Double(vm.topK) },
-                set: { vm.topK = Int($0) }
-            ), in: 1...200, step: 1)
+            Slider(value: $samplerTopK, in: 1...200, step: 1)
                 .tint(.white.opacity(0.5))
 
             HStack(spacing: 0) {
-                rangeLabel("1", active: vm.topK <= 20)
+                rangeLabel("1", active: samplerTopK <= 20)
                 Spacer()
-                rangeLabel("200", active: vm.topK > 80)
+                rangeLabel("200", active: samplerTopK > 80)
             }
         }
         .padding(.vertical, 10)
+        .onChange(of: samplerTopK) { _, newValue in
+            vm.topK = Int(newValue)
+        }
     }
 
     private var topPRow: some View {
@@ -109,19 +147,22 @@ struct GenerationComputeSection: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(.white)
                 Spacer()
-                valueChip(String(format: "%.2f", vm.topP))
+                valueChip(String(format: "%.2f", samplerTopP))
             }
 
-            Slider(value: $vm.topP, in: 0.0...1.0, step: 0.05)
+            Slider(value: $samplerTopP, in: 0.0...1.0, step: 0.05)
                 .tint(.white.opacity(0.5))
 
             HStack(spacing: 0) {
-                rangeLabel("0", active: vm.topP <= 0.5)
+                rangeLabel("0", active: samplerTopP <= 0.5)
                 Spacer()
-                rangeLabel("1", active: vm.topP >= 0.9)
+                rangeLabel("1", active: samplerTopP >= 0.9)
             }
         }
         .padding(.vertical, 10)
+        .onChange(of: samplerTopP) { _, newValue in
+            vm.topP = newValue
+        }
     }
 
     // MARK: - Engine Card
@@ -324,6 +365,7 @@ struct GenerationComputeSection: View {
     private var resetButton: some View {
         Button {
             vm.resetSamplerDefaults()
+            samplerAuto = true
         } label: {
             Label("Reset to Defaults", systemImage: "arrow.counterclockwise")
                 .font(.system(.subheadline, design: .monospaced))
@@ -366,7 +408,7 @@ struct GenerationComputeSection: View {
     }
 
     private var tempTint: Color {
-        switch vm.temperature {
+        switch samplerTemp {
         case 0..<0.5:  return .blue.opacity(0.8)
         case 0.5...1.0: return LamoTheme.Colors.accent
         default:        return .orange.opacity(0.8)
