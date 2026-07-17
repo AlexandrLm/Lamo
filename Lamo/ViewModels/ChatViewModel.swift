@@ -403,15 +403,15 @@ final class ChatViewModel {
             }
         }
         messages[index].isStreaming = false
-        // Free memory: clear fields that are only needed during generation
-        messages[index].thinkingContent = ""
-        messages[index].fileContent = ""
         streamingMessageID = nil
         isStreaming = false
         streamingBuffer = ""
         streamingThinkingBuffer = ""
         conversation.updatedAt = .now
         save()
+        // Free memory AFTER save: clear transient generation-only fields
+        messages[index].thinkingContent = ""
+        messages[index].fileContent = ""
         Task { await refreshContextTracker() }
         if success == true {
             UINotificationFeedbackGenerator().notificationOccurred(.success)

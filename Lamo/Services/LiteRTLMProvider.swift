@@ -185,7 +185,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
         if AppDefaults.toolCreateReminder.wrappedValue { allTools.append(CreateReminderTool()) }
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
-        if AppDefaults.toolThink.wrappedValue { allTools.append(ThinkTool()) }
         let tools = allTools
 
         let config = LiteRTLM.ConversationConfig(
