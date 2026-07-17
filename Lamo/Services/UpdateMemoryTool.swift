@@ -36,17 +36,17 @@ struct UpdateMemoryTool: Tool {
         await ToolCallReporter.shared.reportCall(name: Self.name, params: "{\(paramsDesc)}")
 
         guard hasFacts || hasForget || hasSummary else {
-            let result: [String: Any] = ["status": "noop", "info": "No memory changes provided"]
-            await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
-            return result
+            let noop: [String: Any] = ["status": "noop", "info": "No memory changes provided"]
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: noop)
+            return noop
         }
 
         if hasFacts, let facts = facts { await MemoryService.shared.storeFacts(facts) }
         if hasForget, let forget = forget { await MemoryService.shared.removeFacts(forget) }
         if hasSummary, let summary = summary { await MemoryService.shared.updateConversationSummary(summary) }
 
-        let result: [String: Any] = ["status": "saved"]
-        await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
-        return result
+        let saved: [String: Any] = ["status": "saved"]
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: saved)
+        return saved
     }
 }

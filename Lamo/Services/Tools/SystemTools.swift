@@ -9,35 +9,8 @@ import CoreLocation
 private func report(_ name: String, params: String) async {
     await ToolCallReporter.shared.reportCall(name: name, params: params)
 }
-
 private func reportResult(_ name: String, _ result: Any) async {
-    let text: String
-    if let dict = result as? [String: Any] {
-        text = formatDict(dict)
-    } else if let arr = result as? [Any] {
-        text = "[\n" + arr.prefix(3).map { "  \($0)" }.joined(separator: ",\n") + "\n]"
-    } else {
-        text = "\(result)"
-    }
-    await ToolCallReporter.shared.reportResult(name: name, result: text)
-}
-
-private func formatDict(_ dict: [String: Any], indent: Int = 0) -> String {
-    let pad = String(repeating: "  ", count: indent)
-    let entries = dict
-        .sorted { $0.key < $1.key }
-        .compactMap { (key, value) -> String? in
-        let val: String
-        if let nested = value as? [String: Any] {
-            val = formatDict(nested, indent: indent + 1)
-        } else if let arr = value as? [Any] {
-            val = "[\n" + arr.prefix(3).map { "\(pad)    \($0)" }.joined(separator: ",\n") + "\n\(pad)  ]"
-        } else {
-            val = "\(value)"
-        }
-        return "\(pad)  \(key): \(val)"
-    }
-    return "{\n" + entries.joined(separator: ",\n") + "\n\(pad)}"
+    await ToolCallReporter.shared.reportResult(name: name, result: result)
 }
 
 // MARK: - Get Current Time

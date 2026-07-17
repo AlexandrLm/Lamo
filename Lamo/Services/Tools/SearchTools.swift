@@ -53,7 +53,7 @@ struct WebSearchTool: Tool {
             result = searchResults
         }
 
-        await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
         return result
     }
 }
@@ -72,14 +72,14 @@ struct FetchUrlTool: Tool {
 
         guard let fetchURL = URL(string: url) else {
             let err: [String: Any] = ["error": "Invalid URL"]
-            await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(err)")
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: err)
             throw FetchError.invalidURL
         }
 
         if let cached = URLCacheStore.shared.content(for: url) {
-            let result: [String: Any] = ["content": cached, "url": url, "source": "cache"]
-            await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(result)")
-            return result
+            let cachedResult: [String: Any] = ["content": cached, "url": url, "source": "cache"]
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: cachedResult)
+            return cachedResult
         }
 
         let result = try await WebFetcher.fetchStructured(url: fetchURL)
@@ -92,7 +92,7 @@ struct FetchUrlTool: Tool {
 
         if !result.content.isEmpty { URLCacheStore.shared.setContent(result.content, for: url) }
 
-        await ToolCallReporter.shared.reportResult(name: Self.name, result: "\(output)")
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: output)
         return output
     }
 }
