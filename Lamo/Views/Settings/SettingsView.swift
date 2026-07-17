@@ -56,12 +56,10 @@ struct SettingsView: View {
     // MARK: - Sections
 
     enum SettingsSection: String, CaseIterable, Hashable {
-        case engine = "AI Engine"
         case models = "Models"
-        case sampler = "Generation"
+        case generation = "Inference"
         case memory = "Memory"
         case tools = "Tools"
-        case advanced = "Advanced"
         case device = "Device"
     }
 
@@ -163,8 +161,13 @@ struct SettingsView: View {
                 gridCard(icon: "internaldrive", title: "Models", subtitle: gridSubtitle_models)
             }
 
-            NavigationLink(value: SettingsSection.sampler) {
-                gridCard(icon: "sparkles", title: "Generation", subtitle: "T:\(String(format: "%.1f", vm.temperature)) K:\(vm.topK)")
+            NavigationLink(value: SettingsSection.generation) {
+                gridCard(
+                    icon: "sparkles",
+                    title: "Inference",
+                    subtitle: gridSubtitle_generation,
+                    subtitle2: gridSubtitle_generation2
+                )
             }
 
             NavigationLink(value: SettingsSection.memory) {
@@ -188,10 +191,6 @@ struct SettingsView: View {
             NavigationLink(value: SettingsSection.device) {
                 gridCard(icon: "iphone", title: "Device", subtitle: gridSubtitle_device)
             }
-
-            NavigationLink(value: SettingsSection.advanced) {
-                gridCard(icon: "gearshape.2", title: "Advanced", subtitle: gridSubtitle_advanced)
-            }
         }
     }
 
@@ -208,9 +207,14 @@ struct SettingsView: View {
         }
         return "Not benchmarked"
     }
+    private var gridSubtitle_generation: String {
+        "T:\(String(format: "%.1f", vm.temperature)) · K:\(vm.topK) · P:\(String(format: "%.2f", vm.topP))"
+    }
 
-    private var gridSubtitle_advanced: String {
-        vm.useGPU ? "GPU · Auto" : "CPU · \(vm.cpuThreadCount) threads"
+    private var gridSubtitle_generation2: String {
+        let backend = vm.useGPU ? "GPU" : "CPU×\(vm.cpuThreadCount)"
+        let kv = vm.kvCacheAuto ? "Auto ctx" : "\(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens) ctx"
+        return "\(backend) · \(kv)"
     }
 
     private var toolsSubtitle: String {
@@ -219,8 +223,8 @@ struct SettingsView: View {
         return "\(enabled)/\(total) enabled"
     }
 
-    private func gridCard(icon: String, title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+    private func gridCard(icon: String, title: String, subtitle: String, subtitle2: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.xs) {
             Image(systemName: icon)
                 .font(.system(size: 20))
                 .foregroundStyle(.white.opacity(0.7))
@@ -236,6 +240,14 @@ struct SettingsView: View {
                 .foregroundStyle(.white.opacity(0.4))
                 .lineLimit(1)
                 .truncationMode(.middle)
+
+            if let subtitle2 {
+                Text(subtitle2)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(LamoTheme.Spacing.md)
@@ -317,18 +329,14 @@ struct SettingsView: View {
         switch section {
         case .models:
             ModelsSettingsSection(vm: vm)
-        case .sampler:
-            GenerationSettingsSection(vm: vm)
+        case .generation:
+            GenerationComputeSection(vm: vm)
         case .memory:
             MemorySettingsSection(vm: vm)
         case .tools:
             ToolsSettingsSection()
-        case .advanced:
-            AdvancedSettingsSection(vm: vm)
         case .device:
             DeviceSettingsSection()
-        case .engine:
-            EmptyView()
         }
     }
 
