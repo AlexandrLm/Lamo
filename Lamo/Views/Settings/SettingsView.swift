@@ -64,36 +64,42 @@ struct SettingsView: View {
     // MARK: - Hero Card
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
-            HStack(spacing: LamoTheme.Spacing.sm) {
-                statusDot
-                Text(statusLabel)
+        NavigationLink(value: SettingsSection.models) {
+            VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
+                HStack(spacing: LamoTheme.Spacing.sm) {
+                    statusDot
+                    Text(statusLabel)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .textCase(.uppercase)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.2))
+                }
+
+                if let current = vm.selectedModel {
+                    Text(vm.displayName(for: current))
+                        .font(.system(.title3, design: .monospaced).bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else {
+                    Text("No model loaded")
+                        .font(.system(.title3, design: .monospaced).bold())
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+
+                Text("On-device · No internet")
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .textCase(.uppercase)
-                Spacer()
+                    .foregroundStyle(.white.opacity(0.35))
             }
-
-            if let current = vm.selectedModel {
-                Text(vm.displayName(for: current))
-                    .font(.system(.title3, design: .monospaced).bold())
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            } else {
-                Text("No model loaded")
-                    .font(.system(.title3, design: .monospaced).bold())
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-
-            Text("On-device · No internet")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.35))
-
+            .padding(LamoTheme.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+            .contentShape(Rectangle())
         }
-        .padding(LamoTheme.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -133,10 +139,6 @@ struct SettingsView: View {
         ]
 
         return LazyVGrid(columns: columns, spacing: LamoTheme.Spacing.md) {
-            NavigationLink(value: SettingsSection.models) {
-                gridCard(icon: "internaldrive", title: "Models", subtitle: gridSubtitle_models)
-            }
-
             NavigationLink(value: SettingsSection.generation) {
                 gridCard(
                     icon: "sparkles",
@@ -163,15 +165,7 @@ struct SettingsView: View {
             NavigationLink(value: SettingsSection.tools) {
                 gridCard(icon: "wrench.and.screwdriver.fill", title: "Tools", subtitle: toolsSubtitle)
             }
-
         }
-    }
-
-    private var gridSubtitle_models: String {
-        if let current = vm.selectedModel {
-            return vm.displayName(for: current)
-        }
-        return "Select model"
     }
 
     private var gridSubtitle_generation: String {
