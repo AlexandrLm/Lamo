@@ -84,7 +84,7 @@ struct ModelsSettingsSection: View {
             }
         }
         .sheet(isPresented: $showFilesPicker) {
-            FilesFolderPicker(url: ProviderManager.modelsDirectory)
+            FilesFolderPicker()
         }
     }
 
@@ -359,7 +359,13 @@ struct ModelsSettingsSection: View {
                 infoRow(label: "Speculative", value: info.hasSpeculativeDecoding ? "YES" : "NO")
             }
             Divider().background(.white.opacity(0.06))
-            infoRow(label: "Location", value: "Files → On My iPhone → Lamo → models")
+            infoRow(label: "Location", value: "Files → On My iPhone → Lamo")
+            if !PresetModel.allCases.contains(where: { $0.isDownloaded }) && vm.availableModels.isEmpty {
+                Text("Models will appear here after download.\nUse Files app → Browse → On My iPhone → Lamo to manage them.")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
+                    .padding(.top, 4)
+            }
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -428,10 +434,6 @@ struct ModelsSettingsSection: View {
     // MARK: - Open in Files
 
     private func openModelsFolder() {
-        let modelsDir = ProviderManager.modelsDirectory
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        // Use UIDocumentPickerViewController to open the folder in Files app.
-        // UIApplication.shared.open doesn't work for file URLs on iOS.
         showFilesPicker = true
     }
 
@@ -461,15 +463,19 @@ struct ModelsSettingsSection: View {
 
 // MARK: - Files Folder Picker
 
-/// Opens the Files app at a specific folder URL using UIDocumentPickerViewController.
-/// UIApplication.shared.open doesn't work for file URLs on iOS — this is the correct way.
+/// Opens a document picker at the app's models directory.
+/// Lets the user browse and see model files in the Files app UI.
 struct FilesFolderPicker: UIViewControllerRepresentable {
-    let url: URL
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: false)
-        picker.directoryURL = url
+        // Ensure models directory exists so it shows up in Files
+        let modelsDir = ProviderManager.modelsDirectory
+        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+
+        // .folder content type opens the picker in directory browsing mode
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder, .data], asCopy: false)
+        picker.directoryURL = ProviderManager.modelsDirectory
         picker.allowsMultipleSelection = false
         picker.shouldShowFileExtensions = true
         picker.delegate = context.coordinator
@@ -490,8 +496,6 @@ struct FilesFolderPicker: UIViewControllerRepresentable {
         }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            // User picked a file — we don't need to do anything, just dismiss.
-            // The folder view itself is the main purpose.
             dismiss()
         }
 
