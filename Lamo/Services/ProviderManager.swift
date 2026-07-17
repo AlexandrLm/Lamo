@@ -567,22 +567,22 @@ final class ProviderManager: ObservableObject {
         return findFirstModel()
     }
 
-    /// Finds the first .litertlm file in ~/Documents/models/.
+    /// Finds the first model file (.litertlm, .bin, .tflite) in ~/Documents/models/.
     static func findFirstModel() -> String? {
         guard FileManager.default.fileExists(atPath: modelsDirectory.path) else { return nil }
         guard let first = try? FileManager.default.contentsOfDirectory(
             at: modelsDirectory, includingPropertiesForKeys: nil
-        ).first(where: { $0.pathExtension == "litertlm" }) else { return nil }
+        ).first(where: { $0.pathExtension == "litertlm" || $0.pathExtension == "bin" || $0.pathExtension == "tflite" }) else { return nil }
         return first.path
     }
 
-    /// Lists all .litertlm files in ~/Documents/models/.
+    /// Lists all model files (.litertlm, .bin, .tflite) in ~/Documents/models/.
     static func listModels() -> [String] {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: modelsDirectory, includingPropertiesForKeys: nil
         ) else { return [] }
         return files
-            .filter { $0.pathExtension == "litertlm" }
+            .filter { $0.pathExtension == "litertlm" || $0.pathExtension == "bin" || $0.pathExtension == "tflite" }
             .map { $0.lastPathComponent }
     }
 }

@@ -13,7 +13,11 @@ struct ModelCardView: View {
     }
 
     private var isDownloaded: Bool {
-        model.isFileValid || downloadState?.isComplete == true
+        model.isDownloaded || downloadState?.isComplete == true
+    }
+
+    private var isPartial: Bool {
+        model.isPartialDownload && downloadState?.isComplete != true
     }
 
     private var isDownloading: Bool {
@@ -50,9 +54,15 @@ struct ModelCardView: View {
                 Spacer(minLength: 0)
 
                 if isDownloaded && !isActiveModel {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.green)
+                    if isPartial {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.orange.opacity(0.7))
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                    }
                 } else if isDownloading {
                     ProgressView()
                         .controlSize(.small)
@@ -61,7 +71,7 @@ struct ModelCardView: View {
 
             HStack(spacing: 16) {
                 specItem(model.parameterCount, "params")
-                specItem(model.fileSizeString, "size")
+                specItem(model.isDownloaded ? model.actualFileSizeString : model.fileSizeString, "size")
                 specItem(model.minRAM, "RAM")
             }
             .padding(.top, 10)
@@ -115,6 +125,16 @@ struct ModelCardView: View {
                                 .foregroundStyle(.black)
                         }
                         .buttonStyle(.glassProminent)
+                    }
+
+                    if isPartial {
+                        Button {
+                            downloadManager.download(model: model)
+                        } label: {
+                            Label("Re-download", systemImage: "arrow.clockwise.down.circle.fill")
+                                .font(.caption.weight(.medium))
+                        }
+                        .foregroundStyle(.orange.opacity(0.8))
                     }
 
                     Button(role: .destructive) {

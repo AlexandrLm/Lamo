@@ -133,6 +133,11 @@ enum PresetModel: String, CaseIterable, Identifiable {
         return FileManager.default.fileExists(atPath: fileURL.path)
     }
 
+    /// File exists but may be incomplete/corrupted (size < 80% of expected).
+    var isPartialDownload: Bool {
+        isDownloaded && !isFileValid
+    }
+
     var isFileValid: Bool {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let modelsDir = documents.appendingPathComponent("models")
@@ -140,8 +145,9 @@ enum PresetModel: String, CaseIterable, Identifiable {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
               let size = attrs[.size] as? Int64 else { return false }
         let expectedBytes = Int64(fileSizeGB * 1_073_741_824)
-        let tolerance = expectedBytes / 20  // 5%
-        return abs(size - expectedBytes) < tolerance
+        // File is valid if it's at least 80% of expected size — allows for
+        // minor size differences between HuggingFace revisions.
+        return size > expectedBytes * 4 / 5
     }
 
     /// Human-readable file size on disk
