@@ -11,13 +11,13 @@ struct ContactsTool: Tool {
     @ToolParam(description: "Name, phone number, email, or organization to search for.")
     var query: String
 
-    @ToolParam(description: "Maximum number of contacts to return. Default is 5.")
-    var max_results: Int = 5
+    @ToolParam(description: "Maximum number of contacts to return (1–20).")
+    var maxResults: Int = 5
 
     func run() async throws -> Any {
         await ToolCallReporter.shared.reportCall(
             name: Self.name,
-            params: "{\"query\": \"\(query)\", \"max_results\": \(max_results)}"
+            params: "{\"query\": \"\(query)\", \"max_results\": \(maxResults)}"
         )
 
         let store = CNContactStore()
@@ -60,7 +60,7 @@ struct ContactsTool: Tool {
 
         let lowerQuery = query.lowercased()
         var matches: [[String: Any]] = []
-        let cap = max(1, max_results)
+        let cap = max(1, maxResults)
 
         let request = CNContactFetchRequest(keysToFetch: keys)
         do {

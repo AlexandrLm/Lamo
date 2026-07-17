@@ -9,38 +9,38 @@ struct CalendarAvailabilityTool: Tool {
     static let description = "Find available time slots in your calendar. Specify duration, date range, and working hours to get a list of free windows. Perfect for scheduling meetings or planning your day."
 
     @ToolParam(description: "Desired slot duration in minutes. Default 60 (1 hour).")
-    var duration_minutes: Int = 60
+    var durationMinutes: Int = 60
 
     @ToolParam(description: "Start of search range in YYYY-MM-DD format. Default: today.")
-    var start_date: String?
+    var startDate: String?
 
     @ToolParam(description: "End of search range in YYYY-MM-DD format. Default: today + 7 days.")
-    var end_date: String?
+    var endDate: String?
 
     @ToolParam(description: "Working hours start (0–23). Slots only within working hours. Default 9.")
-    var work_hours_start: Int = 9
+    var workHoursStart: Int = 9
 
     @ToolParam(description: "Working hours end (0–23). Slots only within working hours. Default 18.")
-    var work_hours_end: Int = 18
+    var workHoursEnd: Int = 18
 
     @ToolParam(description: "Maximum number of slots to return. Default 10.")
-    var max_slots: Int = 10
+    var maxSlots: Int = 10
 
     func run() async throws -> Any {
         await ToolCallReporter.shared.reportCall(
             name: Self.name,
             params: """
-            {"duration_minutes": \(duration_minutes), "start_date": \(start_date.map { "\"\($0)\"" } ?? "null"), \
-            "end_date": \(end_date.map { "\"\($0)\"" } ?? "null"), "work_hours_start": \(work_hours_start), \
-            "work_hours_end": \(work_hours_end), "max_slots": \(max_slots)}
+            {"duration_minutes": \(durationMinutes), "start_date": \(startDate.map { "\"\($0)\"" } ?? "null"), \
+            "end_date": \(endDate.map { "\"\($0)\"" } ?? "null"), "work_hours_start": \(workHoursStart), \
+            "work_hours_end": \(workHoursEnd), "max_slots": \(maxSlots)}
             """
         )
 
         // Validate parameters
-        let duration = max(1, duration_minutes)
-        let workStart = max(0, min(23, work_hours_start))
-        let workEnd = max(0, min(23, work_hours_end))
-        let maxSlotsCap = max(1, max_slots)
+        let duration = max(1, durationMinutes)
+        let workStart = max(0, min(23, workHoursStart))
+        let workEnd = max(0, min(23, workHoursEnd))
+        let maxSlotsCap = max(1, maxSlots)
 
         guard workStart < workEnd else {
             let errorResult: [String: Any] = ["error": "work_hours_start must be less than work_hours_end"]
@@ -58,14 +58,14 @@ struct CalendarAvailabilityTool: Tool {
         let today = cal.startOfDay(for: Date())
 
         let rangeStart: Date
-        if let startStr = start_date, !startStr.isEmpty, let parsed = dateFormatter.date(from: startStr) {
+        if let startStr = startDate, !startStr.isEmpty, let parsed = dateFormatter.date(from: startStr) {
             rangeStart = cal.startOfDay(for: parsed)
         } else {
             rangeStart = today
         }
 
         let rangeEnd: Date
-        if let endStr = end_date, !endStr.isEmpty, let parsed = dateFormatter.date(from: endStr) {
+        if let endStr = endDate, !endStr.isEmpty, let parsed = dateFormatter.date(from: endStr) {
             rangeEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: parsed)) ?? cal.date(byAdding: .day, value: 8, to: today)!
         } else {
             rangeEnd = cal.date(byAdding: .day, value: 8, to: today)!

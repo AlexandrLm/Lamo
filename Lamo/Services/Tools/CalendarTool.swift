@@ -21,10 +21,10 @@ struct CalendarTool: Tool {
     var mode: String = "list"
 
     @ToolParam(description: "Start date in YYYY-MM-DD format. Default: today.")
-    var start_date: String?
+    var startDate: String?
 
     @ToolParam(description: "End date in YYYY-MM-DD format. Default: today + 7 days.")
-    var end_date: String?
+    var endDate: String?
 
     @ToolParam(description: "Event title (required for 'create' mode).")
     var title: String?
@@ -36,23 +36,23 @@ struct CalendarTool: Tool {
     var location: String?
 
     @ToolParam(description: "Start time in HH:MM format (for 'create' mode).")
-    var start_time: String?
+    var startTime: String?
 
     @ToolParam(description: "End time in HH:MM format (for 'create' mode).")
-    var end_time: String?
+    var endTime: String?
 
     @ToolParam(description: "Search query (for 'search' mode).")
     var query: String?
 
     func run() async throws -> Any {
         var paramsDesc = "{\"mode\": \"\(mode)\""
-        if let sd = start_date { paramsDesc += ", \"start_date\": \"\(sd)\"" }
-        if let ed = end_date { paramsDesc += ", \"end_date\": \"\(ed)\"" }
+        if let sd = startDate { paramsDesc += ", \"start_date\": \"\(sd)\"" }
+        if let ed = endDate { paramsDesc += ", \"end_date\": \"\(ed)\"" }
         if let t = title { paramsDesc += ", \"title\": \"\(t)\"" }
         if let n = notes { paramsDesc += ", \"notes\": \"\(n)\"" }
         if let l = location { paramsDesc += ", \"location\": \"\(l)\"" }
-        if let st = start_time { paramsDesc += ", \"start_time\": \"\(st)\"" }
-        if let et = end_time { paramsDesc += ", \"end_time\": \"\(et)\"" }
+        if let st = startTime { paramsDesc += ", \"start_time\": \"\(st)\"" }
+        if let et = endTime { paramsDesc += ", \"end_time\": \"\(et)\"" }
         if let q = query { paramsDesc += ", \"query\": \"\(q)\"" }
         paramsDesc += "}"
         await report(Self.name, params: paramsDesc)
@@ -119,9 +119,9 @@ struct CalendarTool: Tool {
     private func handleList(store: EKEventStore) async throws -> Any {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
-        let start = cal.startOfDay(for: parseDate(start_date, fallback: today))
+        let start = cal.startOfDay(for: parseDate(startDate, fallback: today))
         let defaultEnd = cal.date(byAdding: .day, value: 7, to: today) ?? today
-        let end = cal.startOfDay(for: parseDate(end_date, fallback: defaultEnd))
+        let end = cal.startOfDay(for: parseDate(endDate, fallback: defaultEnd))
         // Include events starting on end_date by extending one day (predicate end is exclusive)
         let predicateEnd = cal.date(byAdding: .day, value: 1, to: end) ?? end
 
@@ -172,11 +172,11 @@ struct CalendarTool: Tool {
 
             let cal = Calendar.current
             let today = cal.startOfDay(for: Date())
-            let eventDate = parseDate(start_date, fallback: today)
+            let eventDate = parseDate(startDate, fallback: today)
 
-            if let st = start_time, let parsedStart = parseTime(st, on: eventDate) {
+            if let st = startTime, let parsedStart = parseTime(st, on: eventDate) {
                 event.startDate = parsedStart
-                if let et = end_time, let parsedEnd = parseTime(et, on: eventDate) {
+                if let et = endTime, let parsedEnd = parseTime(et, on: eventDate) {
                     event.endDate = parsedEnd
                 } else {
                     event.endDate = cal.date(byAdding: .hour, value: 1, to: parsedStart) ?? parsedStart
