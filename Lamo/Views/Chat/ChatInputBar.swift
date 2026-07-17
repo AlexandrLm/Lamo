@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import os
+import Combine
 
 struct ChatInputBar: View {
     @Binding var text: String
@@ -84,9 +85,8 @@ struct ChatInputBar: View {
 
                 // Thinking mode — clear toggle with colored ring
                 Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        provider.thinkingMode.toggle()
-                    }
+                    provider.objectWillChange.send()
+                    provider.thinkingMode.toggle()
                 } label: {
                     Image(systemName: provider.thinkingMode ? "brain.head.profile.fill" : "brain.head.profile")
                         .font(.system(size: 15, weight: .semibold))
@@ -102,21 +102,22 @@ struct ChatInputBar: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Circle())
                 .accessibilityLabel(provider.thinkingMode ? "Thinking on" : "Thinking off")
 
-                // Model picker
+                // Model picker — same height as circle buttons
                 Button { showModelPicker = true } label: {
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(provider.isEngineReady ? .white.opacity(0.6) : .white.opacity(0.3))
-                            .frame(width: 6, height: 6)
                         Text(modelDisplayName)
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white.opacity(0.7))
                             .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.3))
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .frame(height: 32)
                     .glassEffect(in: .capsule)
                 }
                 .buttonStyle(.plain)
