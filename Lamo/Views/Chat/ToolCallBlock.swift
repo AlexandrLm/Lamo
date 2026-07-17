@@ -125,7 +125,7 @@ struct ToolResultView: View {
 
 private struct WeatherCard: View {
     let d: [String: Any]
-    private static let handled = Set(["temperature_c","feels_like_c","humidity_percent","wind_speed_kmh","wind_direction_deg","conditions","is_day","city","sunrise","sunset"])
+    private static let handled = Set(["temperature_c","feels_like_c","humidity_percent","wind_speed_kmh","wind_direction_deg","conditions","is_day","city","sunrise","sunset","forecast"])
 
     var body: some View {
         let temp = d["temperature_c"] as? Double ?? 0
@@ -155,6 +155,26 @@ private struct WeatherCard: View {
                     Label(shortTime(ss), systemImage: "sunset.fill")
                 }.font(.system(.caption2, design: .rounded)).foregroundStyle(.tertiary)
             }
+            let forecast = d["forecast"] as? [[String: Any]] ?? []
+            if !forecast.isEmpty {
+                Color.white.opacity(0.06).frame(height: 1).padding(.vertical, 2)
+                ForEach(Array(forecast.enumerated()), id: \.offset) { i, day in
+                    let high = day["high_c"] as? Double ?? 0
+                    let low = day["low_c"] as? Double ?? 0
+                    let precip = day["precipitation_chance_percent"] as? Int ?? 0
+                    let fcCond = day["conditions"] as? String ?? ""
+                    HStack(spacing: 6) {
+                        Text(i == 0 ? "Today" : shortDate(day["date"] as? String ?? ""))
+                            .font(.caption2).foregroundStyle(i == 0 ? .primary : .secondary).frame(width: 36, alignment: .leading)
+                        Text(weatherEmoji(fcCond, isDay: true)).font(.caption)
+                        Text(fcCond).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        Spacer()
+                        if precip > 0 { Text("💧\(precip)%").font(.caption2).foregroundStyle(.blue.opacity(0.7)) }
+                        Text("\(Int(high))°").font(.system(.caption, design: .rounded).weight(.medium)).foregroundStyle(.primary)
+                        Text("\(Int(low))°").font(.system(.caption, design: .rounded)).foregroundStyle(.tertiary)
+                    }
+                }
+            }
             ExtraFields(dict: d, handled: Self.handled)
         }
     }
@@ -173,6 +193,9 @@ private struct SearchResults: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if let t = item["title"] as? String, !t.isEmpty {
                         Text(t).font(.system(.caption, design: .rounded).weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                    }
+                    if let c = item["content"] as? String, !c.isEmpty {
+                        Text(String(c.prefix(200))).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary.opacity(0.7)).lineLimit(2)
                     }
                     if let s = item["snippet"] as? String, !s.isEmpty {
                         Text(s).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
@@ -263,15 +286,17 @@ private struct LocationCard: View {
 }
 
 // MARK: - Device Info
-
 private struct DeviceCard: View {
     let d: [String: Any]
-    private static let handled = Set(["device_name","device_model","system_name","system_version","battery_level","battery_state","physical_memory_gb","free_storage","total_storage","processor_count","uptime_seconds","is_low_power_mode"])
+    private static let handled = Set(["device_name","device_model","device_model_identifier","system_name","system_version","battery_level","battery_state","physical_memory_gb","free_storage","total_storage","processor_count","uptime_seconds","is_low_power_mode"])
     var body: some View {
         let name = d["device_name"] as? String ?? ""; let model = d["device_model"] as? String ?? ""
         let os = "\(d["system_name"] as? String ?? "") \(d["system_version"] as? String ?? "")"
         VStack(alignment: .leading, spacing: 6) {
             HStack { Text(name).font(.system(.caption, design: .rounded).weight(.semibold)).foregroundStyle(.primary); Spacer(); Text(model).font(.caption2).foregroundStyle(.tertiary) }
+            if let id = d["device_model_identifier"] as? String, !id.isEmpty {
+                Text(id).font(.system(size: 8, design: .monospaced)).foregroundStyle(.tertiary.opacity(0.5))
+            }
             Text(os).font(.caption2).foregroundStyle(.secondary)
             BatteryBar(level: d["battery_level"] as? Int ?? 0)
             StorageBar(free: d["free_storage"] as? String ?? "", total: d["total_storage"] as? String ?? "")
@@ -305,7 +330,6 @@ private struct StorageBar: View {
         if tb > 0 {
             let frac = CGFloat(tb - fb) / CGFloat(tb)
             HStack(spacing: 6) {
-                Image(systemName: "internaldrive").font(.caption2).foregroundStyle(.tertiary)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.1)).frame(height: 4)
@@ -337,7 +361,6 @@ private struct OpenURLResult: View {
     }
 }
 
-// MARK: - Reminder
 
 private struct ReminderResult: View {
     let d: [String: Any]
@@ -351,11 +374,12 @@ private struct ReminderResult: View {
     }
 }
 
+
 // MARK: - Memory
 
 private struct MemoryResult: View {
     let d: [String: Any]
-    private static let handled = Set(["status","info"])
+    private static let handled = Set(["status","info","existing_facts"])
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if (d["status"] as? String) == "noop" { Text("No new facts").font(.caption2).foregroundStyle(.tertiary) }
@@ -550,6 +574,10 @@ private func shortURL(_ u: String) -> String {
 private func formatNumber(_ n: Double) -> String {
     if n == floor(n) && n.isFinite && abs(n) < 1e15 { return String(Int(n)) }
     return String(format: "%.6g", n)
+
+}
+private func shortDate(_ iso: String) -> String {
+    if iso.count >= 10 { return String(iso.suffix(5)) }; return iso
 }
 private func parseBytes(_ s: String) -> Int64 {
     let c = s.lowercased().replacingOccurrences(of: ",", with: "")

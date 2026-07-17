@@ -167,7 +167,7 @@ actor SearchProvider {
         }
 
         var request = URLRequest(url: url)
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
+        request.setValue("Lamo/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 8
 
         let (data, _) = try await URLSession.shared.data(for: request)

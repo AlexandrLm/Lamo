@@ -187,7 +187,7 @@ final class ProviderManager: ObservableObject {
 
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
-        "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
+        "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
     }
 
     // MARK: - Internal State

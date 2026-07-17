@@ -464,7 +464,7 @@ final class ChatViewModel {
     private func autoFetchUnfetchedURLs(from response: String) async {
         // Skip if the model already used tools — detected by tool call markers in the response.
         // LiteRT-LM tool calls produce JSON blocks with "name" and "arguments" fields.
-        let toolCallMarkers = ["\"name\":", "\"arguments\":", "web_search", "fetch_url", "deep_research"]
+        let toolCallMarkers = ["\"name\":", "\"arguments\":", "web_search", "fetch_url"]
         let lowerResponse = response.lowercased()
         let hasToolCall = toolCallMarkers.contains { lowerResponse.contains($0) }
         guard !hasToolCall else { return }

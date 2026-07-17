@@ -1,3 +1,6 @@
+#if canImport(PDFKit)
+import PDFKit
+#endif
 import Foundation
 
 // MARK: - HTML Entity Decoder
@@ -113,21 +116,59 @@ actor WebFetcher {
     private static func fetchOnceStructured(url: URL) async throws -> PageMetadata {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,application/pdf;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.timeoutInterval = 15
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
         let mimeType = (response as? HTTPURLResponse)?.mimeType ?? ""
+        let httpURL = (response as? HTTPURLResponse)?.url ?? url
         let isPDF = mimeType.contains("pdf") || url.pathExtension == "pdf"
-
         if isPDF {
+            #if canImport(PDFKit)
+            if let pdfText = extractPDFText(from: data) {
+                let truncated = truncateContent(pdfText, maxLength: 6000)
+                return PageMetadata(
+                    title: url.lastPathComponent,
+                    description: nil,
+                    contentType: "pdf",
+                    content: truncated
+                )
+            }
+            #endif
             return PageMetadata(
                 title: url.lastPathComponent,
                 description: nil,
                 contentType: "pdf",
-                content: "[PDF document — cannot extract text from \(url.absoluteString)]"
+                content: "[PDF document — text extraction failed for \(url.absoluteString)]"
+            )
+        }
+
+        // Plain text, JSON, XML — return as-is
+        let isPlainText = mimeType.hasPrefix("text/plain")
+        let isJSON = mimeType.contains("json") || url.pathExtension == "json"
+        let isXML = mimeType.contains("xml") || url.pathExtension == "xml"
+        if isPlainText || isJSON || isXML {
+            let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) ?? ""
+            if isJSON {
+                // Pretty-print JSON
+                if let obj = try? JSONSerialization.jsonObject(with: data),
+                   let pretty = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+                   let prettyStr = String(data: pretty, encoding: .utf8) {
+                    return PageMetadata(
+                        title: url.lastPathComponent,
+                        description: nil,
+                        contentType: "json",
+                        content: truncateContent(prettyStr, maxLength: 6000)
+                    )
+                }
+            }
+            return PageMetadata(
+                title: url.lastPathComponent,
+                description: nil,
+                contentType: mimeType.isEmpty ? "text" : mimeType,
+                content: truncateContent(text, maxLength: 6000)
             )
         }
 
@@ -139,19 +180,7 @@ actor WebFetcher {
         let metadata = extractMetadata(from: html)
         let content = extractReadableContent(from: html)
 
-        let maxLength = 6000
-        let truncatedContent: String
-        if content.count > maxLength {
-            // Try to truncate at sentence boundary
-            let truncated = String(content.prefix(maxLength))
-            if let lastPeriod = truncated.lastIndex(of: ".") {
-                truncatedContent = String(truncated[...lastPeriod])
-            } else {
-                truncatedContent = truncated + "\n\n[Content truncated at \(maxLength) chars]"
-            }
-        } else {
-            truncatedContent = content
-        }
+        let truncatedContent = truncateContent(content, maxLength: 6000)
 
         return PageMetadata(
             title: metadata.title,
@@ -160,6 +189,26 @@ actor WebFetcher {
             content: truncatedContent
         )
     }
+
+    /// Truncates content at sentence boundary near maxLength.
+    private static func truncateContent(_ content: String, maxLength: Int) -> String {
+        guard content.count > maxLength else { return content }
+        let truncated = String(content.prefix(maxLength))
+        if let lastPeriod = truncated.lastIndex(of: ".") {
+            return String(truncated[...lastPeriod])
+        }
+        return truncated + "\n\n[Content truncated at \(maxLength) chars]"
+    }
+
+    #if canImport(PDFKit)
+    /// Extracts plain text from PDF data using PDFKit.
+    private static func extractPDFText(from data: Data) -> String? {
+        guard let pdf = PDFDocument(data: data) else { return nil }
+        let pages = (0..<pdf.pageCount).compactMap { pdf.page(at: $0)?.string }
+        let text = pages.joined(separator: "\n")
+        return text.isEmpty ? nil : text
+    }
+    #endif
 
     // MARK: - Readability-based Content Extraction
 

@@ -59,7 +59,7 @@ enum AppDefaults {
     static var visualTokenBudget = UserDefault("litertLMVisualTokenBudget", default: 560)
 
     // Prompt
-    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, deep_research, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first.")
+    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first.")
 
     // Thinking
     static var thinkingMode = UserDefault("litertLMThinkingMode", default: false)

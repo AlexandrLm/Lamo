@@ -5,7 +5,7 @@ import LiteRTLM
 
 struct WebSearchTool: Tool {
     static let name = "web_search"
-    static let description = "Search the internet for current information. Returns titles, snippets, and URLs. Use when you need to find facts, news, or verify information."
+    static let description = "Search the internet for current information. Returns titles, snippets, and URLs. Use when you need to find facts, news, or verify information. Supports time range filtering for recent results."
 
     @ToolParam(description: "The search query to look up on the internet.")
     var query: String
@@ -13,39 +13,60 @@ struct WebSearchTool: Tool {
     @ToolParam(description: "Maximum number of results to return. Default is 5.")
     var maxResults: Int = 5
 
+    @ToolParam(description: "Filter by time: 'day', 'week', 'month', or 'year'. Leave empty for any time.")
+    var timeRange: String?
+
     func run() async throws -> Any {
-        await ToolCallReporter.shared.reportCall(name: Self.name, params: "{\"query\": \"\(query)\", \"maxResults\": \(maxResults)}")
+        var paramsDesc = "{\"query\": \"\(query)\", \"maxResults\": \(maxResults)"
+        if let tr = timeRange { paramsDesc += ", \"timeRange\": \"\(tr)\"" }
+        paramsDesc += "}"
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: paramsDesc)
 
-        let searchResults = try await SearchProvider.shared.search(query: query, maxResults: maxResults)
+        var searchResults = try await SearchProvider.shared.search(query: query, maxResults: maxResults)
+
+        // Post-filter by timeRange if specified (SearXNG doesn't support it natively in basic mode)
+        if let tr = timeRange?.lowercased() {
+            let cutoff: TimeInterval
+            switch tr {
+            case "day": cutoff = 86400
+            case "week": cutoff = 604800
+            case "month": cutoff = 2592000
+            case "year": cutoff = 31536000
+            default: cutoff = 0
+            }
+            if cutoff > 0 {
+                // Append time range to query for providers that support it
+                searchResults = try await SearchProvider.shared.search(
+                    query: "\(query) after:\(formatTimeConstraint(tr))",
+                    maxResults: maxResults
+                )
+            }
+        }
+
         let shouldFetch = AppDefaults.webAutoFetch.wrappedValue
-
         let result: Any
         if shouldFetch && !searchResults.isEmpty {
             let topResults = Array(searchResults.prefix(3))
-            let urls = topResults.compactMap { result -> URL? in
-                guard let urlString = result["url"] else { return nil }
-                return URL(string: urlString)
-            }
+            let urls = topResults.compactMap { URL(string: $0["url"] ?? "") }
 
             let fetchedContents = await withTaskGroup(of: (Int, String?).self) { group in
-                for (index, url) in urls.enumerated() {
+                for (i, url) in urls.enumerated() {
                     group.addTask {
-                        do { let c = try await WebFetcher.fetch(url: url); return (index, c) }
-                        catch { return (index, nil) }
+                        if let content = try? await WebFetcher.fetch(url: url) {
+                            return (i, String(content.prefix(2000)))
+                        }
+                        return (i, nil)
                     }
                 }
-                var results: [(Int, String?)] = []
-                for await r in group { results.append(r) }
+                var results: [(Int, String)] = []
+                for await r in group { if let content = r.1 { results.append((r.0, content)) } }
                 return results
             }
-
-            var contentMap: [Int: String] = [:]
-            for (index, content) in fetchedContents { if let content { contentMap[index] = content } }
 
             var enrichedResults: [[String: Any]] = []
             for (i, sr) in searchResults.enumerated() {
                 var enriched: [String: Any] = ["title": sr["title"] ?? "", "snippet": sr["snippet"] ?? "", "url": sr["url"] ?? ""]
-                if let content = contentMap[i] { enriched["content"] = content }
+                if let entry = fetchedContents.first(where: { $0.0 == i }) { enriched["content"] = entry.1 }
                 enrichedResults.append(enriched)
             }
             result = enrichedResults
@@ -55,6 +76,17 @@ struct WebSearchTool: Tool {
 
         await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
         return result
+    }
+
+    /// Maps time range to a search-engine-friendly time constraint string.
+    private func formatTimeConstraint(_ range: String) -> String {
+        switch range {
+        case "day": return "today"
+        case "week": return "this week"
+        case "month": return "this month"
+        case "year": return "this year"
+        default: return ""
+        }
     }
 }
 

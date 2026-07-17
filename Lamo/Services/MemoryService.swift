@@ -101,6 +101,7 @@ final class MemoryService: ObservableObject {
 
     /// Remove facts that match the given strings (called by UpdateMemoryTool).
     func removeFacts(_ factsToRemove: [String]) async {
+
         guard let context = modelContext else { return }
         let toRemove = factsToRemove.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -134,6 +135,11 @@ final class MemoryService: ObservableObject {
         } catch {
             LamoLogger.memory.error("Remove error: \(error)")
         }
+    }
+
+    /// Returns all currently stored facts as an array of strings.
+    func allFactTexts() -> [String] {
+        return factsCache.map { $0.text }
     }
 
     // MARK: - Context Building
