@@ -218,10 +218,10 @@ struct ContextDetailView: View {
         let total = max(t.budgetTokens, 1)
         let sysW = Double(t.systemPromptTokens) / Double(total)
         let memW = Double(t.memoryTokens) / Double(total)
+        let toolW = Double(t.toolTokens) / Double(total)
         let msgTok = t.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }
         let msgW = Double(msgTok) / Double(total)
         let bufW = Double(t.reservedForReply) / Double(total)
-
         return VStack(alignment: .leading, spacing: 0) {
             sectionLabel("Breakdown", icon: "chart.bar.fill")
 
@@ -229,6 +229,7 @@ struct ContextDetailView: View {
                 HStack(spacing: 1) {
                     if sysW > 0 { Rectangle().fill(.white).frame(width: geo.size.width * sysW) }
                     if memW > 0 { Rectangle().fill(LamoTheme.Colors.accent.opacity(0.6)).frame(width: geo.size.width * memW) }
+                    if toolW > 0 { Rectangle().fill(.orange.opacity(0.5)).frame(width: geo.size.width * toolW) }
                     if msgW > 0 { Rectangle().fill(.white.opacity(0.3)).frame(width: geo.size.width * msgW) }
                     if bufW > 0 { Rectangle().fill(.white.opacity(0.1)).frame(width: geo.size.width * bufW) }
                 }
@@ -240,6 +241,7 @@ struct ContextDetailView: View {
             HStack(spacing: 14) {
                 legendDot(color: .white, label: "System")
                 if t.memoryTokens > 0 { legendDot(color: LamoTheme.Colors.accent, label: "Memory") }
+                if t.toolTokens > 0 { legendDot(color: .orange, label: "Tools") }
                 legendDot(color: .white.opacity(0.3), label: "Messages")
                 legendDot(color: .white.opacity(0.1), label: "Buffer")
             }
@@ -249,6 +251,12 @@ struct ContextDetailView: View {
             breakdownRow(icon: "terminal", label: "System prompt", value: t.systemPromptTokens)
             if t.memoryTokens > 0 {
                 breakdownRow(icon: "brain", label: "Memory facts", value: t.memoryTokens)
+            }
+            if t.toolTokens > 0 {
+                let label = t.toolCountTotal > t.toolCount
+                    ? "Tools (\(t.toolCount)/\(t.toolCountTotal) active)"
+                    : "Tools (\(t.toolCount))"
+                breakdownRow(icon: "wrench.and.screwdriver", label: label, value: t.toolTokens, isEstimate: true)
             }
             breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", value: msgTok)
             breakdownRow(icon: "arrowshape.down", label: "Reply buffer", value: t.reservedForReply, isEstimate: true)

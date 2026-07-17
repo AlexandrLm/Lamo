@@ -20,6 +20,9 @@ struct ContextTracker {
 
     let systemPromptTokens: Int
     let memoryTokens: Int
+    let toolTokens: Int          // tokens consumed by tool definitions
+    let toolCount: Int           // how many tools were passed
+    let toolCountTotal: Int      // total tools available (before filtering)
     let totalLimit: Int          // effectiveMaxTokens
     let messageUsages: [MessageUsage]
     /// Pre-computed token count — avoids O(n) filter+reduce on every read.
@@ -96,14 +99,14 @@ struct ContextTracker {
 
         return (includedIDs, Array(dropped), needsSummary, usedTokens)
     }
-
-    // MARK: - Build from settings + messages (requires real token counts)
-
     static func build(
         messages: [ChatMessage],
         tokenCounts: [UUID: Int],
         systemPromptTokens: Int,
         memoryTokens: Int,
+        toolTokens: Int = 0,
+        toolCount: Int = 0,
+        toolCountTotal: Int = 0,
         maxNumTokens: Int
     ) -> ContextTracker {
         let effective = max(maxNumTokens, 512)
@@ -136,13 +139,16 @@ struct ContextTracker {
             if !isLast { runningOffset += tokens }
         }
 
-        let usedTokens = systemPromptTokens + memoryTokens + usages
+        let usedTokens = systemPromptTokens + memoryTokens + toolTokens + usages
             .filter { $0.isInContext && !$0.isStreaming }
             .reduce(0) { $0 + $1.tokenCount }
 
         return ContextTracker(
             systemPromptTokens: systemPromptTokens,
             memoryTokens: memoryTokens,
+            toolTokens: toolTokens,
+            toolCount: toolCount,
+            toolCountTotal: toolCountTotal,
             totalLimit: effective,
             messageUsages: usages,
             usedTokens: usedTokens

@@ -126,9 +126,10 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         let memoryTokens = await pm.tokenizeCount(memoryContext)
 
         // Use ContextTracker for accurate message selection
+        let messageTokenCounts = await pm.tokenizeMessages(messages)
         let budgetResult = ContextTracker.calculateIncluded(
             messages: messages,
-            tokenCounts: await pm.tokenizeMessages(messages),
+            tokenCounts: messageTokenCounts,
             systemPromptTokens: systemTokens,
             memoryTokens: memoryTokens,
             maxNumTokens: effectiveMaxTokens
@@ -210,10 +211,20 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         let relevantTools = allTools.filter { filteredNames.contains(type(of: $0).name) }
         LamoLogger.engine.debug("ToolFilter: \(allTools.count) → \(relevantTools.count) tools for query: \(lastUserQuery.prefix(50))")
 
-        // --- Configure agentic loop budget (KV-cache guard for multi-tool turns) ---
-        let toolDefTokens = relevantTools.count * 80  // rough: each tool JSON schema ~80 tokens
+        // --- Tokenize tool schemas for accurate budget (not count * 80) ---
+        var toolSchemaText = ""
+        for tool in relevantTools {
+            let name = type(of: tool).name
+            let desc = type(of: tool).description
+            toolSchemaText += "\(name): \(desc)\n"
+        }
+        // ×3 multiplier: JSON boilerplate + parameter schemas + required lists
+        let toolDefTokens = await pm.tokenizeCount(toolSchemaText) * 3
+        pm.lastToolTokens = toolDefTokens
+        pm.lastToolCount = relevantTools.count
+        pm.lastToolCountTotal = allTools.count
         let conversationTokens = includedMessages.reduce(0) { acc, msg in
-            acc + (msg.content.count / 4)  // fast estimate; real counts already computed above
+            acc + (messageTokenCounts[msg.id] ?? msg.content.count / 4)
         }
         await AgenticLoopBudget.shared.configure(
             totalBudget: effectiveMaxTokens,

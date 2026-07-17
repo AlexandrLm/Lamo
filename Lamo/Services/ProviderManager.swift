@@ -31,6 +31,13 @@ final class ProviderManager: ObservableObject {
     /// Tracks the real KV-cache budget (not UserDefaults which may be 0 in auto mode).
     private(set) var currentMaxTokens: Int?
 
+    /// Tool definition token count from the last conversation build (real tokenizer).
+    @Published var lastToolTokens: Int = 0
+    /// How many tools were included in the last turn (after filtering).
+    @Published var lastToolCount: Int = 0
+    /// Total tools available (before filtering).
+    @Published var lastToolCountTotal: Int = 0
+
     // MARK: - Memory Pressure
     private var memoryPressureSource: DispatchSourceMemoryPressure?
 
