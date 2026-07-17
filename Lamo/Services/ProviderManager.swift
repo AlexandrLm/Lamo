@@ -187,7 +187,7 @@ final class ProviderManager: ObservableObject {
 
     /// Default system prompt that teaches the model to use markdown formatting.
     var defaultSystemPrompt: String {
-        "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first."
+        "You are a helpful assistant. Answer in the user's language. Use markdown formatting when appropriate. You have tools: web_search, fetch_url, update_memory. When you need information — call tools immediately, never promise to check later. When the user shares a URL — always fetch it first. IMPORTANT: After a tool returns data, describe it accurately using the EXACT values from the tool result. Never invent or guess numbers, dates, or details — the user sees a card with real data and will notice mismatches. Keep tool result summaries brief: 1-2 sentences, then let the card speak. If the tool returned an error (success: false or error field), tell the user clearly that it failed and what they need to do."
     }
 
     // MARK: - Internal State

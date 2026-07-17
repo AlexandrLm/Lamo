@@ -485,8 +485,8 @@ struct WeatherTool: Tool {
     @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
     var city: String = ""
 
-    @ToolParam(description: "Number of forecast days (1-7). Default 1.")
-    var days: Int = 1
+    @ToolParam(description: "Number of forecast days (1-7). Default 7 for a full week forecast.")
+    var days: Int = 7
 
     func run() async throws -> Any {
         let clampedDays = max(1, min(days, 7))
