@@ -69,4 +69,17 @@ enum AppDefaults {
 
     // Web
     static var webAutoFetch = UserDefault("web_auto_fetch", default: true)
+
+    // MARK: - Tool Toggles (all enabled by default)
+
+    static var toolWebSearch = UserDefault("tool_web_search", default: true)
+    static var toolFetchURL = UserDefault("tool_fetch_url", default: true)
+    static var toolGetCurrentTime = UserDefault("tool_get_current_time", default: true)
+    static var toolCalculator = UserDefault("tool_calculator", default: true)
+    static var toolOpenURL = UserDefault("tool_open_url", default: true)
+    static var toolWikipedia = UserDefault("tool_wikipedia", default: true)
+    static var toolGetLocation = UserDefault("tool_get_location", default: true)
+    static var toolDeviceInfo = UserDefault("tool_device_info", default: true)
+    static var toolWeather = UserDefault("tool_weather", default: true)
+    static var toolCreateReminder = UserDefault("tool_create_reminder", default: true)
 }

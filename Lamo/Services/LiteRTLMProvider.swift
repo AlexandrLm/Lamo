@@ -170,9 +170,20 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         // --- Create conversation ---
         let samplerConfig = try buildSamplerConfig()
-        let tools: [LiteRTLM.Tool] = MemoryService.shared.isEnabled
-            ? [UpdateMemoryTool(), WebSearchTool(), FetchUrlTool(), GetCurrentTimeTool(), CalculatorTool(), OpenURLTool(), WikipediaTool(), DeviceInfoTool(), WeatherTool(), CreateReminderTool()]
-            : [WebSearchTool(), FetchUrlTool(), GetCurrentTimeTool(), CalculatorTool(), OpenURLTool(), WikipediaTool(), DeviceInfoTool(), WeatherTool(), CreateReminderTool()]
+        // Build tool list filtered by user toggles
+        var allTools: [LiteRTLM.Tool] = []
+        if AppDefaults.toolWebSearch.wrappedValue { allTools.append(WebSearchTool()) }
+        if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
+        if AppDefaults.toolGetCurrentTime.wrappedValue { allTools.append(GetCurrentTimeTool()) }
+        if AppDefaults.toolCalculator.wrappedValue { allTools.append(CalculatorTool()) }
+        if AppDefaults.toolOpenURL.wrappedValue { allTools.append(OpenURLTool()) }
+        if AppDefaults.toolGetLocation.wrappedValue { allTools.append(GetLocationTool()) }
+        if AppDefaults.toolWikipedia.wrappedValue { allTools.append(WikipediaTool()) }
+        if AppDefaults.toolDeviceInfo.wrappedValue { allTools.append(DeviceInfoTool()) }
+        if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
+        if AppDefaults.toolCreateReminder.wrappedValue { allTools.append(CreateReminderTool()) }
+        if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
+        let tools = allTools
 
         let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,

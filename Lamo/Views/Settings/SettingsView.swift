@@ -60,6 +60,7 @@ struct SettingsView: View {
         case models = "Models"
         case sampler = "Generation"
         case memory = "Memory"
+        case tools = "Tools"
         case advanced = "Advanced"
         case device = "Device"
     }
@@ -180,6 +181,10 @@ struct SettingsView: View {
                 )
             }
 
+            NavigationLink(value: SettingsSection.tools) {
+                gridCard(icon: "wrench.and.screwdriver.fill", title: "Tools", subtitle: toolsSubtitle)
+            }
+
             NavigationLink(value: SettingsSection.device) {
                 gridCard(icon: "iphone", title: "Device", subtitle: gridSubtitle_device)
             }
@@ -206,6 +211,12 @@ struct SettingsView: View {
 
     private var gridSubtitle_advanced: String {
         vm.useGPU ? "GPU · Auto" : "CPU · \(vm.cpuThreadCount) threads"
+    }
+
+    private var toolsSubtitle: String {
+        let total = ToolInfo.all.count
+        let enabled = ToolInfo.all.filter { $0.isEnabled() }.count
+        return "\(enabled)/\(total) enabled"
     }
 
     private func gridCard(icon: String, title: String, subtitle: String) -> some View {
@@ -310,6 +321,8 @@ struct SettingsView: View {
             GenerationSettingsSection(vm: vm)
         case .memory:
             MemorySettingsSection(vm: vm)
+        case .tools:
+            ToolsSettingsSection()
         case .advanced:
             AdvancedSettingsSection(vm: vm)
         case .device:

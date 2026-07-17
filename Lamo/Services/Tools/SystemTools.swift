@@ -2,6 +2,7 @@ import Foundation
 import LiteRTLM
 import UIKit
 import EventKit
+import CoreLocation
 
 // MARK: - Get Current Time
 
@@ -322,24 +323,101 @@ struct DeviceInfoTool: Tool {
     }
 }
 
+// MARK: - Get Location (CoreLocation)
+
+struct GetLocationTool: Tool {
+    static let name = "get_location"
+    static let description = """
+        Get your current GPS location using device sensors. \
+        Returns city, coordinates, and address. \
+        First use will prompt for location permission. \
+        Use when you need to know exactly where the user is for weather, navigation, or local information.
+        """
+
+    func run() async throws -> Any {
+        let location = try await requestCurrentLocation()
+        let name = try await reverseGeocode(location)
+
+        return [
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "altitude_m": location.altitude,
+            "horizontal_accuracy_m": location.horizontalAccuracy,
+            "location_name": name,
+        ] as [String: Any]
+    }
+
+    private func requestCurrentLocation() async throws -> CLLocation {
+        let manager = CLLocationManager()
+
+        // Check authorization
+        let status = manager.authorizationStatus
+        switch status {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+            // Wait briefly for user to respond — timeout after 15s
+            let start = Date()
+            while manager.authorizationStatus == .notDetermined {
+                if Date().timeIntervalSince(start) > 15 { throw LocationError.permissionDenied }
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            guard manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways else {
+                throw LocationError.permissionDenied
+            }
+        case .denied, .restricted:
+            throw LocationError.permissionDenied
+        default:
+            break
+        }
+
+        // Use CLLocationUpdate.liveUpdates() (iOS 17+)
+        let updates = CLLocationUpdate.liveUpdates()
+        for try await update in updates {
+            guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
+            return loc
+        }
+        throw LocationError.unavailable
+    }
+
+    private func reverseGeocode(_ location: CLLocation) async throws -> String {
+        let geocoder = CLGeocoder()
+        let placemarks = try await geocoder.reverseGeocodeLocation(location)
+        guard let place = placemarks.first else { return "\(location.coordinate.latitude), \(location.coordinate.longitude)" }
+
+        let parts = [place.locality, place.administrativeArea, place.country].compactMap { $0 }
+        return parts.isEmpty ? "\(location.coordinate.latitude), \(location.coordinate.longitude)" : parts.joined(separator: ", ")
+    }
+}
+
+private enum LocationError: LocalizedError {
+    case permissionDenied
+    case unavailable
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied: return "Location permission denied. Enable in Settings > Privacy > Location Services."
+        case .unavailable: return "Could not determine location. Try again."
+        }
+    }
+}
 // MARK: - Weather
 
 struct WeatherTool: Tool {
-    static let name = "weather"
     static let description = """
-        Get current weather conditions for a city. Uses Open-Meteo (free, no API key). \
-        Returns temperature, humidity, wind speed, conditions, and sunrise/sunset. \
-        The city name is geocoded to coordinates automatically.
+        Get current weather conditions. Uses Open-Meteo (free, no API key). \
+        If no city is provided, auto-detects your GPS location. \
+        Returns temperature, humidity, wind speed, conditions, and sunrise/sunset.
         """
 
-    @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). For more precision add country code: 'Paris,FR'.")
-    var city: String
+    @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
+    var city: String = ""
 
     func run() async throws -> Any {
-        // Step 1: Geocode city name to coordinates
-        let coords = try await geocode(city: city)
-
-        // Step 2: Fetch weather for those coordinates
+        let coords: Coords
+        if city.isEmpty {
+            coords = try await detectLocation()
+        } else {
+            coords = try await geocode(city: city)
+        }
         return try await fetchWeather(lat: coords.lat, lon: coords.lon, cityName: coords.name)
     }
 
@@ -347,6 +425,51 @@ struct WeatherTool: Tool {
         let lat: Double
         let lon: Double
         let name: String
+    }
+
+    private func detectLocation() async throws -> Coords {
+        let manager = CLLocationManager()
+        let status = manager.authorizationStatus
+        switch status {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+            let start = Date()
+            while manager.authorizationStatus == .notDetermined {
+                if Date().timeIntervalSince(start) > 15 { throw WeatherError.cityNotFound }
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            guard manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways else {
+                throw WeatherError.cityNotFound
+            }
+        case .denied, .restricted:
+            throw WeatherError.cityNotFound
+        default:
+            break
+        }
+
+        let updates = CLLocationUpdate.liveUpdates()
+        for try await update in updates {
+            guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
+            let geocoder = CLGeocoder()
+            let placemarks = try await geocoder.reverseGeocodeLocation(loc)
+            let name = placemarks.first?.locality ?? "\(loc.coordinate.latitude), \(loc.coordinate.longitude)"
+            return Coords(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude, name: name)
+        }
+        throw WeatherError.cityNotFound
+    }
+        """
+
+    @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
+    var city: String = ""
+
+    func run() async throws -> Any {
+        let coords: Coords
+        if city.isEmpty {
+            coords = try await detectLocation()
+        } else {
+            coords = try await geocode(city: city)
+        }
+        return try await fetchWeather(lat: coords.lat, lon: coords.lon, cityName: coords.name)
     }
 
     private func geocode(city: String) async throws -> Coords {
@@ -372,7 +495,6 @@ struct WeatherTool: Tool {
         let name = (first["name"] as? String) ?? city
         let country = first["country"] as? String
         let displayName = country.map { "\(name), \($0)" } ?? name
-
         return Coords(lat: lat, lon: lon, name: displayName)
     }
 
