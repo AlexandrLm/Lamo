@@ -1,8 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Models section — library, catalog, import, storage.
-/// Extracted from SettingsView for maintainability.
+/// Models section — active model hero, library, catalog, import.
 struct ModelsSettingsSection: View {
     var vm: SettingsViewModel
     @ObservedObject var downloadManager = DownloadManager.shared
@@ -19,7 +18,7 @@ struct ModelsSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: LamoTheme.Spacing.lg) {
+            VStack(spacing: LamoTheme.Spacing.md) {
                 heroCard
                 librarySection
                 catalogSection
@@ -35,87 +34,79 @@ struct ModelsSettingsSection: View {
             isPresented: $isImportingModel,
             allowedContentTypes: [.data],
             allowsMultipleSelection: false
-        ) { result in
-            handleModelImport(result)
-        }
+        ) { result in handleModelImport(result) }
         .overlay {
             if isCopyingFile {
                 ZStack {
                     Color.black.opacity(0.6).ignoresSafeArea()
                     VStack(spacing: 12) {
-                        ProgressView()
-                            .tint(.white)
+                        ProgressView().tint(.white)
                         Text("Importing model…")
                             .font(.system(.subheadline, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.7))
                     }
-                    .padding(28)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(28).background(.ultraThinMaterial).clipShape(RoundedRectangle(cornerRadius: 16))
                 }
             }
         }
         .alert("Import Error", isPresented: $showError) {
             Button("OK") { importError = nil }
-        } message: {
-            if let error = importError { Text(error) }
-        }
+        } message: { if let e = importError { Text(e) } }
         .alert("Model Imported", isPresented: $importSuccess) {
-            Button("Use Now") {
-                vm.selectedModel = importedModelName
-                vm.refreshModels()
-                vm.loadModelInfo()
-            }
+            Button("Use Now") { vm.selectedModel = importedModelName; vm.refreshModels(); vm.loadModelInfo() }
             Button("Later", role: .cancel) { vm.refreshModels() }
-        } message: {
-            Text("\(vm.displayName(for: importedModelName)) is ready to use.")
-        }
+        } message: { Text("\(vm.displayName(for: importedModelName)) is ready to use.") }
         .alert("Delete Model?", isPresented: $showDeleteModelAlert) {
             Button("Delete", role: .destructive) {
-                if let model = modelToDelete {
-                    downloadManager.deleteModel(model)
-                }
+                if let m = modelToDelete { downloadManager.deleteModel(m) }
                 modelToDelete = nil
             }
             Button("Cancel", role: .cancel) { modelToDelete = nil }
         } message: {
-            if let model = modelToDelete {
-                Text("Remove \(model.displayName) from your device?")
-            }
+            if let m = modelToDelete { Text("Remove \(m.displayName) from your device?") }
         }
-        .sheet(isPresented: $showFilesPicker) {
-            FilesFolderPicker()
-        }
+        .sheet(isPresented: $showFilesPicker) { FilesFolderPicker() }
     }
 
     // MARK: - Hero
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: LamoTheme.Spacing.md) {
-            if let current = vm.selectedModel {
-                HStack {
-                    Image(systemName: "bolt.fill").foregroundStyle(.white.opacity(0.5))
-                    Text("ACTIVE").font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.3))
+        VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
+            if let current = vm.selectedModel, let info = vm.modelInfo {
+                HStack(spacing: LamoTheme.Spacing.sm) {
+                    Image(systemName: "cpu.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(LamoTheme.Colors.accent)
+                    Text("ACTIVE")
+                        .font(.system(size: 9, design: .monospaced).weight(.bold))
+                        .foregroundStyle(LamoTheme.Colors.accent)
                     Spacer()
                 }
+
                 Text(vm.displayName(for: current))
                     .font(.system(.title3, design: .monospaced).bold())
-                    .foregroundStyle(.white).lineLimit(1).truncationMode(.middle)
-                if let info = vm.modelInfo {
-                    HStack(spacing: LamoTheme.Spacing.lg) {
-                        specStat(value: info.fileSizeString, label: "SIZE")
-                        specStat(value: info.hasSpeculativeDecoding ? "YES" : "NO", label: "SPEC")
-                    }
+                    .foregroundStyle(.white)
+                    .lineLimit(1).truncationMode(.middle)
+
+                // Spec chips
+                HStack(spacing: LamoTheme.Spacing.sm) {
+                    specChip(icon: "internaldrive", value: info.fileSizeString)
+                    specChip(icon: "bolt.speedometer", value: info.hasSpeculativeDecoding ? "SpecDec" : "Base")
+                    if let cores = activeCores { specChip(icon: "arrow.triangle.branch", value: cores) }
                 }
+
+                Text("On-device inference · No network required")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
             } else {
-                HStack {
-                    Image(systemName: "minus.circle").foregroundStyle(.white.opacity(0.3))
-                    Text("NO MODEL").font(.system(size: 9, design: .monospaced))
+                HStack(spacing: LamoTheme.Spacing.sm) {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 9)).foregroundStyle(.white.opacity(0.3))
+                    Text("NO MODEL").font(.system(size: 9, design: .monospaced).weight(.bold))
                         .foregroundStyle(.white.opacity(0.3))
                     Spacer()
                 }
-                Text("Download or import a model below")
+                Text("Download or import a model to get started")
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -125,93 +116,113 @@ struct ModelsSettingsSection: View {
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
-    private func specStat(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(.white.opacity(0.8))
-            Text(label).font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.25))
+    private var activeCores: String? {
+        guard vm.useGPU else { return "\(vm.cpuThreadCount) CPU" }
+        if let dev = MTLCreateSystemDefaultDevice() {
+            if dev.supportsFamily(.apple9) { return "6 GPU" }
+            if dev.supportsFamily(.apple8) { return "5 GPU" }
+            return "GPU"
         }
+        return "GPU"
     }
 
-    // MARK: - Library (downloaded + imported models)
+    private func specChip(icon: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 8))
+                .foregroundStyle(LamoTheme.Colors.accent.opacity(0.6))
+            Text(value)
+                .font(.system(size: 10, design: .monospaced).weight(.medium))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    // MARK: - Library
 
     private var librarySection: some View {
         let downloadedPresets = PresetModel.allCases.filter { $0.isDownloaded }
         let localModels = vm.availableModels.filter { path in
             !PresetModel.allCases.contains { $0.filename == (path as NSString).lastPathComponent }
         }
+        let total = downloadedPresets.count + localModels.count
 
         return VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-            HStack {
-                Text("Library").font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.3)).textCase(.uppercase)
-                Spacer()
-                Text("\(downloadedPresets.count + localModels.count)").font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.2))
+            if total > 0 {
+                sectionLabel("Library", count: "\(total)")
             }
 
             if downloadedPresets.isEmpty && localModels.isEmpty {
                 Text("No models yet — download or import below")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.25))
-                    .padding(.vertical, 8)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.2))
             }
 
-            ForEach(downloadedPresets) { model in
-                libraryRow(model: model)
-            }
-
-            ForEach(localModels, id: \.self) { path in
-                importedRow(path: path)
-            }
+            ForEach(downloadedPresets) { model in libraryRow(model: model) }
+            ForEach(localModels, id: \.self) { path in importedRow(path: path) }
         }
     }
 
     private func libraryRow(model: PresetModel) -> some View {
         let isActive = vm.selectedModel.map { ($0 as NSString).lastPathComponent == model.filename } ?? false
+        let info = isActive ? vm.modelInfo : nil
 
-        return HStack(spacing: 12) {
-            Button {
-                vm.selectedModel = vm.availableModels.first {
-                    ($0 as NSString).lastPathComponent == model.filename
-                } ?? model.localPath
-                vm.loadModelInfo()
-                vm.refreshModels()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: model.systemImage)
-                        .font(.system(size: 16)).foregroundStyle(.white.opacity(0.5))
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.displayName).font(.system(.subheadline, design: .monospaced).weight(.medium))
-                            .foregroundStyle(.white).lineLimit(1)
-                        HStack(spacing: 6) {
-                            Text(model.parameterCount)
-                            Text("·").foregroundStyle(.white.opacity(0.15))
-                            Text(model.actualFileSizeString)
-                        }
-                        .font(.system(.caption2, design: .monospaced)).foregroundStyle(.white.opacity(0.35))
-                    }
-                    Spacer()
-                    if isActive {
-                        Text("ACTIVE").font(.system(size: 8, design: .monospaced).weight(.medium))
-                            .foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3)
-                            .glassEffect(.regular, in: .rect(cornerRadius: 4))
-                    }
+        return HStack(spacing: 10) {
+            // Model icon with accent ring if active
+            ZStack {
+                if isActive {
+                    Circle()
+                        .stroke(LamoTheme.Colors.accent, lineWidth: 1.5)
+                        .frame(width: 34, height: 34)
                 }
+                Image(systemName: model.systemImage)
+                    .font(.system(size: 15))
+                    .foregroundStyle(isActive ? LamoTheme.Colors.accent : .white.opacity(0.45))
+            }
+            .frame(width: 34, height: 34)
+
+            Button {
+                vm.selectedModel = vm.availableModels.first { ($0 as NSString).lastPathComponent == model.filename } ?? model.localPath
+                vm.loadModelInfo(); vm.refreshModels()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(model.displayName)
+                            .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(.white)
+                        if isActive {
+                            Text("ACTIVE")
+                                .font(.system(size: 7, design: .monospaced).weight(.bold))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(LamoTheme.Colors.accent)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        Text(model.parameterCount).foregroundStyle(.white.opacity(0.5))
+                        Text("·").foregroundStyle(.white.opacity(0.15))
+                        Text(model.actualFileSizeString).foregroundStyle(.white.opacity(0.4))
+                        if let info, info.hasSpeculativeDecoding {
+                            Text("·").foregroundStyle(.white.opacity(0.15))
+                            Text("Draft").foregroundStyle(LamoTheme.Colors.accent.opacity(0.5))
+                        }
+                    }
+                    .font(.system(.caption2, design: .monospaced))
+                }
+                Spacer()
             }
             .buttonStyle(.plain)
 
             Button(role: .destructive) {
-                modelToDelete = model
-                showDeleteModelAlert = true
+                modelToDelete = model; showDeleteModelAlert = true
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.2))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.15))
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 4)
+            .buttonStyle(.plain).padding(.trailing, 2)
         }
         .padding(.horizontal, LamoTheme.Spacing.md).padding(.vertical, 12)
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
@@ -220,118 +231,98 @@ struct ModelsSettingsSection: View {
     private func importedRow(path: String) -> some View {
         let isActive = vm.selectedModel == path
 
-        return HStack(spacing: 12) {
-            Button {
-                vm.selectedModel = path
-                vm.loadModelInfo()
-                vm.refreshModels()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "doc.zipper")
-                        .font(.system(size: 16)).foregroundStyle(.white.opacity(0.5))
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(vm.displayName(for: path))
-                            .font(.system(.subheadline, design: .monospaced).weight(.medium))
-                            .foregroundStyle(.white).lineLimit(1)
-                        Text((path as NSString).lastPathComponent)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.35)).lineLimit(1)
-                    }
-                    Spacer()
-                    if isActive {
-                        Text("ACTIVE").font(.system(size: 8, design: .monospaced).weight(.medium))
-                            .foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3)
-                            .glassEffect(.regular, in: .rect(cornerRadius: 4))
-                    }
+        return HStack(spacing: 10) {
+            ZStack {
+                if isActive {
+                    Circle()
+                        .stroke(LamoTheme.Colors.accent, lineWidth: 1.5)
+                        .frame(width: 34, height: 34)
                 }
+                Image(systemName: "doc.zipper")
+                    .font(.system(size: 15))
+                    .foregroundStyle(isActive ? LamoTheme.Colors.accent : .white.opacity(0.45))
+            }
+            .frame(width: 34, height: 34)
+
+            Button {
+                vm.selectedModel = path; vm.loadModelInfo(); vm.refreshModels()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(vm.displayName(for: path))
+                            .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(.white)
+                        if isActive {
+                            Text("ACTIVE")
+                                .font(.system(size: 7, design: .monospaced).weight(.bold))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(LamoTheme.Colors.accent)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    Text((path as NSString).lastPathComponent)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                Spacer()
             }
             .buttonStyle(.plain)
 
             Button(role: .destructive) {
                 guard !isActive else { return }
                 try? FileManager.default.removeItem(atPath: path)
-                vm.refreshModels()
-                vm.loadModelInfo()
+                vm.refreshModels(); vm.loadModelInfo()
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(isActive ? 0.05 : 0.2))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(isActive ? 0.05 : 0.15))
             }
-            .buttonStyle(.plain)
-            .disabled(isActive)
-            .padding(.trailing, 4)
+            .buttonStyle(.plain).disabled(isActive).padding(.trailing, 2)
         }
         .padding(.horizontal, LamoTheme.Spacing.md).padding(.vertical, 12)
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
     }
 
-    // MARK: - Catalog (models available to download)
+    // MARK: - Catalog
 
     private var catalogSection: some View {
         let availableToDownload = PresetModel.allCases.filter { !$0.isDownloaded }
 
         return VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
             if !availableToDownload.isEmpty {
-                HStack {
-                    Text("Catalog").font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.3)).textCase(.uppercase)
-                    Spacer()
-                }
+                sectionLabel("Catalog", count: nil)
 
                 ForEach(availableToDownload) { model in
                     ModelCardView(
                         model: model,
                         downloadManager: downloadManager,
                         isActiveModel: vm.selectedModel.map { ($0 as NSString).lastPathComponent == model.filename } ?? false,
-                        onSelect: {
-                            vm.selectedModel = model.localPath
-                            vm.loadModelInfo()
-                        }
+                        onSelect: { vm.selectedModel = model.localPath; vm.loadModelInfo() }
                     )
                 }
             }
         }
     }
 
-    // MARK: - Add (import + open in files + storage)
+    // MARK: - Add
 
     private var addSection: some View {
-        VStack(spacing: LamoTheme.Spacing.md) {
-            HStack(spacing: LamoTheme.Spacing.md) {
-                Button {
-                    isImportingModel = true
-                } label: {
-                    HStack(spacing: 6) {
-                        if isCopyingFile {
-                            ProgressView().controlSize(.mini).tint(.white)
-                            Text("Importing…")
-                        } else {
-                            Image(systemName: "plus")
-                            Text("Import")
-                        }
-                    }
-                    .font(.system(.caption, design: .monospaced).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .glassEffect(.regular, in: .capsule)
-                }
-                .buttonStyle(.plain)
-                .disabled(isCopyingFile)
-
-                Button {
-                    openModelsFolder()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                        Text("Open in Files")
-                    }
-                    .font(.system(.caption, design: .monospaced).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .glassEffect(.regular, in: .capsule)
-                }
-                .buttonStyle(.plain)
+        VStack(spacing: LamoTheme.Spacing.sm) {
+            Button { isImportingModel = true } label: {
+                Label("Import .litertlm File", systemImage: "square.and.arrow.down")
+                    .font(.system(.subheadline, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
             }
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
+
+            Button { openModelsFolder() } label: {
+                Label("Open Models Folder", systemImage: "folder")
+                    .font(.system(.subheadline, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            }
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
 
             storageCard
         }
@@ -339,32 +330,16 @@ struct ModelsSettingsSection: View {
 
     private var storageCard: some View {
         VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
-            Text("Storage").font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.3)).textCase(.uppercase)
-            let totalSize = calculateModelsSize()
-            let freeSpace = getFreeSpace()
-            if totalSize > 0 || freeSpace != nil {
-                HStack(spacing: LamoTheme.Spacing.lg) {
-                    if totalSize > 0 {
-                        specStat(value: ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file), label: "USED")
+            sectionLabel("Storage", count: nil)
+            HStack {
+                infoRow(label: "Models", value: ByteCountFormatter.string(fromByteCount: calculateModelsSize(), countStyle: .file))
+                Spacer()
+                infoRow(label: "Free", value: {
+                    if let free = getFreeSpace() {
+                        return ByteCountFormatter.string(fromByteCount: free, countStyle: .file)
                     }
-                    if let free = freeSpace {
-                        specStat(value: ByteCountFormatter.string(fromByteCount: free, countStyle: .file), label: "FREE")
-                    }
-                }
-            }
-            if let info = vm.modelInfo {
-                Divider().background(.white.opacity(0.06))
-                infoRow(label: "Name", value: info.name)
-                infoRow(label: "Speculative", value: info.hasSpeculativeDecoding ? "YES" : "NO")
-            }
-            Divider().background(.white.opacity(0.06))
-            infoRow(label: "Location", value: "Files → On My iPhone → Lamo")
-            if !PresetModel.allCases.contains(where: { $0.isDownloaded }) && vm.availableModels.isEmpty {
-                Text("Models will appear here after download.\nUse Files app → Browse → On My iPhone → Lamo to manage them.")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.25))
-                    .padding(.top, 4)
+                    return "—"
+                }())
             }
         }
         .padding(LamoTheme.Spacing.lg)
@@ -373,134 +348,91 @@ struct ModelsSettingsSection: View {
     }
 
     private func infoRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.4))
-            Spacer()
-            Text(value)
-                .font(.system(.caption, design: .monospaced).weight(.medium))
-                .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
-                .truncationMode(.middle)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(.system(.caption, design: .monospaced).weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+            Text(label).font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.25)).textCase(.uppercase)
         }
     }
 
-    // MARK: - Model Import
+    // MARK: - Import
 
     private func handleModelImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-
-        let ext = url.pathExtension.lowercased()
-        guard ext == "litertlm" || ext == "bin" || ext == "tflite" else {
-            importError = "Unsupported file type '.\(ext)'. Select a .litertlm file."
-            showError = true
-            return
-        }
-
-        isCopyingFile = true
-        Task.detached {
-            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let modelsDir = documents.appendingPathComponent("models")
-            try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-
-            let fileName = url.lastPathComponent
-            let destination = modelsDir.appendingPathComponent(fileName)
-
-            do {
-                let accessing = url.startAccessingSecurityScopedResource()
-                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.removeItem(at: destination)
-                }
-                try FileManager.default.copyItem(at: url, to: destination)
-
-                await MainActor.run {
-                    self.isCopyingFile = false
-                    self.importedModelName = fileName
-                    self.importSuccess = true
-                }
-            } catch {
-                await MainActor.run {
-                    self.isCopyingFile = false
-                    self.importError = "Import failed: \(error.localizedDescription)"
-                    self.showError = true
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            guard url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            isCopyingFile = true
+            let dest = ProviderManager.modelsDirectory.appendingPathComponent(url.lastPathComponent)
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
+                    try FileManager.default.copyItem(at: url, to: dest)
+                    DispatchQueue.main.async {
+                        isCopyingFile = false; importedModelName = dest.path
+                        vm.refreshModels(); vm.loadModelInfo(); importSuccess = true
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        isCopyingFile = false; importError = error.localizedDescription; showError = true
+                    }
                 }
             }
+        case .failure(let error):
+            importError = error.localizedDescription; showError = true
         }
     }
 
-    // MARK: - Open in Files
+    private func openModelsFolder() { showFilesPicker = true }
 
-    private func openModelsFolder() {
-        showFilesPicker = true
+    // MARK: - Helpers
+
+    private func sectionLabel(_ text: String, count: String?) -> some View {
+        HStack(spacing: 6) {
+            Text(text)
+                .font(.system(size: 10, design: .monospaced).weight(.bold))
+                .foregroundStyle(.white.opacity(0.25))
+                .textCase(.uppercase)
+            if let count {
+                Text(count)
+                    .font(.system(size: 10, design: .monospaced).weight(.bold))
+                    .foregroundStyle(LamoTheme.Colors.accent.opacity(0.6))
+            }
+            Spacer()
+        }
     }
 
-    // MARK: - Storage Helpers
-
     private func calculateModelsSize() -> Int64 {
-        let modelsDir = ProviderManager.modelsDirectory
-        guard let files = try? FileManager.default.contentsOfDirectory(at: modelsDir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
         var total: Int64 = 0
-        for file in files where file.pathExtension == "litertlm" || file.pathExtension == "bin" || file.pathExtension == "tflite" {
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
-               let size = attrs[.size] as? Int64 {
-                total += size
+        let dir = ProviderManager.modelsDirectory
+        if let contents = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey]) {
+            for url in contents {
+                if let attrs = try? url.resourceValues(forKeys: [.fileSizeKey]),
+                   let size = attrs.fileSize { total += Int64(size) }
             }
         }
         return total
     }
 
     private func getFreeSpace() -> Int64? {
-        let modelsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        if let values = try? modelsDir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]) {
-            return values.volumeAvailableCapacityForImportantUsage
-        }
-        return nil
+        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+              let free = attrs[.systemFreeSize] as? Int64 else { return nil }
+        return free
     }
 }
 
 // MARK: - Files Folder Picker
 
-/// Opens a document picker at the app's models directory.
-/// Lets the user browse and see model files in the Files app UI.
 struct FilesFolderPicker: UIViewControllerRepresentable {
-    @Environment(\.dismiss) private var dismiss
-
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        // Ensure models directory exists so it shows up in Files
-        let modelsDir = ProviderManager.modelsDirectory
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-
-        // .folder content type opens the picker in directory browsing mode
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder, .data], asCopy: false)
-        picker.directoryURL = ProviderManager.modelsDirectory
+        let dir = ProviderManager.modelsDirectory
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data])
+        picker.directoryURL = dir
         picker.allowsMultipleSelection = false
-        picker.shouldShowFileExtensions = true
-        picker.delegate = context.coordinator
         return picker
     }
-
     func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(dismiss: dismiss)
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let dismiss: DismissAction
-
-        init(dismiss: DismissAction) {
-            self.dismiss = dismiss
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            dismiss()
-        }
-
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            dismiss()
-        }
-    }
 }
