@@ -171,8 +171,8 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         // --- Create conversation ---
         let samplerConfig = try buildSamplerConfig()
         let tools: [LiteRTLM.Tool] = MemoryService.shared.isEnabled
-            ? [UpdateMemoryTool(), WebSearchTool(), FetchUrlTool(), DeepResearchTool(), GetCurrentTimeTool(), CalculatorTool(), OpenURLTool(), WikipediaTool(), DeviceInfoTool(), WeatherTool(), CreateReminderTool()]
-            : [WebSearchTool(), FetchUrlTool(), DeepResearchTool(), GetCurrentTimeTool(), CalculatorTool(), OpenURLTool(), WikipediaTool(), DeviceInfoTool(), WeatherTool(), CreateReminderTool()]
+            ? [UpdateMemoryTool(), WebSearchTool(), FetchUrlTool(), GetCurrentTimeTool(), CalculatorTool(), OpenURLTool(), WikipediaTool(), DeviceInfoTool(), WeatherTool(), CreateReminderTool()]
+            : [WebSearchTool(), FetchUrlTool(), GetCurrentTimeTool(), CalculatorTool(), OpenURLTool(), WikipediaTool(), DeviceInfoTool(), WeatherTool(), CreateReminderTool()]
 
         let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,

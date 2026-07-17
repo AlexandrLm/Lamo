@@ -181,19 +181,6 @@ struct WikipediaTool: Tool {
     @ToolParam(description: "Language code (e.g. 'en', 'ru', 'de', 'fr'). Default 'en'.")
     var language: String = "en"
 
-    private let baseURL: String
-
-    init() {
-        // Auto-detect language from system locale, fallback to "en"
-        let sysLang = Locale.current.language.languageCode?.identifier ?? "en"
-        let wikiLangs: Set<String> = [
-            "en", "ru", "de", "fr", "es", "it", "pt", "ja", "zh", "ko",
-            "ar", "nl", "pl", "sv", "tr", "uk", "vi", "id", "cs", "fi",
-            "he", "th", "no", "da", "ro", "hu", "sk", "ca", "el", "bg",
-        ]
-        self.baseURL = "https://\(sysLang).wikipedia.org"
-    }
-
     func run() async throws -> Any {
         let lang = language.isEmpty ? "en" : language
         let base = "https://\(lang).wikipedia.org"
