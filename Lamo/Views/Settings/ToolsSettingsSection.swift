@@ -205,5 +205,13 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolCreateReminder.wrappedValue },
             setEnabled: { AppDefaults.toolCreateReminder.wrappedValue = $0 }
         ),
+        ToolInfo(
+            id: "think",
+            displayName: "Deep Think",
+            description: "Lets the model pause and reason through complex problems step by step before answering.",
+            icon: "lightbulb",
+            isEnabled: { AppDefaults.toolThink.wrappedValue },
+            setEnabled: { AppDefaults.toolThink.wrappedValue = $0 }
+        ),
     ]
 }

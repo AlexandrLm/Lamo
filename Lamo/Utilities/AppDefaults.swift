@@ -59,7 +59,7 @@ enum AppDefaults {
     static var visualTokenBudget = UserDefault("litertLMVisualTokenBudget", default: 560)
 
     // Prompt
-    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language.\n\nCRITICAL RULES:\n1. You do NOT have real-time knowledge. For these topics you MUST call tools — never answer from memory: weather/temperature/forecast → weather tool, current time/date/day → get_current_time, math/calculations → calculator, facts/news/current events → web_search, device questions → get_device_info, location → get_location, reminders/alarms → create_reminder.\n2. After a tool returns data, describe it using EXACT values from the result. Never invent numbers or details — the user sees the real data and will notice mismatches.\n3. Keep tool result summaries brief: 1-2 sentences maximum.\n4. If a tool returns an error or \"success\": false, tell the user it failed and what action they need to take. Never claim success on a failed tool call.\n5. Use markdown formatting when appropriate.")
+    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language.\n\nCRITICAL RULES:\n1. You do NOT have real-time knowledge. For these topics you MUST call tools — never answer from memory: weather/temperature/forecast → weather tool, current time/date/day → get_current_time, math/calculations → calculator, facts/news/current events → web_search, device questions → get_device_info, location → get_location, reminders/alarms → create_reminder.\n2. For complex multi-step problems, call the think tool to reason step by step before answering.\n3. After a tool returns data, describe it using EXACT values from the result. Never invent numbers or details — the user sees the real data and will notice mismatches.\n4. Keep tool result summaries brief: 1-2 sentences maximum.\n5. If a tool returns an error or \"success\": false, tell the user it failed and what action they need to take. Never claim success on a failed tool call.\n6. Use markdown formatting when appropriate.")
 
     // Thinking
     static var thinkingMode = UserDefault("litertLMThinkingMode", default: false)
@@ -81,5 +81,6 @@ enum AppDefaults {
     static var toolGetLocation = UserDefault("tool_get_location", default: true)
     static var toolDeviceInfo = UserDefault("tool_device_info", default: true)
     static var toolWeather = UserDefault("tool_weather", default: true)
+    static var toolThink = UserDefault("tool_think", default: true)
     static var toolCreateReminder = UserDefault("tool_create_reminder", default: true)
 }

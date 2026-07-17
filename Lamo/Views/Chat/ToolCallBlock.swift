@@ -63,6 +63,7 @@ struct ToolCallBlock: View {
         case "weather": return "cloud.sun.fill"
         case "create_reminder": return "bell.badge.fill"
         case "update_memory": return "brain.fill"
+        case "think": return "lightbulb.fill"
         default: return "wrench.fill"
         }
     }
