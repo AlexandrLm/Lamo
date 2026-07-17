@@ -68,32 +68,49 @@ struct ToolCallBlock: View {
 struct ToolResultView: View {
     let toolName: String; let jsonString: String
 
-    private var dict: [String: Any]? {
-        guard let d = jsonString.data(using: .utf8),
-              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return nil }
-        return j
+    private var parsed: Any? {
+        guard let d = jsonString.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: d)
     }
 
     var body: some View {
-        if let d = dict {
-            Group {
-                switch toolName {
-                case "weather":         WeatherCard(d: d)
-                case "web_search":      SearchResults(d: d)
-                case "wikipedia":       WikipediaResult(d: d)
-                case "calculator":      CalculatorResult(d: d)
-                case "get_current_time": TimeCard(d: d)
-                case "get_location":    LocationCard(d: d)
-                case "device_info":     DeviceCard(d: d)
-                case "open_url":        OpenURLResult(d: d)
-                case "create_reminder": ReminderResult(d: d)
-                case "update_memory":   MemoryResult(d: d)
-                case "fetch_url":       FetchResult(d: d)
-                default:                PrettyJSON(d: d)
-                }
-            }
-        } else {
+        switch parsed {
+        case let dict as [String: Any]:
+            richView(for: dict)
+        case let arr as [[String: Any]]:
+            arrayView(items: arr)
+        case let arr as [Any]:
+            arrayView(items: arr.map { ["value": $0] })
+        default:
             Text(jsonString).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+        }
+    }
+
+    @ViewBuilder
+    private func richView(for d: [String: Any]) -> some View {
+        switch toolName {
+        case "weather":         WeatherCard(d: d)
+        case "web_search":      SearchResults(d: d)
+        case "wikipedia":       WikipediaResult(d: d)
+        case "calculator":      CalculatorResult(d: d)
+        case "get_current_time": TimeCard(d: d)
+        case "get_location":    LocationCard(d: d)
+        case "device_info":     DeviceCard(d: d)
+        case "open_url":        OpenURLResult(d: d)
+        case "create_reminder": ReminderResult(d: d)
+        case "update_memory":   MemoryResult(d: d)
+        case "fetch_url":       FetchResult(d: d)
+        default:                PrettyJSON(d: d)
+        }
+    }
+
+    @ViewBuilder
+    private func arrayView(items: [[String: Any]]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                richView(for: item)
+                if i < items.count - 1 { Divider().opacity(0.3).padding(.vertical, 4) }
+            }
         }
     }
 }
