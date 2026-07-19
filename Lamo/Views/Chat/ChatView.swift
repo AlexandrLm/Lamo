@@ -86,6 +86,11 @@ struct ChatView: View {
                     )
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                ContextBarView(tracker: viewModel.contextTracker) {
+                    showContextDetail = true
+                }
+            }
         }
         .sheet(isPresented: $showContextDetail) {
             ContextDetailView(tracker: viewModel.contextTracker)
