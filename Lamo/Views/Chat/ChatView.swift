@@ -8,7 +8,6 @@ struct ChatView: View {
     @State private var scrollPosition = ScrollPosition()
     @State private var showContextDetail = false
     @ObservedObject private var provider = ProviderManager.shared
-    @State private var showModelPicker = false
     var onNewChat: (() -> Void)?
 
     init(
@@ -48,8 +47,21 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Button {
-                    showModelPicker = true
+                Menu {
+                    ForEach(ProviderManager.listModels(), id: \.self) { filename in
+                        let fullPath = ProviderManager.modelsDirectory.appendingPathComponent(filename).path
+                        let displayName = ProviderManager.displayName(forModelPath: filename)
+                        Button {
+                            provider.switchModel(modelPath: fullPath)
+                        } label: {
+                            HStack {
+                                Text(displayName)
+                                if provider.litertLMModelPath == fullPath {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         if !provider.isEngineReady && provider.litertLMModelPath != nil {
@@ -59,30 +71,21 @@ struct ChatView: View {
                                 .tint(.white.opacity(0.4))
                         }
                         Text(provider.currentModelDisplayName.isEmpty ? "No model" : provider.currentModelDisplayName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(modelTitleColor)
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(modelTitleColor.opacity(0.5))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
                     .overlay(
                         Capsule()
                             .stroke(modelTitleColor.opacity(0.25), lineWidth: 1)
                     )
                 }
-                .buttonStyle(.plain)
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                ContextBarView(tracker: viewModel.contextTracker) {
-                    showContextDetail = true
-                }
-            }
-        }
-        .sheet(isPresented: $showModelPicker) {
-            ModelPickerPopover(isPresented: $showModelPicker)
         }
         .sheet(isPresented: $showContextDetail) {
             ContextDetailView(tracker: viewModel.contextTracker)
