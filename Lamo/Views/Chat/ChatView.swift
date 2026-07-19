@@ -30,17 +30,12 @@ struct ChatView: View {
             }
         }
         .background {
-            if viewModel.messages.isEmpty {
-                ZStack {
-                    LamoTheme.Colors.background
-
-                    // Full-screen shifting gradient from the very top
-                    AmbientGradientView()
-                        .ignoresSafeArea(edges: .top)
-                }
-            } else {
+            ZStack {
                 LamoTheme.Colors.background
+                AmbientGradientView(intensity: viewModel.messages.isEmpty ? 1.0 : 0.12)
+                    .ignoresSafeArea(edges: .top)
             }
+            .animation(.easeInOut(duration: 1.2), value: viewModel.messages.isEmpty)
         }
         .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -228,38 +223,53 @@ struct StreamingIndicator: View {
     }
 }
 
-// MARK: - Ambient Gradient (self-contained, animates only itself)
+// MARK: - Ambient Gradient
 
+/// A living, slowly shifting gradient backdrop.
+/// Uses `TimelineView` for seamless continuous animation — no autoreverse jerk.
 private struct AmbientGradientView: View {
-    @State private var phase: CGFloat = 0
+    /// 1.0 = full vibrant (empty state), 0.0 = invisible
+    let intensity: CGFloat
 
     var body: some View {
-        LinearGradient(
-            stops: [
-                .init(color: Color(
-                    hue: 0.6 + 0.12 * CGFloat(sin(phase)),
-                    saturation: 0.3 + 0.1 * CGFloat(cos(phase * 0.5)),
-                    brightness: 0.35 + 0.08 * CGFloat(sin(phase * 0.8))
-                ), location: 0),
-                .init(color: Color(
-                    hue: 0.7 + 0.1 * CGFloat(cos(phase * 0.6)),
-                    saturation: 0.2 + 0.08 * CGFloat(sin(phase * 0.4)),
-                    brightness: 0.22 + 0.05 * CGFloat(cos(phase))
-                ), location: 0.3),
-                .init(color: Color(
-                    hue: 0.75 + 0.08 * CGFloat(sin(phase * 0.3)),
-                    saturation: 0.1,
-                    brightness: 0.12
-                ), location: 0.55),
-                .init(color: .clear, location: 0.8)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .onAppear {
-            withAnimation(.linear(duration: 10).repeatForever(autoreverses: true)) {
-                phase = .pi * 2
-            }
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+
+            LinearGradient(
+                stops: [
+                    // Top stop — warm teal, shifts slowly
+                    .init(color: Color(
+                        hue: 0.58 + 0.04 * sin(t * 0.3),
+                        saturation: 0.40 + 0.08 * cos(t * 0.2),
+                        brightness: (0.38 + 0.05 * sin(t * 0.25)) * intensity
+                    ), location: 0),
+
+                    // Upper mid — blue-teal transition
+                    .init(color: Color(
+                        hue: 0.62 + 0.06 * cos(t * 0.35),
+                        saturation: 0.30 + 0.06 * sin(t * 0.28),
+                        brightness: (0.25 + 0.04 * cos(t * 0.22)) * intensity
+                    ), location: 0.25),
+
+                    // Mid — deep blue
+                    .init(color: Color(
+                        hue: 0.68 + 0.04 * sin(t * 0.4),
+                        saturation: 0.18 + 0.05 * cos(t * 0.3),
+                        brightness: (0.16 + 0.03 * sin(t * 0.35)) * intensity
+                    ), location: 0.50),
+
+                    // Fade to transparent
+                    .init(color: Color(
+                        hue: 0.72,
+                        saturation: 0.08,
+                        brightness: 0.08 * intensity
+                    ), location: 0.72),
+
+                    .init(color: .clear, location: 0.92)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
     }
 }
