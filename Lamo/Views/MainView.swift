@@ -288,7 +288,6 @@ struct MainView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 20) {
-            LogoAnimationView(size: 80)
 
             VStack(spacing: 8) {
                 Text("Start a Conversation")
