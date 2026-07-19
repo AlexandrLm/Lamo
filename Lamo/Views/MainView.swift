@@ -153,7 +153,7 @@ struct MainView: View {
                             )
                             .tag(conversation.id)
                             .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
+                            .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
                             .listRowBackground(Color.clear)
                             .contextMenu {
                                 Button {
@@ -258,8 +258,8 @@ struct MainView: View {
             Spacer()
         }
         .padding(.horizontal, 8)
-        .padding(.top, 16)
-        .padding(.bottom, 6)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Ambient Gradient
@@ -515,52 +515,52 @@ struct ConversationRow: View {
             // Selection accent bar
             RoundedRectangle(cornerRadius: 2)
                 .fill(LamoTheme.Colors.accent)
-                .frame(width: isSelected ? 3 : 0)
+                .frame(width: isSelected ? 2 : 0)
                 .opacity(isSelected ? 1 : 0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-                .padding(.trailing, 10)
+                .padding(.trailing, 6)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     if conversation.isPinned {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 8))
+                            .font(.system(size: 7))
                             .foregroundStyle(LamoTheme.Colors.accent.opacity(0.5))
                     }
                     Text(conversation.title)
-                        .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                         .lineLimit(1)
-                        .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                        .foregroundStyle(isSelected ? LamoTheme.Colors.accent : .white.opacity(0.85))
 
                     Spacer(minLength: 8)
 
                     Text(formattedTime)
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.white.opacity(isSelected ? 0.25 : 0.18))
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.white.opacity(isSelected ? 0.25 : 0.15))
                         .lineLimit(1)
 
                     if messageCount > 1 {
                         Text("\(messageCount)")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.3))
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(
-                                RoundedRectangle(cornerRadius: 4)
+                                RoundedRectangle(cornerRadius: 3)
                                     .fill(Color.white.opacity(0.08))
                             )
                     }
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(isSelected ? 0.07 : 0.0))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? LamoTheme.Colors.accent.opacity(0.08) : Color.clear)
                 .animation(.easeOut(duration: 0.2), value: isSelected)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityLabel("\(conversation.title), \(formattedTime)\(messageCount > 1 ? ", \(messageCount) messages" : "")")
     }
 }
