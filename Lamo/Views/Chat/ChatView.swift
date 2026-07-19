@@ -8,6 +8,7 @@ struct ChatView: View {
     @State private var scrollPosition = ScrollPosition()
     @State private var showContextDetail = false
     @ObservedObject private var provider = ProviderManager.shared
+    @State private var showModelPicker = false
     var onNewChat: (() -> Void)?
 
     init(
@@ -44,14 +45,38 @@ struct ChatView: View {
             .animation(.easeInOut(duration: 1.5), value: provider.isEngineReady)
             .animation(.easeInOut(duration: 1.5), value: provider.engineError)
         }
-        .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Button {
+                    showModelPicker = true
+                } label: {
+                    HStack(spacing: 4) {
+                        if !provider.isEngineReady && provider.litertLMModelPath != nil {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .scaleEffect(0.7)
+                                .tint(.white.opacity(0.4))
+                        }
+                        Text(provider.currentModelDisplayName.isEmpty ? "No model" : provider.currentModelDisplayName)
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundStyle(modelTitleColor)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                }
+                .buttonStyle(.plain)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 ContextBarView(tracker: viewModel.contextTracker) {
                     showContextDetail = true
                 }
             }
+        }
+        .sheet(isPresented: $showModelPicker) {
+            ModelPickerPopover(isPresented: $showModelPicker)
         }
         .sheet(isPresented: $showContextDetail) {
             ContextDetailView(tracker: viewModel.contextTracker)
@@ -203,6 +228,13 @@ struct ChatView: View {
 
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    private var modelTitleColor: Color {
+        if provider.isEngineReady { return LamoTheme.Colors.accent.opacity(0.85) }
+        if provider.engineError != nil { return .orange.opacity(0.7) }
+        if provider.litertLMModelPath != nil { return .white.opacity(0.5) }
+        return .white.opacity(0.3)
     }
 }
 
