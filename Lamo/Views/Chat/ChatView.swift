@@ -7,6 +7,7 @@ struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var scrollPosition = ScrollPosition()
     @State private var showContextDetail = false
+    @ObservedObject private var provider = ProviderManager.shared
     var onNewChat: (() -> Void)?
 
     init(
@@ -32,10 +33,16 @@ struct ChatView: View {
         .background {
             ZStack {
                 LamoTheme.Colors.background
-                AmbientGradientView(intensity: viewModel.messages.isEmpty ? 1.0 : 0.12)
+                AmbientGradientView(
+                    intensity: viewModel.messages.isEmpty ? 1.0 : 0.12,
+                    isReady: provider.isEngineReady,
+                    hasError: provider.engineError != nil
+                )
                     .ignoresSafeArea(edges: .top)
             }
             .animation(.easeInOut(duration: 1.2), value: viewModel.messages.isEmpty)
+            .animation(.easeInOut(duration: 1.5), value: provider.isEngineReady)
+            .animation(.easeInOut(duration: 1.5), value: provider.engineError)
         }
         .navigationTitle(viewModel.messages.isEmpty ? "" : viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -230,42 +237,53 @@ struct StreamingIndicator: View {
 private struct AmbientGradientView: View {
     /// 1.0 = full vibrant (empty state), 0.0 = invisible
     let intensity: CGFloat
+    let isReady: Bool
+    let hasError: Bool
+
+    /// Base hue shifts depending on engine state:
+    ///   Ready   → teal  (0.58)
+    ///   Loading → amber (0.12)
+    ///   Error   → red   (0.02)
+    private var baseHue: Double {
+        if hasError { return 0.02 }
+        if !isReady { return 0.12 }
+        return 0.58
+    }
+
+    private func color(
+        at t: Double,
+        hueShift: Double,
+        satBase: Double,
+        briBase: Double,
+        pulse: Double
+    ) -> Color {
+        let h = baseHue + hueShift
+        let s = satBase + 0.05 * cos(t * 0.25)
+        let b = briBase * intensity * pulse
+        return Color(hue: h, saturation: s, brightness: b)
+    }
 
     var body: some View {
         TimelineView(.animation) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
+            let pulse: Double = {
+                if hasError { return 1.0 + 0.25 * abs(sin(t * 2.0)) }
+                if !isReady { return 1.0 + 0.12 * abs(sin(t * 1.2)) }
+                return 1.0
+            }()
+            let s0: Double = hasError ? 0.70 : 0.40
+            let s1: Double = hasError ? 0.55 : 0.30
+            let s2: Double = hasError ? 0.40 : 0.18
+            let b0: Double = hasError ? 0.32 : 0.38
+            let b1: Double = hasError ? 0.22 : 0.25
+            let b2: Double = hasError ? 0.14 : 0.16
 
             LinearGradient(
                 stops: [
-                    // Top stop — warm teal, shifts slowly
-                    .init(color: Color(
-                        hue: 0.58 + 0.04 * sin(t * 0.3),
-                        saturation: 0.40 + 0.08 * cos(t * 0.2),
-                        brightness: (0.38 + 0.05 * sin(t * 0.25)) * intensity
-                    ), location: 0),
-
-                    // Upper mid — blue-teal transition
-                    .init(color: Color(
-                        hue: 0.62 + 0.06 * cos(t * 0.35),
-                        saturation: 0.30 + 0.06 * sin(t * 0.28),
-                        brightness: (0.25 + 0.04 * cos(t * 0.22)) * intensity
-                    ), location: 0.25),
-
-                    // Mid — deep blue
-                    .init(color: Color(
-                        hue: 0.68 + 0.04 * sin(t * 0.4),
-                        saturation: 0.18 + 0.05 * cos(t * 0.3),
-                        brightness: (0.16 + 0.03 * sin(t * 0.35)) * intensity
-                    ), location: 0.50),
-
-                    // Fade to transparent
-                    .init(color: Color(
-                        hue: 0.72,
-                        saturation: 0.08,
-                        brightness: 0.08 * intensity
-                    ), location: 0.72),
-
-                    .init(color: .clear, location: 0.92)
+                    .init(color: color(at: t, hueShift: 0.04 * sin(t * 0.3), satBase: s0, briBase: b0 + 0.05 * sin(t * 0.25), pulse: pulse), location: 0),
+                    .init(color: color(at: t, hueShift: 0.06 * cos(t * 0.35), satBase: s1, briBase: b1 + 0.04 * cos(t * 0.22), pulse: pulse), location: 0.20),
+                    .init(color: color(at: t, hueShift: 0.07 * sin(t * 0.4), satBase: s2, briBase: b2 + 0.03 * sin(t * 0.35), pulse: pulse), location: 0.40),
+                    .init(color: .clear, location: 0.55)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
