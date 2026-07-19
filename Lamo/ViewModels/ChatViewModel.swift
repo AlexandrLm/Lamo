@@ -13,7 +13,7 @@ final class ChatViewModel {
     /// Current context window usage breakdown.
     var contextTracker: ContextTracker?
     /// Images attached to the current input, waiting to be sent.
-    var pendingImages: [UIImage] = []
+    var pendingImages: [PendingImage] = []
     /// Non-image files attached to the current input, waiting to be sent.
     var pendingFiles: [PendingFile] = []
     /// Benchmark data captured from the last inference response.
@@ -55,7 +55,7 @@ final class ChatViewModel {
 
         Task { @MainActor in
             let attachments = await processAttachments(
-                images: imagesToProcess,
+                images: imagesToProcess.map(\.image),
                 files: filesToProcess
             )
 

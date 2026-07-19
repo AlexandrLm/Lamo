@@ -471,8 +471,8 @@ struct SystemMetrics {
         // Model
         let pm = ProviderManager.shared
         let modelName: String = {
-            guard let path = pm.litertLMModelPath ?? ProviderManager.findFirstModel() else { return "None" }
-            return (path as NSString).lastPathComponent.replacingOccurrences(of: ".litertlm", with: "").replacingOccurrences(of: "-", with: " ")
+            let name = pm.currentModelDisplayName
+            return name.isEmpty ? "None" : name
         }()
         let gpu = AppDefaults.useGPU.wrappedValue
         let backend = gpu ? "GPU" : "CPU×\(AppDefaults.cpuThreadCount.wrappedValue)"

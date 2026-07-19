@@ -3,7 +3,7 @@ import UIKit
 
 /// UIImagePickerController wrapper for camera capture.
 struct CameraView: UIViewControllerRepresentable {
-    @Binding var image: UIImage?
+    let onCapture: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
@@ -32,7 +32,7 @@ struct CameraView: UIViewControllerRepresentable {
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
             if let uiImage = info[.originalImage] as? UIImage {
-                parent.image = uiImage
+                parent.onCapture(uiImage)
             }
             parent.dismiss()
         }

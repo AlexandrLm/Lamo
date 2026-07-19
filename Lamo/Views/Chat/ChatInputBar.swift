@@ -2,22 +2,33 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import os
-import Combine
+
+// MARK: - Constants
+
+private enum Constants {
+    static let barCornerRadius: CGFloat = 22
+    static let buttonSize: CGFloat = 32
+    static let maxPhotoSelection = 5
+    static let maxImageDimension: CGFloat = 1024
+}
+
+// MARK: - ChatInputBar
 
 struct ChatInputBar: View {
     @Binding var text: String
-    @Binding var pendingImages: [UIImage]
+    @Binding var pendingImages: [PendingImage]
     @Binding var pendingFiles: [PendingFile]
     let isStreaming: Bool
     let onSend: () -> Void
     let onStop: () -> Void
+
     @FocusState private var isTextFieldFocused: Bool
     @State private var showModelPicker = false
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
-    @State private var sendTrigger = false
+    @State private var sendCount = 0
     @State private var pulseOpacity: Double = 0
     @ObservedObject private var provider = ProviderManager.shared
 
@@ -51,7 +62,7 @@ struct ChatInputBar: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Constants.barCornerRadius))
         .frame(maxWidth: LamoTheme.maxContentWidth)
         .padding(.bottom, 6)
         .padding(.horizontal, 5)
@@ -71,16 +82,13 @@ struct ChatInputBar: View {
             ModelPickerPopover(isPresented: $showModelPicker)
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraView(image: Binding(
-                get: { nil },
-                set: { newImage in
-                    if let img = newImage { pendingImages.append(img) }
-                }
-            ))
-            .ignoresSafeArea()
+            CameraView(onCapture: { pendingImages.append(PendingImage(image: $0)) })
+                .ignoresSafeArea()
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItems, maxSelectionCount: 5, matching: .images)
-        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.data], allowsMultipleSelection: true) { result in
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItems,
+                      maxSelectionCount: Constants.maxPhotoSelection, matching: .images)
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.data],
+                      allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls):
                 for url in urls { pendingFiles.append(PendingFile(url: url)) }
@@ -92,9 +100,13 @@ struct ChatInputBar: View {
             guard !photoPickerItems.isEmpty else { return }
             Task {
                 for item in photoPickerItems {
-                    if let data = try? await item.loadTransferable(type: Data.self),
-                       let image = UIImage(data: data) {
-                        pendingImages.append(image)
+                    do {
+                        if let data = try await item.loadTransferable(type: Data.self),
+                           let image = UIImage(data: data) {
+                            pendingImages.append(PendingImage(image: image))
+                        }
+                    } catch {
+                        LamoLogger.ui.error("Photo picker load failed: \(error)")
                     }
                 }
                 photoPickerItems = []
@@ -114,7 +126,7 @@ struct ChatInputBar: View {
                 Image(systemName: "plus")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
+                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
                     .glassEffect(.regular.interactive(), in: .circle)
 
                 let attachCount = pendingImages.count + pendingFiles.count
@@ -135,20 +147,24 @@ struct ChatInputBar: View {
 
     private var thinkingButton: some View {
         Button {
-            provider.objectWillChange.send()
             provider.thinkingMode.toggle()
         } label: {
             Image(systemName: provider.thinkingMode ? "brain.head.profile.fill" : "brain.head.profile")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(provider.thinkingMode ? .white : .white.opacity(0.3))
-                .frame(width: 32, height: 32)
+                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
                 .background(
                     Circle()
-                        .fill(provider.thinkingMode ? LamoTheme.Colors.accent.opacity(0.2) : Color.white.opacity(0.05))
+                        .fill(provider.thinkingMode
+                            ? LamoTheme.Colors.accent.opacity(0.2)
+                            : Color.white.opacity(0.05))
                 )
                 .overlay(
                     Circle()
-                        .stroke(provider.thinkingMode ? LamoTheme.Colors.accent.opacity(0.6) : Color.white.opacity(0.1), lineWidth: 1.5)
+                        .stroke(provider.thinkingMode
+                            ? LamoTheme.Colors.accent.opacity(0.6)
+                            : Color.white.opacity(0.1),
+                            lineWidth: 1.5)
                 )
         }
         .buttonStyle(.plain)
@@ -166,7 +182,7 @@ struct ChatInputBar: View {
                         .scaleEffect(0.6)
                         .tint(.white.opacity(0.5))
                 }
-                Text(modelDisplayName)
+                Text(provider.currentModelDisplayName.isEmpty ? "No model" : provider.currentModelDisplayName)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(modelTextColor)
                     .lineLimit(1)
@@ -175,7 +191,7 @@ struct ChatInputBar: View {
                     .foregroundStyle(.white.opacity(0.3))
             }
             .padding(.horizontal, 10)
-            .frame(height: 32)
+            .frame(height: Constants.buttonSize)
             .glassEffect(in: .capsule)
             .overlay(
                 Capsule()
@@ -194,31 +210,31 @@ struct ChatInputBar: View {
                 Image(systemName: "stop.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.black)
-                    .frame(width: 32, height: 32)
+                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
                     .background(Color.white, in: Circle())
             }
             .buttonStyle(.plain)
             .transition(.scale.combined(with: .opacity))
         } else if canSend {
             Button(action: {
-                sendTrigger.toggle()
+                sendCount += 1
                 isTextFieldFocused = false
                 onSend()
             }) {
                 Image(systemName: "arrow.up")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.black)
-                    .frame(width: 32, height: 32)
+                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
                     .background(Color.white, in: Circle())
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendTrigger)
+            .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendCount)
             .transition(.scale.combined(with: .opacity))
         } else {
             Image(systemName: "arrow.up")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.3))
-                .frame(width: 32, height: 32)
+                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
                 .background(Color.white.opacity(0.1), in: Circle())
         }
     }
@@ -226,15 +242,10 @@ struct ChatInputBar: View {
     // MARK: - Computed
 
     private var canSend: Bool {
-        provider.isEngineReady && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty)
-    }
-
-    private var modelDisplayName: String {
-        guard let path = provider.litertLMModelPath else { return "No model" }
-        return (path as NSString).lastPathComponent
-            .replacingOccurrences(of: ".litertlm", with: "")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
+        provider.isEngineReady
+            && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !pendingImages.isEmpty
+                || !pendingFiles.isEmpty)
     }
 
     private var modelTextColor: Color {
@@ -255,14 +266,12 @@ struct ChatInputBar: View {
     private var pendingImagesRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(pendingImages.indices, id: \.self) { index in
+                ForEach(pendingImages) { item in
                     PendingImageThumb(
-                        image: pendingImages[index],
+                        image: item.image,
                         onRemove: {
                             withAnimation(.spring(response: 0.2)) {
-                                if pendingImages.indices.contains(index) {
-                                    pendingImages.remove(at: index)
-                                }
+                                pendingImages.removeAll { $0.id == item.id }
                             }
                         }
                     )
@@ -294,122 +303,13 @@ struct ChatInputBar: View {
     }
 }
 
-// MARK: - Pending File Thumbnail
-
-private struct PendingFileThumb: View {
-    let file: PendingFile
-    let onRemove: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            HStack(spacing: 8) {
-                Image(systemName: file.iconName)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(file.name).font(.caption).foregroundStyle(.white).lineLimit(1)
-                    Text(file.formattedSize).font(.caption2).foregroundStyle(.white.opacity(0.4))
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .glassEffect(.regular, in: .rect(cornerRadius: 10))
-
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.caption)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, Color.black.opacity(0.55))
-            }
-            .offset(x: 4, y: -4)
-        }
-    }
-}
-
-// MARK: - Pending Image Thumbnail
-
-private struct PendingImageThumb: View {
-    let image: UIImage
-    let onRemove: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Image(uiImage: image)
-                .resizable().scaledToFill()
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5))
-
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.body)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, Color.black.opacity(0.55))
-            }
-            .offset(x: 5, y: -5)
-        }
-    }
-}
-
-// MARK: - Drop Delegate
-
-struct ChatDropDelegate: DropDelegate {
-    @Binding var pendingImages: [UIImage]
-    @Binding var pendingFiles: [PendingFile]
-
-    func performDrop(info: DropInfo) -> Bool {
-        let imageProviders = info.itemProviders(for: [.image])
-        for provider in imageProviders {
-            _ = provider.loadObject(ofClass: UIImage.self) { image, error in
-                guard let uiImage = image as? UIImage, error == nil else { return }
-                DispatchQueue.main.async { pendingImages.append(uiImage.resizedForModel(maxDimension: 1024)) }
-            }
-        }
-        let fileProviders = info.itemProviders(for: [.fileURL])
-        for provider in fileProviders {
-            _ = provider.loadObject(ofClass: URL.self) { url, error in
-                guard let url, error == nil else { return }
-                DispatchQueue.main.async { pendingFiles.append(PendingFile(url: url)) }
-            }
-        }
-        return !imageProviders.isEmpty || !fileProviders.isEmpty
-    }
-    func dropEntered(info: DropInfo) {}
-    func dropExited(info: DropInfo) {}
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .copy) }
-}
-
-// MARK: - Image Resize
-
-extension UIImage {
-    func resizedForModel(maxDimension: CGFloat) -> UIImage {
-        let size = self.size
-        let longestSide = max(size.width, size.height)
-        guard longestSide > maxDimension else { return self }
-        let scale = maxDimension / longestSide
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        return renderer.image { _ in self.draw(in: CGRect(origin: .zero, size: newSize)) }
-    }
-}
-
 // MARK: - Model Picker Sheet
 
 struct ModelPickerPopover: View {
     @Binding var isPresented: Bool
     @ObservedObject private var provider = ProviderManager.shared
     @State private var modelInfos: [String: ModelInfo] = [:]
-
-    private var availableModels: [(displayName: String, path: String)] {
-        ProviderManager.listModels().map { filename in
-            let cleanName = filename
-                .replacingOccurrences(of: ".litertlm", with: "")
-                .replacingOccurrences(of: "-", with: " ")
-                .replacingOccurrences(of: "_", with: " ")
-            let fullPath = ProviderManager.modelsDirectory.appendingPathComponent(filename).path
-            return (cleanName, fullPath)
-        }
-    }
+    @State private var availableModels: [(displayName: String, path: String)] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -435,6 +335,12 @@ struct ModelPickerPopover: View {
         .background(LamoTheme.Colors.background)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            availableModels = ProviderManager.listModels().map { filename in
+                let fullPath = ProviderManager.modelsDirectory.appendingPathComponent(filename).path
+                return (ProviderManager.displayName(forModelPath: filename), fullPath)
+            }
+        }
     }
 
     private func modelCard(_ model: (displayName: String, path: String)) -> some View {
@@ -502,7 +408,8 @@ struct ModelPickerPopover: View {
         VStack(spacing: 12) {
             Image(systemName: "tray").font(.system(size: 28)).foregroundStyle(.tertiary)
             Text("No models downloaded").font(.subheadline).foregroundStyle(.tertiary)
-            Text("Download a model in Settings to get started").font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+            Text("Download a model in Settings to get started")
+                .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center)
         }
         .padding(.vertical, 60).frame(maxWidth: .infinity)
     }
@@ -511,7 +418,8 @@ struct ModelPickerPopover: View {
         HStack(spacing: 8) {
             if provider.isEngineReady {
                 Circle().fill(LamoTheme.Colors.accent).frame(width: 6, height: 6)
-                Text(modelDisplayName).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                Text(provider.currentModelDisplayName)
+                    .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
                 Text("· ready").font(.caption2).foregroundStyle(LamoTheme.Colors.accent.opacity(0.7))
             } else if let error = provider.engineError {
                 Circle().fill(Color.orange).frame(width: 6, height: 6)
@@ -526,13 +434,5 @@ struct ModelPickerPopover: View {
             Spacer()
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
-    }
-
-    private var modelDisplayName: String {
-        guard let path = provider.litertLMModelPath else { return "" }
-        return (path as NSString).lastPathComponent
-            .replacingOccurrences(of: ".litertlm", with: "")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
     }
 }

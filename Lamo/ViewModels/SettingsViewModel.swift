@@ -145,10 +145,7 @@ final class SettingsViewModel {
 
     /// Human-readable model name from path.
     func displayName(for path: String) -> String {
-        (path as NSString).lastPathComponent
-            .replacingOccurrences(of: ".litertlm", with: "")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
+        ProviderManager.displayName(forModelPath: path)
     }
 }
 
@@ -173,8 +170,7 @@ struct ModelInfo {
         let hasSpecDecoding = caps?.hasSpeculativeDecodingSupport() ?? false
 
         return ModelInfo(
-            name: fileName.replacingOccurrences(of: ".litertlm", with: "")
-                .replacingOccurrences(of: "-", with: " "),
+            name: ProviderManager.displayName(forModelPath: path),
             fileSize: fileSize,
             hasSpeculativeDecoding: hasSpecDecoding
         )

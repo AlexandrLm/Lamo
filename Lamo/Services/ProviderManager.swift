@@ -198,9 +198,8 @@ final class ProviderManager: ObservableObject {
         set { AppDefaults.systemPrompt.wrappedValue = newValue }
     }
 
-    var thinkingMode: Bool {
-        get { AppDefaults.thinkingMode.wrappedValue }
-        set { AppDefaults.thinkingMode.wrappedValue = newValue }
+    @Published var thinkingMode: Bool = AppDefaults.thinkingMode.wrappedValue {
+        didSet { AppDefaults.thinkingMode.wrappedValue = thinkingMode }
     }
 
     /// Compact system prompt — tool details are in their schemas, not here.
@@ -606,16 +605,19 @@ final class ProviderManager: ObservableObject {
 
     // MARK: - Model Discovery
 
-    /// Human-readable name of the currently active model.
-    var currentModelDisplayName: String {
-        guard let path = litertLMModelPath ?? Self.findFirstModel() else {
-            return ""
-        }
+    /// Formats a model path/filename into a human-readable display name.
+    static func displayName(forModelPath path: String) -> String {
         let filename = (path as NSString).lastPathComponent
             .replacingOccurrences(of: ".litertlm", with: "")
             .replacingOccurrences(of: "-", with: " ")
             .replacingOccurrences(of: "_", with: " ")
         return filename
+    }
+
+    /// Human-readable name of the currently active model.
+    var currentModelDisplayName: String {
+        guard let path = litertLMModelPath ?? Self.findFirstModel() else { return "" }
+        return Self.displayName(forModelPath: path)
     }
 
     /// The models directory: ~/Documents/models/
