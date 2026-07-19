@@ -71,19 +71,24 @@ struct ChatView: View {
                                 .tint(.white.opacity(0.4))
                         }
                         Text(provider.currentModelDisplayName.isEmpty ? "No model" : provider.currentModelDisplayName)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(modelTitleColor)
+                            .font(.system(size: 20, weight: .regular, design: .monospaced))
+                            .foregroundStyle(provider.engineError != nil ? .red : .white.opacity(0.7))
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(modelTitleColor.opacity(0.5))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(provider.engineError != nil ? .red.opacity(0.6) : .white.opacity(0.3))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(.red.opacity(provider.engineError != nil ? 0.15 : 0))
+                    )
                     .overlay(
                         Capsule()
-                            .stroke(modelTitleColor.opacity(0.25), lineWidth: 1)
+                            .stroke(.red.opacity(provider.engineError != nil ? 0.4 : 0), lineWidth: 1)
                     )
+                    .animation(.easeInOut(duration: 0.5), value: provider.engineError != nil)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -244,11 +249,11 @@ struct ChatView: View {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
-    private var modelTitleColor: Color {
-        if provider.isEngineReady { return LamoTheme.Colors.accent.opacity(0.85) }
-        if provider.engineError != nil { return .orange.opacity(0.7) }
-        if provider.litertLMModelPath != nil { return .white.opacity(0.5) }
-        return .white.opacity(0.3)
+    private var modelDotColor: Color {
+        if provider.isEngineReady { return LamoTheme.Colors.accent }
+        if provider.engineError != nil { return .orange }
+        if provider.litertLMModelPath != nil { return .white.opacity(0.4) }
+        return .white.opacity(0.2)
     }
 }
 

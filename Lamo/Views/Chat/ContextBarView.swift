@@ -18,6 +18,7 @@ struct ContextBarView: View {
                         .font(.system(.caption2, design: .monospaced).weight(.medium))
                         .foregroundStyle(.white.opacity(0.5))
                 }
+                .padding(.vertical, 5)
             }
             .buttonStyle(.plain)
             .transition(.opacity)
