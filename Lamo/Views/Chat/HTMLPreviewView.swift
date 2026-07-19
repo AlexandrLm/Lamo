@@ -125,30 +125,6 @@ struct HTMLCard: View {
 #endif
 }
 
-// MARK: - Loading Shimmer
-
-private struct HTMLShimmer: View {
-    @State private var phase: CGFloat = -1
-    var body: some View {
-        GeometryReader { geo in
-            RoundedRectangle(cornerRadius: 10)
-                .fill(LinearGradient(
-                    stops: [
-                        .init(color: .white.opacity(0.0), location: 0),
-                        .init(color: .white.opacity(0.05), location: 0.4),
-                        .init(color: .white.opacity(0.0), location: 0.6),
-                    ],
-                    startPoint: UnitPoint(x: phase, y: 0.5),
-                    endPoint: UnitPoint(x: phase + 0.4, y: 0.5)
-                ))
-                .frame(width: geo.size.width * 0.7, height: 12).padding(.leading, 16).padding(.top, 16)
-        }
-        .frame(height: 100).background(Color(white: 0.06))
-        .onAppear {
-            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { phase = 1.5 }
-        }
-    }
-}
 
 // MARK: - HTML Preview View (WKWebView)
 
@@ -158,16 +134,12 @@ struct HTMLPreviewView: View {
     var cornerRadius: CGFloat = 12
 
     @State private var contentHeight: CGFloat = 160
-    @State private var isLoading = true
 
     var body: some View {
-        ZStack {
-            HTMLWebView(html: wrapHTML(html), contentHeight: $contentHeight, isLoading: $isLoading)
-                .frame(height: min(contentHeight, maxHeight))
-            if isLoading { HTMLShimmer().transition(.opacity) }
-        }
-        .animation(.easeInOut(duration: 0.3), value: contentHeight)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        HTMLWebView(html: wrapHTML(html), contentHeight: $contentHeight)
+            .frame(height: min(contentHeight, maxHeight))
+            .animation(.easeInOut(duration: 0.3), value: contentHeight)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 
     private func wrapHTML(_ raw: String) -> String {
@@ -217,7 +189,6 @@ struct HTMLPreviewView: View {
 private struct HTMLWebView: UIViewRepresentable {
     let html: String
     @Binding var contentHeight: CGFloat
-    @Binding var isLoading: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -298,10 +269,9 @@ private struct HTMLWebView: UIViewRepresentable {
 private struct HTMLWebView: View {
     let html: String
     @Binding var contentHeight: CGFloat
-    @Binding var isLoading: Bool
     var body: some View {
         Text("HTML preview not available on macOS").font(.caption).foregroundStyle(.tertiary)
-            .onAppear { isLoading = false; contentHeight = 40 }
+            .onAppear { contentHeight = 40 }
     }
 }
 #endif
