@@ -10,7 +10,6 @@ struct MessageBubble: View {
     @State private var showCopyConfirmation = false
     @State private var showImageViewer = false
     @State private var selectedImageIndex = 0
-    @State private var showActions = false
     @State private var showShareSheet = false
     @State private var copyConfirmationTask: Task<Void, Never>?
 
@@ -107,10 +106,6 @@ struct MessageBubble: View {
         }
     }
 
-    private var modelName: String {
-        let name = ProviderManager.shared.currentModelDisplayName
-        return name.isEmpty ? "AI" : name
-    }
 
     // MARK: - Action Button
 

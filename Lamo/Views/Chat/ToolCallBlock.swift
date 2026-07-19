@@ -6,7 +6,7 @@ struct ToolCallBlock: View {
     let call: ToolCallRecord
     let isStreaming: Bool
     @State private var isExpanded = false
-
+    @State private var cachedSummary: String?
     private var accentColor: Color { Color(red: 0.35, green: 0.55, blue: 0.90) }
     private var isRunning: Bool { call.result == nil && isStreaming }
     private var borderColor: Color { isRunning ? accentColor.opacity(0.35) : Color.white.opacity(0.08) }
@@ -44,6 +44,8 @@ struct ToolCallBlock: View {
                 .stroke(borderColor, lineWidth: 1)
         )
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isExpanded)
+        .onAppear { cachedSummary = call.result.flatMap { resultSummary(from: $0) } }
+        .onChange(of: call.result) { _, new in cachedSummary = new.flatMap { resultSummary(from: $0) } }
     }
 
     private var header: some View {
@@ -59,8 +61,8 @@ struct ToolCallBlock: View {
                     ProgressView().tint(accentColor).controlSize(.mini).scaleEffect(0.8)
                     Text("running").font(.caption2).foregroundStyle(.tertiary)
                 }
-                if !isRunning, let result = call.result, !isExpanded {
-                    if let summary = resultSummary(from: result) {
+                if !isRunning, call.result != nil, !isExpanded {
+                    if let summary = cachedSummary {
                         Text("·").foregroundStyle(.tertiary.opacity(0.4))
                         Text(summary)
                             .font(.caption2)
@@ -160,11 +162,18 @@ struct ToolCallBlock: View {
 // MARK: - Tool Result Router
 
 struct ToolResultView: View {
-    let toolName: String; let jsonString: String
+    let toolName: String
+    let jsonString: String
+    private let parsed: Any?
 
-    private var parsed: Any? {
-        guard let d = jsonString.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: d)
+    init(toolName: String, jsonString: String) {
+        self.toolName = toolName
+        self.jsonString = jsonString
+        if let d = jsonString.data(using: .utf8) {
+            self.parsed = try? JSONSerialization.jsonObject(with: d)
+        } else {
+            self.parsed = nil
+        }
     }
 
     var body: some View {
@@ -224,7 +233,7 @@ struct ToolResultView: View {
 
 // ─── TOOL ICON & COLOR HELPERS ───────────────────────────────────────────
 
-private func toolIcon(name: String) -> String {
+func toolIcon(name: String) -> String {
     switch name {
     case "web_search":              return "magnifyingglass.circle.fill"
     case "fetch_url":               return "doc.text.magnifyingglass"
@@ -250,7 +259,7 @@ private func toolIcon(name: String) -> String {
     }
 }
 
-private func toolColor(name: String) -> Color {
+func toolColor(name: String) -> Color {
     switch name {
     case "weather":              return Color(red: 0.30, green: 0.70, blue: 0.95)
     case "calculator":           return Color(red: 0.55, green: 0.40, blue: 0.90)
@@ -274,7 +283,7 @@ private func toolColor(name: String) -> Color {
 
 // MARK: - Weather ─────────────────────────────────────────────────────────
 
-private struct WeatherCard: View {
+struct WeatherCard: View {
     let d: [String: Any]
     private static let handled = Set([
         "temperature_c", "feels_like_c", "humidity_percent", "wind_speed_kmh",
@@ -370,7 +379,7 @@ private struct WeatherCard: View {
     }
 }
 
-private func metricPill(icon: String, value: String, color: Color, label: String? = nil) -> some View {
+func metricPill(icon: String, value: String, color: Color, label: String? = nil) -> some View {
     HStack(spacing: 4) {
         Image(systemName: icon).font(.system(size: 9)).foregroundStyle(color.opacity(0.7))
         Text(value).font(.system(.caption2, design: .rounded).weight(.medium)).foregroundStyle(.primary)
@@ -382,7 +391,7 @@ private func metricPill(icon: String, value: String, color: Color, label: String
 
 // MARK: - Search ──────────────────────────────────────────────────────────
 
-private struct SearchResults: View {
+struct SearchResults: View {
     let d: [String: Any]
     private static let handled = Set(["results", "query"])
 
@@ -450,7 +459,7 @@ private struct SearchResults: View {
 
 // MARK: - Wikipedia ───────────────────────────────────────────────────────
 
-private struct WikipediaResult: View {
+struct WikipediaResult: View {
     let d: [String: Any]
     private static let handled = Set(["error", "extract", "title", "page_id", "url", "results", "query"])
 
@@ -490,7 +499,7 @@ private struct WikipediaResult: View {
 
 // MARK: - Calculator ──────────────────────────────────────────────────────
 
-private struct CalculatorResult: View {
+struct CalculatorResult: View {
     let d: [String: Any]
     private static let handled = Set(["expression", "error", "result"])
 
@@ -532,7 +541,7 @@ private struct CalculatorResult: View {
 
 // MARK: - Time ────────────────────────────────────────────────────────────
 
-private struct TimeCard: View {
+struct TimeCard: View {
     let d: [String: Any]
     private static let handled = Set(["time", "iso_date", "weekday", "timezone", "utc_offset_hours", "unix_timestamp"])
 
@@ -566,7 +575,7 @@ private struct TimeCard: View {
 
 // MARK: - Location ────────────────────────────────────────────────────────
 
-private struct LocationCard: View {
+struct LocationCard: View {
     let d: [String: Any]
     private static let handled = Set([
         "location_name", "display", "city", "region", "country",
@@ -615,7 +624,7 @@ private struct LocationCard: View {
 
 // MARK: - Device Info ─────────────────────────────────────────────────────
 
-private struct DeviceCard: View {
+struct DeviceCard: View {
     let d: [String: Any]
     private static let handled = Set([
         "device_name", "device_model", "device_model_identifier",
@@ -663,7 +672,7 @@ private struct DeviceCard: View {
     }
 }
 
-private struct BatteryBar: View {
+struct BatteryBar: View {
     let level: Int
     var body: some View {
         HStack(spacing: 8) {
@@ -686,7 +695,7 @@ private struct BatteryBar: View {
     }
 }
 
-private struct StorageBar: View {
+struct StorageBar: View {
     let free: String; let total: String
     var body: some View {
         let fb = parseBytes(free); let tb = parseBytes(total)
@@ -712,7 +721,7 @@ private struct StorageBar: View {
 
 // MARK: - Open URL ────────────────────────────────────────────────────────
 
-private struct OpenURLResult: View {
+struct OpenURLResult: View {
     let d: [String: Any]
     private static let handled = Set(["opened", "url", "error"])
 
@@ -742,7 +751,7 @@ private struct OpenURLResult: View {
 
 // MARK: - Reminder ────────────────────────────────────────────────────────
 
-private struct ReminderResult: View {
+struct ReminderResult: View {
     let d: [String: Any]
     private static let handled = Set(["error", "status", "title", "due_date", "reminder_id", "notes"])
 
@@ -778,7 +787,7 @@ private struct ReminderResult: View {
 
 // MARK: - Memory ──────────────────────────────────────────────────────────
 
-private struct MemoryResult: View {
+struct MemoryResult: View {
     let d: [String: Any]
     private static let handled = Set(["status", "info", "existing_facts", "stored_facts", "deleted_facts"])
 
@@ -834,7 +843,7 @@ private struct MemoryResult: View {
 
 // MARK: - Fetch URL ───────────────────────────────────────────────────────
 
-private struct FetchResult: View {
+struct FetchResult: View {
     let d: [String: Any]
     private static let handled = Set(["title", "content", "url", "source", "description", "type"])
 
@@ -877,7 +886,7 @@ private struct FetchResult: View {
 
 // MARK: - Calendar ────────────────────────────────────────────────────────
 
-private struct CalendarCard: View {
+struct CalendarCard: View {
     let d: [String: Any]
     private static let handled = Set(["mode", "events", "event", "error", "query", "count", "action"])
 
@@ -955,7 +964,7 @@ private struct CalendarCard: View {
 
 // MARK: - Calendar Availability ───────────────────────────────────────────
 
-private struct CalendarAvailabilityCard: View {
+struct CalendarAvailabilityCard: View {
     let d: [String: Any]
     private static let handled = Set(["duration_minutes", "range_start", "range_end", "slots", "count", "error"])
 
@@ -999,7 +1008,7 @@ private struct CalendarAvailabilityCard: View {
 
 // MARK: - Contacts ────────────────────────────────────────────────────────
 
-private struct ContactsCard: View {
+struct ContactsCard: View {
     let d: [String: Any]
     private static let handled = Set(["query", "count", "contacts", "error"])
 
@@ -1061,7 +1070,7 @@ private struct ContactsCard: View {
 
 // MARK: - Health ──────────────────────────────────────────────────────────
 
-private struct HealthCard: View {
+struct HealthCard: View {
     let d: [String: Any]
     private static let handled = Set([
         "mode", "days", "error", "metric", "message",
@@ -1307,7 +1316,7 @@ private struct HealthCard: View {
 
 // MARK: - Sparkline Chart
 
-private struct SparklineView: View {
+struct SparklineView: View {
     let values: [Double]
     var color: Color = .red
     var lineWidth: CGFloat = 2
@@ -1412,7 +1421,7 @@ private struct SparklineView: View {
 }
 // MARK: - Notes ───────────────────────────────────────────────────────────
 
-private struct NotesCard: View {
+struct NotesCard: View {
     let d: [String: Any]
     private static let handled = Set(["mode", "count", "notes", "note", "title", "action", "deleted", "error", "query"])
 
@@ -1485,7 +1494,7 @@ private struct NotesCard: View {
 
 // MARK: - Shortcuts ───────────────────────────────────────────────────────
 
-private struct ShortcutResult: View {
+struct ShortcutResult: View {
     let d: [String: Any]
     private static let handled = Set(["success", "shortcut", "note", "error"])
 
@@ -1519,7 +1528,7 @@ private struct ShortcutResult: View {
 
 // MARK: - Code Sandbox ────────────────────────────────────────────────────
 
-private struct CodeSandboxCard: View {
+struct CodeSandboxCard: View {
     let d: [String: Any]
     private static let handled = Set(["output", "error"])
 
@@ -1577,7 +1586,7 @@ private struct CodeSandboxCard: View {
 
 // MARK: - Plan ────────────────────────────────────────────────────────────
 
-private struct PlanCard: View {
+struct PlanCard: View {
     let d: [String: Any]
     private static let handled = Set(["plan_created", "goal", "total_steps", "steps", "error"])
 
@@ -1648,7 +1657,7 @@ private struct PlanCard: View {
 
 // MARK: - Pretty JSON (universal fallback) ────────────────────────────────
 
-private struct PrettyJSON: View {
+struct PrettyJSON: View {
     let d: [String: Any]
     var title: String? = nil
 
@@ -1676,7 +1685,7 @@ private struct PrettyJSON: View {
     }
 }
 
-private struct JSONChip: View {
+struct JSONChip: View {
     let key: String; let value: Any
     var body: some View {
         HStack(spacing: 4) {
@@ -1697,35 +1706,34 @@ private struct JSONChip: View {
 
 // MARK: - Extra Fields ────────────────────────────────────────────────────
 
-private struct ExtraFields: View {
+struct ExtraFields: View {
     let dict: [String: Any]; let handled: Set<String>
+
+    @ViewBuilder
     var body: some View {
         let extra = dict.filter { !handled.contains($0.key) }
-        if extra.isEmpty { return AnyView(EmptyView()) }
-        return AnyView(
-            VStack(alignment: .leading, spacing: 4) {
-                Color.white.opacity(0.06).frame(height: 1).padding(.vertical, 4)
-                FlowLayout(spacing: 5) {
-                    ForEach(extra.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                        HStack(spacing: 3) {
-                            Text(key.replacingOccurrences(of: "_", with: " "))
-                                .font(.system(size: 8, design: .monospaced)).foregroundStyle(.tertiary)
-                            Text("·").font(.system(size: 8)).foregroundStyle(.tertiary.opacity(0.4))
-                            Text(chipValue(value))
-                                .font(.system(size: 8, design: .monospaced)).foregroundStyle(chipColor(value))
-                        }
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.04)))
+        if !extra.isEmpty {
+            Color.white.opacity(0.06).frame(height: 1).padding(.vertical, 4)
+            FlowLayout(spacing: 5) {
+                ForEach(extra.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+                    HStack(spacing: 3) {
+                        Text(key.replacingOccurrences(of: "_", with: " "))
+                            .font(.system(size: 8, design: .monospaced)).foregroundStyle(.tertiary)
+                        Text("·").font(.system(size: 8)).foregroundStyle(.tertiary.opacity(0.4))
+                        Text(chipValue(value))
+                            .font(.system(size: 8, design: .monospaced)).foregroundStyle(chipColor(value))
                     }
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.04)))
                 }
             }
-        )
+        }
     }
 }
 
 // MARK: - Shared Header ───────────────────────────────────────────────────
 
-private func headerRow(icon: String, color: Color, title: String, subtitle: String?) -> some View {
+func headerRow(icon: String, color: Color, title: String, subtitle: String?) -> some View {
     HStack(spacing: 8) {
         Image(systemName: icon)
             .font(.title3).foregroundStyle(color.opacity(0.7))
@@ -1742,7 +1750,7 @@ private func headerRow(icon: String, color: Color, title: String, subtitle: Stri
 
 // MARK: - Flow Layout ─────────────────────────────────────────────────────
 
-private struct FlowLayout: Layout {
+struct FlowLayout: Layout {
     var spacing: CGFloat = 4
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -1783,7 +1791,7 @@ private struct FlowLayout: Layout {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────
 
-private func chipIcon(_ key: String) -> String {
+func chipIcon(_ key: String) -> String {
     switch key {
     case let k where k.contains("temp"):      return "thermometer.medium"
     case let k where k.contains("humid"):      return "humidity.fill"
@@ -1805,7 +1813,7 @@ private func chipIcon(_ key: String) -> String {
     }
 }
 
-private func chipValue(_ value: Any) -> String {
+func chipValue(_ value: Any) -> String {
     switch value {
     case let s as String where s.count > 60: return "\"\(s.prefix(60))…\""
     case let s as String:    return s
@@ -1818,7 +1826,7 @@ private func chipValue(_ value: Any) -> String {
     }
 }
 
-private func chipColor(_ value: Any) -> Color {
+func chipColor(_ value: Any) -> Color {
     switch value {
     case is String:  return .primary.opacity(0.85)
     case let n as NSNumber where CFGetTypeID(n) == CFBooleanGetTypeID():
@@ -1829,12 +1837,12 @@ private func chipColor(_ value: Any) -> Color {
     }
 }
 
-private func fmtUptime(_ s: Int) -> String {
+func fmtUptime(_ s: Int) -> String {
     let h = s / 3600, m = (s % 3600) / 60
     return h > 0 ? "\(h)h \(m)m" : "\(m)m"
 }
 
-private func weatherEmoji(_ c: String, isDay: Bool) -> String {
+func weatherEmoji(_ c: String, isDay: Bool) -> String {
     let l = c.lowercased()
     if l.contains("clear")                { return isDay ? "☀️" : "🌙" }
     if l.contains("cloud")                { return isDay ? "⛅" : "☁️" }
@@ -1846,35 +1854,35 @@ private func weatherEmoji(_ c: String, isDay: Bool) -> String {
     return "🌡️"
 }
 
-private func shortTime(_ s: String) -> String {
+func shortTime(_ s: String) -> String {
     let sep: Character = s.contains("T") ? "T" : " "
     guard let t = s.firstIndex(of: sep) else { return s }
     return String(s[s.index(after: t)...].prefix(5))
 }
 
-private func shortHour(_ s: String) -> String {
+func shortHour(_ s: String) -> String {
     let sep: Character = s.contains("T") ? "T" : " "
     guard let t = s.firstIndex(of: sep) else { return s }
     return String(s[s.index(after: t)...].prefix(2))
 }
 
-private func shortURL(_ u: String) -> String {
+func shortURL(_ u: String) -> String {
     u.replacingOccurrences(of: "https://", with: "")
      .replacingOccurrences(of: "http://", with: "")
      .replacingOccurrences(of: "www.", with: "")
      .components(separatedBy: "/").first ?? u
 }
 
-private func formatNumber(_ n: Double) -> String {
+func formatNumber(_ n: Double) -> String {
     if n == floor(n) && n.isFinite && abs(n) < 1e15 { return String(Int(n)) }
     return String(format: "%.6g", n)
 }
 
-private func shortDate(_ iso: String) -> String {
+func shortDate(_ iso: String) -> String {
     if iso.count >= 10 { return String(iso.suffix(5)) }; return iso
 }
 
-private func formatEventTime(_ iso: String) -> String {
+func formatEventTime(_ iso: String) -> String {
     if let t = iso.firstIndex(of: "T") {
         let timePart = String(iso[iso.index(after: t)...])
         return String(timePart.prefix(5))
@@ -1882,7 +1890,7 @@ private func formatEventTime(_ iso: String) -> String {
     return iso
 }
 
-private func parseBytes(_ s: String) -> Int64 {
+func parseBytes(_ s: String) -> Int64 {
     let c = s.lowercased().replacingOccurrences(of: ",", with: "")
     if c.hasSuffix("gb") {
         return Int64((Double(c.replacingOccurrences(of: "gb", with: "").trimmingCharacters(in: .whitespaces)) ?? 0) * 1_073_741_824)

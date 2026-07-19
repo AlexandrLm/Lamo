@@ -134,15 +134,20 @@ struct HTMLPreviewView: View {
     var cornerRadius: CGFloat = 12
 
     @State private var contentHeight: CGFloat = 160
+    private let wrappedHTML: String
 
-    var body: some View {
-        HTMLWebView(html: wrapHTML(html), contentHeight: $contentHeight)
-            .frame(height: min(contentHeight, maxHeight))
-            .animation(.easeInOut(duration: 0.3), value: contentHeight)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    init(html: String, maxHeight: CGFloat = 320, cornerRadius: CGFloat = 12) {
+        self.html = html
+        self.maxHeight = maxHeight
+        self.cornerRadius = cornerRadius
+        self.wrappedHTML = Self.wrapHTML(html)
     }
 
-    private func wrapHTML(_ raw: String) -> String {
+    var body: some View {
+        HTMLWebView(html: wrappedHTML, contentHeight: $contentHeight)
+    }
+
+    private static func wrapHTML(_ raw: String) -> String {
         if raw.lowercased().contains("<html") || raw.lowercased().contains("<!doctype") {
             return injectDarkStyles(raw)
         }
@@ -172,7 +177,7 @@ struct HTMLPreviewView: View {
         """
     }
 
-    private func injectDarkStyles(_ raw: String) -> String {
+    private static func injectDarkStyles(_ raw: String) -> String {
         let style = "<style>:root{color-scheme:dark}body{font-family:-apple-system,sans-serif;background:#141414!important;color:#e5e5e7!important;padding:14px 16px;line-height:1.6}a{color:#64d2ff!important}img,video,svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{border:1px solid #3a3a3c;padding:8px 12px}th{background:#2c2c2e}code,pre{font-family:'SF Mono',Menlo,monospace}pre{background:#000;border:1px solid #333;border-radius:10px;padding:12px;overflow-x:auto}</style>"
         if let headEnd = raw.range(of: "</head>") {
             var result = raw

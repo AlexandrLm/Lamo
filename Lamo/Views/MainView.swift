@@ -11,7 +11,7 @@ struct MainView: View {
     @State private var renamingID: UUID?
     @State private var renameText = ""
     @State private var conversationToDelete: Conversation?
-    @StateObject private var providerManager = ProviderManager.shared
+    @ObservedObject private var providerManager = ProviderManager.shared
     /// Cached filtered + grouped conversations — only recomputed when conversations or search text changes.
     @State private var cachedGroups: [(title: String, items: [Conversation])] = []
     @State private var cachedHasResults: Bool = true

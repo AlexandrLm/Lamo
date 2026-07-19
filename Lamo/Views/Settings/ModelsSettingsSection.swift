@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 struct ModelsSettingsSection: View {
     var vm: SettingsViewModel
     @ObservedObject var downloadManager = DownloadManager.shared
-    @Environment(\.modelContext) private var modelContext
     @State private var isImportingModel = false
     @State private var importError: String?
     @State private var importSuccess = false
@@ -93,7 +92,7 @@ struct ModelsSettingsSection: View {
                 HStack(spacing: LamoTheme.Spacing.sm) {
                     specChip(icon: "internaldrive", value: info.fileSizeString)
                     specChip(icon: "bolt.speedometer", value: info.hasSpeculativeDecoding ? "SpecDec" : "Base")
-                    if let cores = activeCores { specChip(icon: "arrow.triangle.branch", value: cores) }
+                    if let cores = Self.activeCores { specChip(icon: "arrow.triangle.branch", value: cores) }
                 }
 
                 Text("On-device inference · No network required")
@@ -117,15 +116,15 @@ struct ModelsSettingsSection: View {
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
-    private var activeCores: String? {
-        guard vm.useGPU else { return "\(vm.cpuThreadCount) CPU" }
+    private static let activeCores: String? = {
+        guard AppDefaults.useGPU.wrappedValue else { return "\(AppDefaults.cpuThreadCount.wrappedValue) CPU" }
         if let dev = MTLCreateSystemDefaultDevice() {
             if dev.supportsFamily(.apple9) { return "6 GPU" }
             if dev.supportsFamily(.apple8) { return "5 GPU" }
             return "GPU"
         }
         return "GPU"
-    }
+    }()
 
     private func specChip(icon: String, value: String) -> some View {
         HStack(spacing: 4) {

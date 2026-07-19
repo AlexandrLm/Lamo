@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @State private var vm = SettingsViewModel()
@@ -10,7 +9,7 @@ struct SettingsView: View {
     @State private var showResetAlert = false
     @Environment(\.dismiss) private var dismiss
 
-    private var providerManager: ProviderManager { ProviderManager.shared }
+    @ObservedObject private var providerManager = ProviderManager.shared
 
     var body: some View {
         NavigationStack {
