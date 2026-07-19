@@ -51,7 +51,7 @@ struct ChatView: View {
                 Button {
                     showModelPicker = true
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         if !provider.isEngineReady && provider.litertLMModelPath != nil {
                             ProgressView()
                                 .controlSize(.mini)
@@ -59,13 +59,19 @@ struct ChatView: View {
                                 .tint(.white.opacity(0.4))
                         }
                         Text(provider.currentModelDisplayName.isEmpty ? "No model" : provider.currentModelDisplayName)
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(modelTitleColor)
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(modelTitleColor.opacity(0.5))
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .overlay(
+                        Capsule()
+                            .stroke(modelTitleColor.opacity(0.25), lineWidth: 1)
+                    )
                 }
                 .buttonStyle(.plain)
             }
