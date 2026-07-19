@@ -67,6 +67,9 @@ struct MarkdownRenderer: View {
                     case .code(let code, let language):
                         CodeBlock(code: code, language: language)
                             .padding(.vertical, 8)
+                    case .html(let html):
+                        HTMLCard(html: html, title: nil)
+                            .padding(.vertical, 8)
                     case .header(let text, let level):
                         VStack(alignment: .leading, spacing: 4) {
                             InlineMarkdown(text: text, textColor: textColor, font: headerFont(level))
@@ -148,6 +151,7 @@ struct MarkdownRenderer: View {
     private enum Block: Sendable {
         case text(String)
         case code(code: String, language: String)
+        case html(String)
         case header(String, level: Int)
         case listItem(String, indent: Int, number: Int?)
         case taskItem(String, checked: Bool)
@@ -190,7 +194,12 @@ struct MarkdownRenderer: View {
             if line.hasPrefix("```") {
                 flushText()
                 if inCodeBlock {
-                    blocks.append(.code(code: codeBuffer.joined(separator: "\n"), language: language))
+                    let code = codeBuffer.joined(separator: "\n")
+                    if language.lowercased() == "html" {
+                        blocks.append(.html(code))
+                    } else {
+                        blocks.append(.code(code: code, language: language))
+                    }
                     codeBuffer = []
                     language = ""
                     inCodeBlock = false

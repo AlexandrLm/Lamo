@@ -243,7 +243,11 @@ struct MessageBubble: View {
                 ToolCallsView(calls: message.toolCalls, isStreaming: message.isStreaming)
             }
 
-            MarkdownRenderer(text: message.content, textColor: LamoTheme.Colors.textPrimary, isStreaming: message.isStreaming && message.content.isEmpty)
+            if HTMLDetector.isHTML(message.content) {
+                HTMLCard(html: message.content, title: nil, maxHeight: 500)
+            } else {
+                MarkdownRenderer(text: message.content, textColor: LamoTheme.Colors.textPrimary, isStreaming: message.isStreaming && message.content.isEmpty)
+            }
         }
         .textSelection(.enabled)
         .padding(.horizontal, 18)
