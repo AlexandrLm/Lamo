@@ -11,7 +11,6 @@ struct MainView: View {
     @State private var renamingID: UUID?
     @State private var renameText = ""
     @State private var conversationToDelete: Conversation?
-    @ObservedObject private var providerManager = ProviderManager.shared
     /// Cached filtered + grouped conversations — only recomputed when conversations or search text changes.
     @State private var cachedGroups: [(title: String, items: [Conversation])] = []
     @State private var cachedHasResults: Bool = true
@@ -386,57 +385,6 @@ struct MainView: View {
                 }
             }
 
-            // Startup gate: small loading banner instead of full-screen block
-            if !providerManager.isEngineReady {
-                VStack {
-                    if let error = providerManager.engineError {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.white.opacity(0.5))
-                            Text(error)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.5))
-                                .lineLimit(2)
-                            Spacer()
-                            Button {
-                                Task { await providerManager.initializeEngineIfNeeded() }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .frame(width: 32, height: 32)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Retry engine load")
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
-                        .padding(.horizontal, LamoTheme.Spacing.lg)
-                        .padding(.top, 8)
-                    } else {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .tint(.white.opacity(0.5))
-                            Text(providerManager.currentModelDisplayName)
-                                .font(.system(.caption, design: .monospaced).weight(.medium))
-                                .foregroundStyle(.white.opacity(0.5))
-                            Spacer()
-                            Text("Loading…")
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.3))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.md))
-                        .padding(.horizontal, LamoTheme.Spacing.lg)
-                        .padding(.top, 8)
-                    }
-                    Spacer()
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
         }
     }
 
