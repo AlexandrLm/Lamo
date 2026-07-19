@@ -153,7 +153,7 @@ struct MainView: View {
                             )
                             .tag(conversation.id)
                             .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
+                            .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
                             .listRowBackground(Color.clear)
                             .contextMenu {
                                 Button {
@@ -221,10 +221,8 @@ struct MainView: View {
                     showSettings = true
                 } label: {
                     Image(systemName: "gearshape")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                        .glassEffect(.regular.interactive(), in: .circle)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Settings")
@@ -234,10 +232,8 @@ struct MainView: View {
                     startNewChat()
                 } label: {
                     Image(systemName: "plus")
-                        .font(.body.weight(.medium))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .glassEffect(.regular.interactive(), in: .circle)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("New Chat")
@@ -249,21 +245,21 @@ struct MainView: View {
     // MARK: - Section Header
 
     private func sidebarSectionHeader(_ title: String) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             if title == "Pinned" {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 7))
-                    .foregroundStyle(.white.opacity(0.35))
+                Circle()
+                    .fill(LamoTheme.Colors.accent.opacity(0.5))
+                    .frame(width: 5, height: 5)
             }
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.3))
-                .tracking(0.8)
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.25))
+                .textCase(.uppercase)
             Spacer()
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 8)
+        .padding(.top, 16)
+        .padding(.bottom, 6)
     }
 
     // MARK: - Ambient Gradient
@@ -288,13 +284,33 @@ struct MainView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 20) {
+            Spacer().frame(height: 20)
 
-            VStack(spacing: 8) {
-                Text("Start a Conversation")
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                LamoTheme.Colors.accent.opacity(0.15),
+                                LamoTheme.Colors.accent.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 64, height: 64)
+
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 24, weight: .light))
+                    .foregroundStyle(LamoTheme.Colors.accent.opacity(0.5))
+            }
+
+            VStack(spacing: 6) {
+                Text("No Chats Yet")
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.5))
 
-                Text("Your chats will appear here")
+                Text("Press ⌘N or tap + to start")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.25))
                     .multilineTextAlignment(.center)
@@ -302,21 +318,25 @@ struct MainView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 32)
-        .padding(.top, 60)
+        .padding(.top, 40)
     }
 
     private var emptySearchView: some View {
         VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 24))
-                .foregroundStyle(.white.opacity(0.12))
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.white.opacity(0.15))
 
-            Text("No Chats Found")
+            Text("No Results")
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.white.opacity(0.3))
+
+            Text("Try a different search")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.15))
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 80)
+        .padding(.top, 60)
     }
 
     // MARK: - Detail
@@ -334,11 +354,35 @@ struct MainView: View {
                     )
                     .id(conversation.id)
                 } else {
-                    ContentUnavailableView(
-                        "Select a Chat",
-                        systemImage: "bubble.left",
-                        description: Text("Choose a conversation or start a new one")
-                    )
+                    VStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            LamoTheme.Colors.accent.opacity(0.12),
+                                            LamoTheme.Colors.accent.opacity(0.04)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 72, height: 72)
+
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 28, weight: .light))
+                                .foregroundStyle(LamoTheme.Colors.accent.opacity(0.45))
+                        }
+
+                        Text("Select a Chat")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+
+                        Text("Choose a conversation from the list\nor start a new one with ⌘N")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.25))
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
 
@@ -452,83 +496,71 @@ struct ConversationRow: View {
     let conversation: Conversation
     var isSelected: Bool = false
 
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter
+    private static let timeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
     }()
 
-    private var relativeTime: String {
-        Self.relativeFormatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
+    private var formattedTime: String {
+        Self.timeFormatter.localizedString(for: conversation.updatedAt, relativeTo: Date())
     }
 
-    private var previewText: String? {
-        let sorted = conversation.messages.sorted(by: { $0.timestamp < $1.timestamp })
-        if let first = sorted.first(where: { $0.role == .user }),
-           !first.content.isEmpty {
-            return String(first.content.prefix(80))
-        }
-        if let last = sorted.last, !last.content.isEmpty {
-            return String(last.content.prefix(80))
-        }
-        return nil
-    }
-
-    private var avatarLetter: String {
-        let title = conversation.title
-        return title.isEmpty ? "?" : String(title.prefix(1)).uppercased()
+    private var messageCount: Int {
+        conversation.messages.count
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Monospace letter avatar
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(isSelected ? 0.10 : 0.05))
-                    .frame(width: 34, height: 34)
+        HStack(spacing: 0) {
+            // Selection accent bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LamoTheme.Colors.accent)
+                .frame(width: isSelected ? 3 : 0)
+                .opacity(isSelected ? 1 : 0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                .padding(.trailing, 10)
 
-                Text(avatarLetter)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(isSelected ? 0.7 : 0.45))
-            }
-
-            // Text content
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .top) {
-                    HStack(spacing: 4) {
-                        if conversation.isPinned {
-                            Image(systemName: "pin.fill")
-                                .font(.system(size: 7))
-                                .foregroundStyle(.white.opacity(0.35))
-                        }
-                        Text(conversation.title)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                            .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if conversation.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(LamoTheme.Colors.accent.opacity(0.5))
                     }
-                    Spacer(minLength: 8)
-                    Text(relativeTime)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.2))
+                    Text(conversation.title)
+                        .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
                         .lineLimit(1)
-                }
+                        .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
 
-                if let preview = previewText {
-                    Text(preview)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.2))
+                    Spacer(minLength: 8)
+
+                    Text(formattedTime)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.white.opacity(isSelected ? 0.25 : 0.18))
                         .lineLimit(1)
+
+                    if messageCount > 1 {
+                        Text("\(messageCount)")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.white.opacity(0.08))
+                            )
+                    }
                 }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(isSelected ? 0.06 : 0.0))
-                .animation(.easeOut(duration: 0.15), value: isSelected)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(isSelected ? 0.07 : 0.0))
+                .animation(.easeOut(duration: 0.2), value: isSelected)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityLabel("\(conversation.title), \(relativeTime)")
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityLabel("\(conversation.title), \(formattedTime)\(messageCount > 1 ? ", \(messageCount) messages" : "")")
     }
 }
