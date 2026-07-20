@@ -69,8 +69,8 @@ enum ToolFilter {
     ]
 
     /// Determine which tool names to include based on the user's last message.
-    /// Always includes `.core` tools. Adds categories whose keywords match the query.
-    /// If no specific intent is detected, returns only `.core` tools (no bloat).
+    /// Matches query keywords to categories. If no intent is detected, returns empty —
+    /// the model chats fine without tools on vague/greeting queries.
     static func filter(toolNames: [String], query: String) -> [String] {
         let lowerQuery = query.lowercased()
 
