@@ -55,7 +55,6 @@ struct ContextDetailView: View {
                     .padding(.top, LamoTheme.Spacing.md)
                     .padding(.bottom, LamoTheme.Spacing.xxxl)
                 }
-                .background(LamoTheme.Colors.background)
                 .navigationTitle("Context")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -69,6 +68,7 @@ struct ContextDetailView: View {
                     }
                 }
             }
+            .background(LamoTheme.Colors.background)
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .onAppear {
@@ -89,16 +89,6 @@ struct ContextDetailView: View {
         VStack(spacing: LamoTheme.Spacing.lg) {
             // Ring
             ZStack {
-                // Background glow
-                Circle()
-                    .fill(ringColor(t).opacity(0.04))
-                    .frame(width: 140, height: 140)
-                    .blur(radius: 20)
-
-                Circle()
-                    .stroke(.white.opacity(0.06), lineWidth: 10)
-                    .frame(width: 112, height: 112)
-
                 Circle()
                     .trim(from: 0, to: t.fillRatio)
                     .stroke(
@@ -142,7 +132,6 @@ struct ContextDetailView: View {
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
     // MARK: - System Metrics
@@ -162,7 +151,6 @@ struct ContextDetailView: View {
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
     private func metricCell(icon: String, value: String, label: String, color: Color) -> some View {
@@ -181,7 +169,6 @@ struct ContextDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(.white.opacity(0.03))
         .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.sm))
     }
 
@@ -267,7 +254,6 @@ struct ContextDetailView: View {
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
     private func breakdownRow(icon: String, label: String, value: Int, isEstimate: Bool = false) -> some View {
@@ -307,7 +293,6 @@ struct ContextDetailView: View {
         }
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
     }
 
     private func messageRow(_ msg: ContextTracker.MessageUsage) -> some View {
