@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import LiteRTLM
 import SwiftData
+import Network
 import os
 
 /// Provider that runs a local LLM via Google's LiteRT-LM framework.
@@ -31,6 +32,28 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     /// Cached SamplerConfig — avoids redundant UserDefaults reads.
     /// Cache key excludes seed (changes every call). Uses Float for comparison accuracy.
     private var cachedSamplerConfig: (topK: Int, topP: Float, temperature: Float, seed: Int, config: LiteRTLM.SamplerConfig)?
+
+    /// Cached network availability — checked once per conversation build.
+    /// Uses NWPathMonitor for a one-shot synchronous check via semaphore.
+    private static var _networkAvailable = true
+    private static let networkLock = NSLock()
+    private static var networkMonitorStarted = false
+
+    private static func checkNetworkAvailable() -> Bool {
+        networkLock.lock()
+        defer { networkLock.unlock() }
+        if !networkMonitorStarted {
+            networkMonitorStarted = true
+            let monitor = NWPathMonitor()
+            monitor.pathUpdateHandler = { path in
+                networkLock.lock()
+                _networkAvailable = path.status == .satisfied
+                networkLock.unlock()
+            }
+            monitor.start(queue: .global(qos: .background))
+        }
+        return _networkAvailable
+    }
 
     init(
         modelPath: String? = nil,
@@ -161,6 +184,31 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
         // Reset plan state for this new turn
         await AgenticLoopState.shared.cancelPlan()
+
+        // --- Inject current date/time so model always knows it (no tool call needed) ---
+        let now = Date()
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.dateFormat = "yyyy-MM-dd"
+        let todayStr = df.string(from: now)
+        df.dateFormat = "HH:mm:ss"
+        let timeStr = df.string(from: now)
+        df.dateFormat = "EEEE"
+        let weekdayStr = df.string(from: now)
+        let tz = TimeZone.current
+        let utcOffset = tz.secondsFromGMT(for: now) / 3600
+        systemPrompt += """
+
+
+        <current_time>
+          iso_date: \(todayStr)
+          time: \(timeStr)
+          weekday: \(weekdayStr)
+          timezone: \(tz.identifier)
+          utc_offset_hours: \(utcOffset >= 0 ? "+" : "")\(utcOffset)
+          unix_timestamp: \(Int(now.timeIntervalSince1970))
+        </current_time>
+        """
         await AgenticLoopBudget.shared.reset()
 
         // --- Build LiteRT-LM messages ---
@@ -182,26 +230,23 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         // --- Create conversation ---
         let samplerConfig = try buildSamplerConfig()
-        // Build tool list filtered by user toggles
+        // Build tool list. Web tools only included when network is available.
+        let networkAvailable = Self.checkNetworkAvailable()
         var allTools: [LiteRTLM.Tool] = []
-        if AppDefaults.toolWebSearch.wrappedValue { allTools.append(WebSearchTool()) }
-        if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
-        if AppDefaults.toolGetCurrentTime.wrappedValue { allTools.append(GetCurrentTimeTool()) }
         if AppDefaults.toolCalculator.wrappedValue { allTools.append(CalculatorTool()) }
-        if AppDefaults.toolOpenURL.wrappedValue { allTools.append(OpenURLTool()) }
         if AppDefaults.toolGetLocation.wrappedValue { allTools.append(GetLocationTool()) }
-        if AppDefaults.toolWikipedia.wrappedValue { allTools.append(WikipediaTool()) }
-        if AppDefaults.toolDeviceInfo.wrappedValue { allTools.append(DeviceInfoTool()) }
         if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
-        if AppDefaults.toolCreateReminder.wrappedValue { allTools.append(CreateReminderTool()) }
-        if AppDefaults.toolCodeSandbox.wrappedValue { allTools.append(CodeSandboxTool()) }
         if AppDefaults.toolCalendar.wrappedValue { allTools.append(CalendarTool()) }
         if AppDefaults.toolContacts.wrappedValue { allTools.append(ContactsTool()) }
-        if AppDefaults.toolNotes.wrappedValue { allTools.append(NotesTool()) }
         if AppDefaults.toolShortcuts.wrappedValue { allTools.append(ShortcutsTool()) }
         if AppDefaults.toolHealth.wrappedValue { allTools.append(HealthTool()) }
-        if AppDefaults.toolCreatePlan.wrappedValue { allTools.append(PlannerTool()) }
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
+        // Internet-dependent tools
+        if networkAvailable {
+            if AppDefaults.toolWebSearch.wrappedValue { allTools.append(WebSearchTool()) }
+            if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
+            if AppDefaults.toolWikipedia.wrappedValue { allTools.append(WikipediaTool()) }
+        }
         let tools = allTools
 
         // --- Smart tool filtering: only include relevant tools for this query ---
@@ -235,6 +280,10 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             conversationSkeletonTokens: conversationTokens,
             maxIterations: 5
         )
+
+        // Enable constrained decoding to force valid tool calls (reduces hallucinations)
+        ExperimentalFlags.optIntoExperimentalAPIs()
+        ExperimentalFlags.enableConversationConstrainedDecoding = true
 
         let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,

@@ -6,12 +6,12 @@ import LiteRTLM
 
 struct HealthTool: Tool {
     static let name = "health"
-    static let description = "Read steps, heart rate, sleep, or weight from Apple Health."
+    static let description = "Read steps, heart rate, sleep, or weight from Health."
 
-    @ToolParam(description: "What to read: 'steps', 'heart_rate', 'sleep', 'weight', or 'summary'.")
+    @ToolParam(description: "Metric: steps, heart_rate, sleep, weight, or summary.")
     var mode: String
 
-    @ToolParam(description: "Number of days to look back (1–30). Default 1.")
+    @ToolParam(description: "Days to look back (1–30). Default 1.")
     var days: Int = 1
 
     private let store = HKHealthStore()

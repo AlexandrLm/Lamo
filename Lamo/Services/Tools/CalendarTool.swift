@@ -17,31 +17,31 @@ struct CalendarTool: Tool {
     static let name = "calendar"
     static let description = "List, create, or search calendar events."
 
-    @ToolParam(description: "Operation mode: 'list', 'create', or 'search'. Default 'list'.")
+    @ToolParam(description: "Operation: list, create, or search.")
     var mode: String = "list"
 
-    @ToolParam(description: "Start date in YYYY-MM-DD format. Default: today.")
+    @ToolParam(description: "Start date YYYY-MM-DD, default today.")
     var startDate: String?
 
-    @ToolParam(description: "End date in YYYY-MM-DD format. Default: today + 7 days.")
+    @ToolParam(description: "End date YYYY-MM-DD, default +7 days.")
     var endDate: String?
 
-    @ToolParam(description: "Event title (required for 'create' mode).")
+    @ToolParam(description: "Event title, required for create.")
     var title: String?
 
-    @ToolParam(description: "Event notes (for 'create' mode).")
+    @ToolParam(description: "Event notes for create mode.")
     var notes: String?
 
-    @ToolParam(description: "Event location (for 'create' mode).")
+    @ToolParam(description: "Event location for create mode.")
     var location: String?
 
-    @ToolParam(description: "Start time in HH:MM format (for 'create' mode).")
+    @ToolParam(description: "Start time HH:MM, for create mode.")
     var startTime: String?
 
-    @ToolParam(description: "End time in HH:MM format (for 'create' mode).")
+    @ToolParam(description: "End time HH:MM, for create mode.")
     var endTime: String?
 
-    @ToolParam(description: "Search query (for 'search' mode).")
+    @ToolParam(description: "Search query for search mode.")
     var query: String?
 
     func run() async throws -> Any {

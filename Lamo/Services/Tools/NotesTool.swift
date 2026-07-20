@@ -5,18 +5,18 @@ import LiteRTLM
 
 struct NotesTool: Tool {
     static let name = "notes"
-    static let description = "Create, search, read, or delete personal notes."
+    static let description = "Manage personal notes."
 
-    @ToolParam(description: "Operation mode: 'list', 'search', 'read', 'create', or 'delete'.")
+    @ToolParam(description: "Operation: list, search, read, create, or delete.")
     var mode: String
 
-    @ToolParam(description: "Note title. Required for 'read', 'create', and 'delete' modes.")
+    @ToolParam(description: "Note title. Required for read, create, and delete.")
     var title: String?
 
-    @ToolParam(description: "Note content. Used in 'create' mode.")
+    @ToolParam(description: "Note content. Used in create mode.")
     var content: String?
 
-    @ToolParam(description: "Search query for 'search' mode. Case-insensitive match against titles and content.")
+    @ToolParam(description: "Search query. Case-insensitive match against titles and content.")
     var query: String?
 
     func run() async throws -> Any {

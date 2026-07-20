@@ -142,14 +142,6 @@ struct ToolInfo: Identifiable {
             setEnabled: { AppDefaults.toolFetchURL.wrappedValue = $0 }
         ),
         ToolInfo(
-            id: "get_current_time",
-            displayName: "Current Time",
-            description: "Get the current date, time, timezone, and Unix timestamp.",
-            icon: "clock",
-            isEnabled: { AppDefaults.toolGetCurrentTime.wrappedValue },
-            setEnabled: { AppDefaults.toolGetCurrentTime.wrappedValue = $0 }
-        ),
-        ToolInfo(
             id: "get_location",
             displayName: "Get Location",
             description: "Get your approximate location (city, country, coordinates) via IP. No GPS permissions needed.",
@@ -166,14 +158,6 @@ struct ToolInfo: Identifiable {
             setEnabled: { AppDefaults.toolCalculator.wrappedValue = $0 }
         ),
         ToolInfo(
-            id: "open_url",
-            displayName: "Open URL",
-            description: "Open a link in the system browser (Safari).",
-            icon: "safari",
-            isEnabled: { AppDefaults.toolOpenURL.wrappedValue },
-            setEnabled: { AppDefaults.toolOpenURL.wrappedValue = $0 }
-        ),
-        ToolInfo(
             id: "wikipedia",
             displayName: "Wikipedia",
             description: "Search Wikipedia articles and get summaries. Auto-detects language.",
@@ -182,44 +166,12 @@ struct ToolInfo: Identifiable {
             setEnabled: { AppDefaults.toolWikipedia.wrappedValue = $0 }
         ),
         ToolInfo(
-            id: "device_info",
-            displayName: "Device Info",
-            description: "Get device model, OS version, battery, storage, memory, and uptime.",
-            icon: "iphone.gen3",
-            isEnabled: { AppDefaults.toolDeviceInfo.wrappedValue },
-            setEnabled: { AppDefaults.toolDeviceInfo.wrappedValue = $0 }
-        ),
-        ToolInfo(
             id: "weather",
             displayName: "Weather",
             description: "Get current weather for any city via Open-Meteo (free, no API key).",
             icon: "cloud.sun",
             isEnabled: { AppDefaults.toolWeather.wrappedValue },
             setEnabled: { AppDefaults.toolWeather.wrappedValue = $0 }
-        ),
-        ToolInfo(
-            id: "create_reminder",
-            displayName: "Create Reminder",
-            description: "Create a reminder in the system Reminders app with optional due date.",
-            icon: "bell.badge",
-            isEnabled: { AppDefaults.toolCreateReminder.wrappedValue },
-            setEnabled: { AppDefaults.toolCreateReminder.wrappedValue = $0 }
-        ),
-        ToolInfo(
-            id: "think",
-            displayName: "Deep Think",
-            description: "Lets the model pause and reason through complex problems step by step before answering.",
-            icon: "lightbulb",
-            isEnabled: { AppDefaults.toolThink.wrappedValue },
-            setEnabled: { AppDefaults.toolThink.wrappedValue = $0 }
-        ),
-        ToolInfo(
-            id: "code_sandbox",
-            displayName: "Code Sandbox",
-            description: "Execute JavaScript code in a secure sandbox for calculations, data analysis, and text processing.",
-            icon: "curlybraces",
-            isEnabled: { AppDefaults.toolCodeSandbox.wrappedValue },
-            setEnabled: { AppDefaults.toolCodeSandbox.wrappedValue = $0 }
         ),
         ToolInfo(
             id: "calendar",
@@ -238,14 +190,6 @@ struct ToolInfo: Identifiable {
             setEnabled: { AppDefaults.toolContacts.wrappedValue = $0 }
         ),
         ToolInfo(
-            id: "notes",
-            displayName: "Notes",
-            description: "Manage personal notes stored in Lamo. Create, search, read, and delete notes.",
-            icon: "note.text",
-            isEnabled: { AppDefaults.toolNotes.wrappedValue },
-            setEnabled: { AppDefaults.toolNotes.wrappedValue = $0 }
-        ),
-        ToolInfo(
             id: "shortcuts",
             displayName: "Shortcuts",
             description: "Run Siri Shortcuts to control HomeKit, send messages, or automate tasks.",
@@ -260,22 +204,6 @@ struct ToolInfo: Identifiable {
             icon: "heart.fill",
             isEnabled: { AppDefaults.toolHealth.wrappedValue },
             setEnabled: { AppDefaults.toolHealth.wrappedValue = $0 }
-        ),
-        ToolInfo(
-            id: "calendar_availability",
-            displayName: "Find Free Slots",
-            description: "Find available time slots in your calendar for scheduling meetings or planning.",
-            icon: "clock.badge.checkmark",
-            isEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue },
-            setEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue = $0 }
-        ),
-        ToolInfo(
-            id: "create_plan",
-            displayName: "Plan Tasks",
-            description: "Break complex tasks into step-by-step plans and execute them in order.",
-            icon: "checklist",
-            isEnabled: { AppDefaults.toolCreatePlan.wrappedValue },
-            setEnabled: { AppDefaults.toolCreatePlan.wrappedValue = $0 }
         ),
     ]
 }

@@ -59,12 +59,12 @@ enum AppDefaults {
     static var visualTokenBudget = UserDefault("litertLMVisualTokenBudget", default: 560)
 
     // Prompt
-    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language.\n\nCRITICAL RULES:\n1. You do NOT have real-time knowledge. For these topics you MUST call tools — never answer from memory: weather/temperature/forecast → weather tool, current time/date/day → get_current_time, math/calculations → calculator, facts/news/current events → web_search, device questions → get_device_info, location → get_location, reminders/alarms → create_reminder.\n2. For complex multi-step problems, call the think tool to reason step by step before answering.\n3. After a tool returns data, describe it using EXACT values from the result. Never invent numbers or details — the user sees the real data and will notice mismatches.\n4. Keep tool result summaries brief: 1-2 sentences maximum.\n5. If a tool returns an error or \"success\": false, tell the user it failed and what action they need to take. Never claim success on a failed tool call.\n6. Use markdown formatting when appropriate.")
+    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language.\n\nCRITICAL RULES:\n1. You do NOT have real-time knowledge. For these topics you MUST call tools — never answer from memory: weather/temperature/forecast → weather, math/calculations → calculator, facts/news/current events → web_search, location → get_location.\n2. Current date and time are provided in <current_time> — use them directly, no tool needed.\n3. After a tool returns data, describe it using EXACT values from the result. Never invent numbers or details.\n4. Use calendar tool for scheduling and date queries. Use contacts for people lookups.\n5. Be concise. Answer in 2-3 sentences unless the user asks for detail.")
 
-    // Thinking
-    static var thinkingMode = UserDefault("litertLMThinkingMode", default: false)
 
     // Memory
+    // Thinking (model-level reasoning, not a tool)
+    static var thinkingMode = UserDefault("litertLMThinkingMode", default: false)
     static var memoryEnabled = UserDefault("memoryEnabled", default: true)
 
     // Web
@@ -74,23 +74,14 @@ enum AppDefaults {
 
     static var toolWebSearch = UserDefault("tool_web_search", default: true)
     static var toolFetchURL = UserDefault("tool_fetch_url", default: true)
-    static var toolGetCurrentTime = UserDefault("tool_get_current_time", default: true)
     static var toolCalculator = UserDefault("tool_calculator", default: true)
-    static var toolOpenURL = UserDefault("tool_open_url", default: true)
     static var toolWikipedia = UserDefault("tool_wikipedia", default: true)
     static var toolGetLocation = UserDefault("tool_get_location", default: true)
-    static var toolDeviceInfo = UserDefault("tool_device_info", default: true)
     static var toolWeather = UserDefault("tool_weather", default: true)
-    static var toolThink = UserDefault("tool_think", default: true)
-    static var toolCreateReminder = UserDefault("tool_create_reminder", default: true)
 
     // MARK: Agent Tools (new)
-    static var toolCodeSandbox = UserDefault("tool_code_sandbox", default: true)
     static var toolCalendar = UserDefault("tool_calendar", default: true)
     static var toolContacts = UserDefault("tool_contacts", default: true)
-    static var toolNotes = UserDefault("tool_notes", default: true)
     static var toolShortcuts = UserDefault("tool_shortcuts", default: true)
     static var toolHealth = UserDefault("tool_health", default: true)
-    static var toolCalendarAvailability = UserDefault("tool_calendar_availability", default: true)
-    static var toolCreatePlan = UserDefault("tool_create_plan", default: true)
 }

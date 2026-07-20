@@ -6,12 +6,12 @@ import UIKit
 
 struct ShortcutsTool: Tool {
     static let name = "shortcuts"
-    static let description = "Run a Siri Shortcut by name."
+    static let description = "Run a Siri Shortcut."
 
-    @ToolParam(description: "Exact name of the shortcut to run.")
+    @ToolParam(description: "Shortcut name")
     var name: String
 
-    @ToolParam(description: "Optional text input to pass to the shortcut.")
+    @ToolParam(description: "Optional text input")
     var input: String?
 
     func run() async throws -> Any {

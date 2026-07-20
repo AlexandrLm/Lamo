@@ -8,10 +8,10 @@ struct ContactsTool: Tool {
     static let name = "contacts"
     static let description = "Search contacts by name, phone, or email."
 
-    @ToolParam(description: "Name, phone number, email, or organization to search for.")
+    @ToolParam(description: "Search by name, phone, email, or organization.")
     var query: String
 
-    @ToolParam(description: "Maximum number of contacts to return (1–20).")
+    @ToolParam(description: "Max contacts to return (1–20).")
     var maxResults: Int = 5
 
     func run() async throws -> Any {

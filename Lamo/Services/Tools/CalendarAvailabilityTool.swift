@@ -8,22 +8,22 @@ struct CalendarAvailabilityTool: Tool {
     static let name = "calendar_availability"
     static let description = "Find free time slots in your calendar."
 
-    @ToolParam(description: "Desired slot duration in minutes. Default 60 (1 hour).")
+    @ToolParam(description: "Slot duration in minutes (default 60).")
     var durationMinutes: Int = 60
 
-    @ToolParam(description: "Start of search range in YYYY-MM-DD format. Default: today.")
+    @ToolParam(description: "Search start in YYYY-MM-DD format (default today).")
     var startDate: String?
 
-    @ToolParam(description: "End of search range in YYYY-MM-DD format. Default: today + 7 days.")
+    @ToolParam(description: "Search end in YYYY-MM-DD format (default today + 7 days).")
     var endDate: String?
 
-    @ToolParam(description: "Working hours start (0–23). Slots only within working hours. Default 9.")
+    @ToolParam(description: "Working hours start, 0–23 (default 9).")
     var workHoursStart: Int = 9
 
-    @ToolParam(description: "Working hours end (0–23). Slots only within working hours. Default 18.")
+    @ToolParam(description: "Working hours end, 0–23 (default 18).")
     var workHoursEnd: Int = 18
 
-    @ToolParam(description: "Maximum number of slots to return. Default 10.")
+    @ToolParam(description: "Maximum slots to return (default 10).")
     var maxSlots: Int = 10
 
     func run() async throws -> Any {

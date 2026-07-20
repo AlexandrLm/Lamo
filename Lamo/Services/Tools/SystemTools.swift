@@ -13,69 +13,6 @@ private func reportResult(_ name: String, _ result: Any) async {
     await ToolCallReporter.shared.reportResult(name: name, result: result)
 }
 
-// MARK: - Get Current Time
-
-struct GetCurrentTimeTool: Tool {
-    static let name = "get_current_time"
-    static let description = "Get current date, time, weekday, timezone, and Unix timestamp."
-
-    @ToolParam(description: "IANA timezone name like 'Asia/Tokyo', 'Europe/London', 'America/New_York'. Leave empty for device timezone.")
-    var timezone: String?
-
-    @ToolParam(description: "Date in YYYY-MM-DD format (e.g. '2026-12-25'). Leave empty for today.")
-    var date: String?
-
-    func run() async throws -> Any {
-        await report(Self.name, params: "{\"timezone\": \(timezone.map { "\"\($0)\"" } ?? "null"), \"date\": \(date.map { "\"\($0)\"" } ?? "null")}")
-
-        let tz: TimeZone
-        if let tzID = timezone, !tzID.isEmpty, let resolved = TimeZone(identifier: tzID) {
-            tz = resolved
-        } else {
-            tz = TimeZone.current
-        }
-
-        let targetDate: Date
-        if let dateStr = date, !dateStr.isEmpty {
-            let fmtr = DateFormatter()
-            fmtr.locale = Locale(identifier: "en_US_POSIX")
-            fmtr.dateFormat = "yyyy-MM-dd"
-            fmtr.timeZone = tz
-            targetDate = fmtr.date(from: dateStr) ?? Date()
-        } else {
-            targetDate = Date()
-        }
-
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = tz
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = tz
-        let dateStr = formatter.string(from: targetDate)
-
-        formatter.dateFormat = "HH:mm:ss"
-        let timeStr = formatter.string(from: targetDate)
-
-        let weekdayFormatter = DateFormatter()
-        weekdayFormatter.locale = Locale(identifier: "en_US")
-        weekdayFormatter.dateFormat = "EEEE"
-        weekdayFormatter.timeZone = tz
-        let weekday = weekdayFormatter.string(from: targetDate)
-
-        let result: [String: Any] = [
-            "iso_date": dateStr,
-            "time": timeStr,
-            "weekday": weekday,
-            "timezone": tz.identifier,
-            "utc_offset_hours": tz.secondsFromGMT(for: targetDate) / 3600,
-            "unix_timestamp": Int(targetDate.timeIntervalSince1970),
-        ]
-        await reportResult(Self.name, result)
-        return result
-    }
-}
 
 // MARK: - Calculator
 
@@ -83,7 +20,7 @@ struct CalculatorTool: Tool {
     static let name = "calculator"
     static let description = "Evaluate math expressions. Supports +, -, *, /, %, **, sqrt, sin, cos, log, abs, round, pi, e."
 
-    @ToolParam(description: "The mathematical expression to evaluate.")
+    @ToolParam(description: "Math expression to evaluate.")
     var expression: String
 
     func run() async throws -> Any {
@@ -215,43 +152,6 @@ private enum CalcError: LocalizedError {
     var errorDescription: String? { "Invalid mathematical expression" }
 }
 
-// MARK: - Open URL
-
-struct OpenURLTool: Tool {
-    static let name = "open_url"
-    static let description = "Open a URL in browser, Mail, Maps, Phone, or FaceTime."
-
-    @ToolParam(description: "The URL to open. Supported schemes: http, https, mailto, maps, tel, facetime.")
-    var url: String
-
-    func run() async throws -> Any {
-        await report(Self.name, params: "{\"url\": \"\(url)\"}")
-
-        guard let nsurl = URL(string: url) else {
-            let result: [String: Any] = ["error": "Invalid URL format."]
-            await reportResult(Self.name, result)
-            return result
-        }
-
-        let allowed = ["http", "https", "mailto", "maps", "tel", "facetime"]
-        guard let scheme = nsurl.scheme?.lowercased(), allowed.contains(scheme) else {
-            let result: [String: Any] = ["error": "Unsupported URL scheme. Allowed: \(allowed.joined(separator: ", "))"]
-            await reportResult(Self.name, result)
-            return result
-        }
-
-        guard await UIApplication.shared.canOpenURL(nsurl) else {
-            let result: [String: Any] = ["error": "Cannot open URL: \(url). The app may not be installed."]
-            await reportResult(Self.name, result)
-            return result
-        }
-
-        let opened = await MainActor.run { UIApplication.shared.open(nsurl) }
-        let result: [String: Any] = ["opened": opened, "url": url]
-        await reportResult(Self.name, result)
-        return result
-    }
-}
 
 // MARK: - Wikipedia
 
@@ -259,19 +159,19 @@ struct WikipediaTool: Tool {
     static let name = "wikipedia"
     static let description = "Search Wikipedia articles or get article summaries."
 
-    @ToolParam(description: "The search query or article title.")
+    @ToolParam(description: "Search query or article title.")
     var query: String
 
-    @ToolParam(description: #"Either "search" to find matching articles, or "extract" to get a summary of a specific article."#)
+    @ToolParam(description: "\"search\" or \"extract\".")
     var mode: String = "search"
 
-    @ToolParam(description: "Language code (e.g. 'en', 'ru', 'de', 'fr'). Default 'en'.")
+    @ToolParam(description: "Wikipedia language code.")
     var language: String = "en"
 
-    @ToolParam(description: "Maximum search results (1-10). Default 5. Only applies to 'search' mode.")
+    @ToolParam(description: "Max search results (1-10).")
     var maxResults: Int = 5
 
-    @ToolParam(description: "Return the full article instead of just the intro paragraph. Only applies to 'extract' mode. Default false.")
+    @ToolParam(description: "Return full article text.")
     var fullExtract: Bool = false
 
     func run() async throws -> Any {
@@ -356,73 +256,6 @@ struct WikipediaTool: Tool {
     }
 }
 
-// MARK: - Device Info
-
-struct DeviceInfoTool: Tool {
-    static let name = "get_device_info"
-    static let description = "Get device model, OS version, battery, storage, and memory."
-
-    func run() async throws -> Any {
-        await report(Self.name, params: "{}")
-
-        let device = UIDevice.current
-        device.isBatteryMonitoringEnabled = true
-        defer { device.isBatteryMonitoringEnabled = false }
-
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        let processInfo = ProcessInfo.processInfo
-
-        let result: [String: Any] = [
-            "device_name": device.name,
-            "device_model": device.model,
-            "device_model_identifier": Self.deviceModelIdentifier(),
-            "system_name": device.systemName,
-            "system_version": device.systemVersion,
-            "battery_level": Int(device.batteryLevel * 100),
-            "battery_state": batteryStateString(device.batteryState),
-            "total_storage": totalDiskSpace().map { formatter.string(fromByteCount: $0) } ?? "unknown",
-            "free_storage": freeDiskSpace().map { formatter.string(fromByteCount: $0) } ?? "unknown",
-            "physical_memory_gb": String(format: "%.1f", Double(processInfo.physicalMemory) / 1_073_741_824),
-            "processor_count": processInfo.processorCount,
-            "uptime_seconds": Int(processInfo.systemUptime),
-            "is_low_power_mode": processInfo.isLowPowerModeEnabled,
-        ]
-        await reportResult(Self.name, result)
-        return result
-    }
-
-    /// Returns the real device model identifier (e.g. "iPhone18,1").
-    private static func deviceModelIdentifier() -> String {
-        var systemInfo = utsname()
-        uname(&systemInfo)
-        return withUnsafePointer(to: &systemInfo.machine) {
-            $0.withMemoryRebound(to: CChar.self, capacity: Int(_SYS_NAMELEN)) {
-                String(cString: $0)
-            }
-        }
-    }
-
-    private func batteryStateString(_ state: UIDevice.BatteryState) -> String {
-        switch state {
-        case .unknown: return "unknown"
-        case .unplugged: return "unplugged"
-        case .charging: return "charging"
-        case .full: return "full"
-        @unknown default: return "unknown"
-        }
-    }
-    private func totalDiskSpace() -> Int64? {
-        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-              let total = attrs[.systemSize] as? Int64 else { return nil }
-        return total
-    }
-    private func freeDiskSpace() -> Int64? {
-        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-              let free = attrs[.systemFreeSize] as? Int64 else { return nil }
-        return free
-    }
-}
 
 // MARK: - Get Location (CoreLocation)
 
@@ -430,7 +263,7 @@ struct GetLocationTool: Tool {
     static let name = "get_location"
     static let description = "Get GPS or IP-based current location (city, coordinates)."
 
-    @ToolParam(description: "If true, skip GPS and use IP-based location only (faster, less accurate). Default false.")
+    @ToolParam(description: "Use IP only (faster, less accurate).")
     var ipOnly: Bool = false
 
     func run() async throws -> Any {
@@ -461,10 +294,10 @@ struct WeatherTool: Tool {
     static let name = "weather"
     static let description = "Get current weather and multi-day forecast for any city."
 
-    @ToolParam(description: "City name (e.g. 'London', 'Tokyo', 'Moscow'). Leave empty to auto-detect your location.")
+    @ToolParam(description: "City name. Empty for auto-detect.")
     var city: String = ""
 
-    @ToolParam(description: "Number of forecast days (1-7). Default 7 for a full week forecast.")
+    @ToolParam(description: "Forecast days (1-7).")
     var days: Int = 7
 
     func run() async throws -> Any {
@@ -595,232 +428,3 @@ private enum WeatherError: LocalizedError {
     }
 }
 
-// MARK: - Create Reminder
-
-struct CreateReminderTool: Tool {
-    static let name = "create_reminder"
-    static let description = "Create a reminder in the Reminders app with optional due date."
-
-    @ToolParam(description: "The reminder title — what to remind about.")
-    var title: String
-
-    @ToolParam(description: "Optional notes or details for the reminder.")
-    var notes: String?
-
-    @ToolParam(description: #"Due date. ISO 8601 (e.g. "2026-07-17T18:00:00") or relative (e.g. "tomorrow 10am", "in 30 minutes", "next Friday"). If not provided, creates a reminder without a due date."#)
-    var dueDate: String?
-
-    @ToolParam(description: "Priority: 0=none, 1=low, 5=medium, 9=high. Default 0.")
-    var priority: Int = 0
-
-
-    func run() async throws -> Any {
-        await report(Self.name, params: "{\"title\": \"\(title)\"\(notes.map { ", \"notes\": \"\($0)\"" } ?? "")\(dueDate.map { ", \"dueDate\": \"\($0)\"" } ?? "")}")
-
-        let store = EKEventStore()
-        let granted: Bool
-        if #available(iOS 17.0, *) {
-            granted = try await store.requestFullAccessToReminders()
-        } else {
-            granted = try await store.requestAccess(to: .reminder)
-        }
-        guard granted else {
-            let result: [String: Any] = ["success": false, "error": "FAILED: Reminders access denied. The user must enable Reminders in Settings > Privacy > Reminders."]
-            await reportResult(Self.name, result)
-            return result
-        }
-
-        let parsedDate: Date?
-        if let dueDate {
-            parsedDate = Self.parseDate(dueDate)
-        } else {
-            parsedDate = nil
-        }
-
-        return try await MainActor.run {
-            let reminder = EKReminder(eventStore: store)
-            reminder.title = title
-            if let notes, !notes.isEmpty { reminder.notes = notes }
-            if let parsedDate {
-                reminder.dueDateComponents = Calendar.current.dateComponents(
-                    [.year, .month, .day, .hour, .minute], from: parsedDate
-                )
-            }
-            reminder.calendar = store.defaultCalendarForNewReminders()
-            let clampedPriority = max(0, min(priority, 9))
-            reminder.priority = clampedPriority
-
-            do {
-                try store.save(reminder, commit: true)
-                let result: [String: Any] = [
-                    "status": "created",
-                    "title": title,
-                    "due_date": dueDate as Any,
-                    "priority": clampedPriority,
-                    "reminder_id": reminder.calendarItemIdentifier,
-                ]
-                Task { await reportResult(Self.name, result) }
-                return result
-            } catch {
-                let result: [String: Any] = ["error": "Failed to save reminder: \(error.localizedDescription)"]
-                Task { await reportResult(Self.name, result) }
-                return result
-            }
-        }
-    }
-
-    // MARK: - Date Parsing
-
-    /// Parses ISO 8601 and common relative date expressions.
-    private static func parseDate(_ raw: String) -> Date? {
-        // 1. ISO 8601 with fractional seconds
-        let fmtr = ISO8601DateFormatter()
-        fmtr.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fmtr.date(from: raw) { return date }
-        // 2. ISO 8601 without fractional seconds
-        let fmtr2 = ISO8601DateFormatter()
-        fmtr2.formatOptions = [.withInternetDateTime]
-        if let date = fmtr2.date(from: raw) { return date }
-
-        // 3. Relative date patterns
-        let now = Date()
-        let cal = Calendar.current
-        let lower = raw.lowercased().trimmingCharacters(in: .whitespaces)
-
-        // "in N minutes/hours/days"
-        let inPattern = try? NSRegularExpression(
-            pattern: #"^in\s+(\d+)\s+(minute|minutes|hour|hours|day|days|week|weeks|month|months)$"#,
-            options: .caseInsensitive
-        )
-        if let match = inPattern?.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
-           let numRange = Range(match.range(at: 1), in: lower),
-           let unitRange = Range(match.range(at: 2), in: lower),
-           let num = Int(lower[numRange]) {
-            let unit = String(lower[unitRange])
-            let components: DateComponents
-            switch unit {
-            case "minute", "minutes": components = DateComponents(minute: num)
-            case "hour", "hours": components = DateComponents(hour: num)
-            case "day", "days": components = DateComponents(day: num)
-            case "week", "weeks": components = DateComponents(day: num * 7)
-            case "month", "months": components = DateComponents(month: num)
-            default: return nil
-            }
-            return cal.date(byAdding: components, to: now)
-        }
-
-        // "tomorrow", "tomorrow 10am", "tomorrow 3pm"
-        if lower.hasPrefix("tomorrow") {
-            var base = cal.date(byAdding: .day, value: 1, to: now) ?? now
-            base = cal.startOfDay(for: base)
-            if let time = extractTime(from: raw) {
-                base = cal.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: base) ?? base
-            }
-            return base
-        }
-
-        // "today 10am", "today 3pm"
-        if lower.hasPrefix("today") {
-            var base = cal.startOfDay(for: now)
-            if let time = extractTime(from: raw) {
-                base = cal.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: base) ?? base
-            }
-            return base
-        }
-
-        // "next monday", "next friday 2pm"
-        let nextPattern = try? NSRegularExpression(
-            pattern: #"^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)"#,
-            options: .caseInsensitive
-        )
-        if let match = nextPattern?.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
-           let dayRange = Range(match.range(at: 1), in: lower) {
-            let dayName = String(lower[dayRange])
-            if let target = nextWeekday(named: dayName, from: now) {
-                if let time = extractTime(from: raw) {
-                    return cal.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: target)
-                }
-                return target
-            }
-        }
-
-        // "at 10am", "at 3:30pm", "10:00", "3pm"
-        if let time = extractTime(from: raw) {
-            return cal.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: now)
-        }
-
-        // "10am", "3pm" (bare time)
-        if let time = extractTime(from: raw) {
-            return cal.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: now)
-        }
-
-        return nil
-    }
-
-    /// Extracts (hour, minute) from strings like "10am", "3:30pm", "14:00".
-    private static func extractTime(from raw: String) -> (hour: Int, minute: Int)? {
-        let lower = raw.lowercased().trimmingCharacters(in: .whitespaces)
-
-        // "10:30am", "3:30pm", "14:00"
-        let hhmmPattern = try? NSRegularExpression(
-            pattern: #"(\d{1,2}):(\d{2})\s*(am|pm)?"#,
-            options: .caseInsensitive
-        )
-        if let match = hhmmPattern?.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
-           let hRange = Range(match.range(at: 1), in: lower),
-           let mRange = Range(match.range(at: 2), in: lower),
-           let hour = Int(lower[hRange]), let minute = Int(lower[mRange]) {
-            let ampmRange = match.range(at: 3)
-            let isPM = ampmRange.location != NSNotFound
-                && String(lower[Range(ampmRange, in: lower)!]) == "pm"
-            let adjustedHour: Int
-            if isPM && hour < 12 { adjustedHour = hour + 12 }
-            else if !isPM && hour == 12 { adjustedHour = 0 }
-            else { adjustedHour = hour }
-            return (adjustedHour, minute)
-        }
-
-        // "10am", "3pm"
-        let hPattern = try? NSRegularExpression(
-            pattern: #"(\d{1,2})\s*(am|pm)"#,
-            options: .caseInsensitive
-        )
-        if let match = hPattern?.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
-           let hRange = Range(match.range(at: 1), in: lower),
-           let hour = Int(lower[hRange]) {
-            let ampmRange = match.range(at: 2)
-            let isPM = ampmRange.location != NSNotFound
-                && String(lower[Range(ampmRange, in: lower)!]) == "pm"
-            let adjustedHour: Int
-            if isPM && hour < 12 { adjustedHour = hour + 12 }
-            else if !isPM && hour == 12 { adjustedHour = 0 }
-            else { adjustedHour = hour }
-            return (adjustedHour, 0)
-        }
-
-        return nil
-    }
-
-    /// Returns the date of the next occurrence of a weekday.
-    private static func nextWeekday(named: String, from date: Date) -> Date? {
-        let cal = Calendar.current
-        let target: Int
-        switch named {
-        case "sunday": target = 1
-        case "monday": target = 2
-        case "tuesday": target = 3
-        case "wednesday": target = 4
-        case "thursday": target = 5
-        case "friday": target = 6
-        case "saturday": target = 7
-        default: return nil
-        }
-        var components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
-        components.weekday = target
-        guard var result = cal.date(from: components) else { return nil }
-        if result <= date {
-            result = cal.date(byAdding: .day, value: 7, to: result) ?? result
-        }
-        return cal.startOfDay(for: result)
-    }
-}

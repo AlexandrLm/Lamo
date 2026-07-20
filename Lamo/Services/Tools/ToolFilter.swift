@@ -21,30 +21,21 @@ enum ToolFilter {
 
     /// Maps tool name → categories. Tools can belong to multiple categories.
     private static let toolCategories: [String: Set<Category>] = [
-        "get_current_time":       [.core],
         "calculator":             [.code, .core],
-        "think":                  [.core],
 
         "web_search":             [.knowledge],
         "wikipedia":              [.knowledge],
         "fetch_url":              [.knowledge],
 
         "calendar":               [.productivity],
-        "calendar_availability":  [.productivity],
         "contacts":               [.productivity],
-        "notes":                  [.productivity],
-        "create_reminder":        [.productivity],
         "update_memory":          [.productivity],
 
-        "get_device_info":        [.system],
         "get_location":           [.system],
         "weather":                [.system],
-        "open_url":               [.system],
         "shortcuts":              [.system],
 
         "health":                 [.health],
-
-        "code_sandbox":           [.code],
     ]
 
     /// Keywords that trigger each category (lowercased). Matched against the user's query.
@@ -79,7 +70,7 @@ enum ToolFilter {
 
     /// Determine which tool names to include based on the user's last message.
     /// Always includes `.core` tools. Adds categories whose keywords match the query.
-    /// If no specific intent is detected, includes ALL tools (conservative fallback).
+    /// If no specific intent is detected, returns only `.core` tools (no bloat).
     static func filter(toolNames: [String], query: String) -> [String] {
         let lowerQuery = query.lowercased()
 
@@ -92,23 +83,22 @@ enum ToolFilter {
             }
         }
 
-        // If no specific categories matched (only .core), return ALL tools
-        // (conservative: better to have extra tools than miss the right one)
+        // If no specific categories matched (only .core), return only core tools.
+        // This prevents context bloat on vague/greeting queries.
         if activeCategories.count == 1 {
-            return toolNames
+            let coreOnly = toolNames.filter { name in
+                guard let cats = toolCategories[name] else { return false }
+                return cats.contains(.core)
+            }
+            return coreOnly.isEmpty ? toolNames : coreOnly
         }
 
         // Filter: keep tools that belong to any active category
         let filtered = toolNames.filter { name in
             guard let cats = toolCategories[name] else {
-                return true // unknown tools: keep (conservative)
+                return false // unknown tools: drop (conservative)
             }
             return !cats.isDisjoint(with: activeCategories)
-        }
-
-        // Safety: if filtering removed everything except core, fall back to all
-        if filtered.count <= 3 {
-            return toolNames
         }
 
         return filtered

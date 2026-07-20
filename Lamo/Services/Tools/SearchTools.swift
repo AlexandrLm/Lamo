@@ -7,13 +7,13 @@ struct WebSearchTool: Tool {
     static let name = "web_search"
     static let description = "Search the internet. Returns titles, snippets, and URLs."
 
-    @ToolParam(description: "The search query to look up on the internet.")
+    @ToolParam(description: "Search query string.")
     var query: String
 
-    @ToolParam(description: "Maximum number of results to return. Default is 5.")
+    @ToolParam(description: "Max results to return.")
     var maxResults: Int = 5
 
-    @ToolParam(description: "Filter by time: 'day', 'week', 'month', or 'year'. Leave empty for any time.")
+    @ToolParam(description: "Time filter: day, week, month, year.")
     var timeRange: String?
 
     func run() async throws -> Any {
@@ -96,7 +96,7 @@ struct FetchUrlTool: Tool {
     static let name = "fetch_url"
     static let description = "Fetch and extract content from a URL."
 
-    @ToolParam(description: "The URL to fetch content from.")
+    @ToolParam(description: "URL to fetch content from.")
     var url: String
 
     func run() async throws -> Any {
