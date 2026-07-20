@@ -45,15 +45,18 @@ struct ContextDetailView: View {
         if let tracker {
             NavigationStack {
                 ScrollView {
-                    VStack(spacing: LamoTheme.Spacing.md) {
-                        heroCard(tracker)
-                        systemCard
-                        breakdownCard(tracker)
-                        messageCard(tracker)
+                    VStack(spacing: 28) {
+                        heroSection(tracker)
+                        Divider().opacity(0.08)
+                        systemSection
+                        Divider().opacity(0.08)
+                        breakdownSection(tracker)
+                        Divider().opacity(0.08)
+                        messagesSection(tracker)
                     }
-                    .padding(.horizontal, LamoTheme.Spacing.lg)
-                    .padding(.top, LamoTheme.Spacing.md)
-                    .padding(.bottom, LamoTheme.Spacing.xxxl)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 48)
                 }
                 .navigationTitle("Context")
                 .navigationBarTitleDisplayMode(.inline)
@@ -85,91 +88,451 @@ struct ContextDetailView: View {
 
     // MARK: - Hero
 
-    private func heroCard(_ t: ContextTracker) -> some View {
-        VStack(spacing: LamoTheme.Spacing.lg) {
+    private func heroSection(_ t: ContextTracker) -> some View {
+        VStack(spacing: 24) {
             // Ring
             ZStack {
+                // Track
+                Circle()
+                    .stroke(.white.opacity(0.06), lineWidth: 12)
+                    .frame(width: 148, height: 148)
+
+                // Filled arc
                 Circle()
                     .trim(from: 0, to: t.fillRatio)
                     .stroke(
                         AngularGradient(
-                            gradient: Gradient(colors: [ringColor(t), ringColor(t).opacity(0.3)]),
-                            center: .center, startAngle: .degrees(-90),
+                            gradient: Gradient(colors: [
+                                LamoTheme.Colors.accent,
+                                LamoTheme.Colors.accent.opacity(0.7),
+                                LamoTheme.Colors.accent.opacity(0.3)
+                            ]),
+                            center: .center,
+                            startAngle: .degrees(-90),
                             endAngle: .degrees(-90 + 360 * max(t.fillRatio, 0.01))
                         ),
-                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
-                    .frame(width: 112, height: 112)
+                    .frame(width: 148, height: 148)
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: ringColor(t).opacity(0.3), radius: 8)
+                    .shadow(color: LamoTheme.Colors.accent.opacity(0.4), radius: 16, y: 0)
 
-                VStack(spacing: 1) {
+                // Glow dot at end of arc
+                if t.fillRatio > 0.01 {
+                    Circle()
+                        .fill(LamoTheme.Colors.accent)
+                        .frame(width: 8, height: 8)
+                        .offset(y: -74)
+                        .rotationEffect(.degrees(360 * t.fillRatio))
+                        .blur(radius: 4)
+                        .opacity(0.7)
+                }
+
+                // Center text
+                VStack(spacing: 0) {
                     Text("\(Int(t.fillRatio * 100))")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("% full")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.25))
+                    Text("%")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(LamoTheme.Colors.accent.opacity(0.7))
                 }
             }
-            .padding(.top, LamoTheme.Spacing.sm)
+            .padding(.top, 8)
 
-            // Stats
-            HStack(spacing: 0) {
-                statCell(icon: "arrow.up.doc", value: ContextTracker.formatTokens(t.usedTokens), label: "Used")
-                statCell(icon: "tray", value: ContextTracker.formatTokens(t.headroom), label: "Free")
-                statCell(icon: "drop.halffull", value: ContextTracker.formatTokens(t.totalLimit), label: "Limit")
+            // Stats row
+            HStack(spacing: 12) {
+                statPill(
+                    icon: "arrow.up.doc",
+                    value: ContextTracker.formatTokens(t.usedTokens),
+                    label: "Used",
+                    color: t.fillRatio >= 0.9 ? .orange : LamoTheme.Colors.accent
+                )
+                statPill(
+                    icon: "tray",
+                    value: ContextTracker.formatTokens(t.headroom),
+                    label: "Free",
+                    color: .white.opacity(0.5)
+                )
+                statPill(
+                    icon: "drop.halffull",
+                    value: ContextTracker.formatTokens(t.totalLimit),
+                    label: "Limit",
+                    color: .white.opacity(0.3)
+                )
             }
 
+            // Dropped warning
             if t.hasDroppedMessages {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle.fill").font(.caption2)
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
                     Text("Older messages dropped to fit context")
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced))
                 }
-                .foregroundStyle(.orange.opacity(0.6))
+                .foregroundStyle(.orange.opacity(0.7))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.orange.opacity(0.08), in: Capsule())
             }
         }
-        .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - System Metrics
+    // MARK: - System
 
-    private var systemCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("System", icon: "gauge.with.dots.needle.50percent")
+    private var systemSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "gauge.with.dots.needle.50percent")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                Text("System".uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(LamoTheme.Colors.accent.opacity(0.8))
+                    .tracking(1)
+            }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: LamoTheme.Spacing.sm) {
-                metricCell(icon: "cpu", value: metrics.modelName, label: "MODEL", color: LamoTheme.Colors.accent.opacity(0.8))
-                metricCell(icon: "bolt.fill", value: metrics.backend, label: "BACKEND", color: .white.opacity(0.6))
-                metricCell(icon: metrics.batteryIcon, value: metrics.batteryString, label: "BATTERY", color: batteryColor)
-                metricCell(icon: "memorychip", value: metrics.memoryString, label: "MEMORY", color: memoryColor)
-                metricCell(icon: "cpu", value: metrics.cpuString, label: "CPU", color: cpuColor)
-                metricCell(icon: "thermometer.medium", value: metrics.thermalString, label: "THERMAL", color: thermalColor)
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible())],
+                spacing: 10
+            ) {
+                metricTile(
+                    icon: "cpu",
+                    value: metrics.modelName,
+                    label: "Model",
+                    color: LamoTheme.Colors.accent.opacity(0.9)
+                )
+                metricTile(
+                    icon: "bolt.fill",
+                    value: metrics.backend,
+                    label: "Backend",
+                    color: .white.opacity(0.6)
+                )
+                metricTile(
+                    icon: metrics.batteryIcon,
+                    value: metrics.batteryString,
+                    label: "Battery",
+                    color: batteryColor
+                )
+                metricTile(
+                    icon: "memorychip",
+                    value: metrics.memoryString,
+                    label: "Memory",
+                    color: memoryColor
+                )
+                metricTile(
+                    icon: "cpu",
+                    value: metrics.cpuString,
+                    label: "CPU",
+                    color: cpuColor
+                )
+                metricTile(
+                    icon: "thermometer.medium",
+                    value: metrics.thermalString,
+                    label: "Thermal",
+                    color: thermalColor
+                )
             }
         }
-        .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func metricCell(icon: String, value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 3) {
-                Image(systemName: icon).font(.system(size: 9))
-                Text(value)
-                    .font(.system(size: 10, design: .monospaced).weight(.bold))
-                    .lineLimit(1).truncationMode(.middle)
-            }
-            .foregroundStyle(color)
-            Text(label)
-                .font(.system(size: 8, design: .monospaced))
+    private func metricTile(icon: String, value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(color)
+                .frame(height: 18)
+            Text(value)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(label.uppercased())
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.25))
-                .textCase(.uppercase)
+                .tracking(0.5)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 6)
+        .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Breakdown
+
+    private func breakdownSection(_ t: ContextTracker) -> some View {
+        let total = max(t.budgetTokens, 1)
+        let msgTok = t.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }
+
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                Text("Breakdown".uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(LamoTheme.Colors.accent.opacity(0.8))
+                    .tracking(1)
+            }
+
+            // Stacked bar
+            barChart(t, total: total)
+
+            // Legend
+            HStack(spacing: 16) {
+                legendDot(color: .white, label: "System")
+                if t.memoryTokens > 0 {
+                    legendDot(color: LamoTheme.Colors.accent, label: "Memory")
+                }
+                if t.toolTokens > 0 {
+                    legendDot(color: .orange, label: "Tools")
+                }
+                legendDot(color: .white.opacity(0.3), label: "Messages")
+                legendDot(color: .white.opacity(0.1), label: "Buffer")
+            }
+
+            thinDivider
+
+            // Rows
+            breakdownRow(icon: "terminal", label: "System prompt", tokens: t.systemPromptTokens, total: total)
+            if t.memoryTokens > 0 {
+                breakdownRow(icon: "brain", label: "Memory facts", tokens: t.memoryTokens, total: total)
+            }
+            if t.toolTokens > 0 {
+                let label = t.toolCountTotal > t.toolCount
+                    ? "Tools (\(t.toolCount)/\(t.toolCountTotal))"
+                    : "Tools (\(t.toolCount))"
+                breakdownRow(icon: "wrench.and.screwdriver", label: label, tokens: t.toolTokens, total: total)
+            }
+            breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", tokens: msgTok, total: total)
+            breakdownRow(icon: "arrowshape.down", label: "Reply buffer", tokens: t.reservedForReply, total: total, isEstimate: true)
+
+            thinDivider
+
+            breakdownRow(icon: "sum", label: "Total used", tokens: t.usedTokens, total: total, bold: true)
+            breakdownRow(icon: "tray.full", label: "Budget limit", tokens: t.totalLimit, total: total, muted: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func barChart(_ t: ContextTracker, total: Int) -> some View {
+        let totalD = Double(max(total, 1))
+        let sysW = Double(t.systemPromptTokens) / totalD
+        let memW = Double(t.memoryTokens) / totalD
+        let toolW = Double(t.toolTokens) / totalD
+        let msgTok = t.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }
+        let msgW = Double(msgTok) / totalD
+        let bufW = Double(t.reservedForReply) / totalD
+
+        return GeometryReader { geo in
+            HStack(spacing: 2) {
+                if sysW > 0 {
+                    Rectangle().fill(.white.opacity(0.9))
+                        .frame(width: geo.size.width * sysW)
+                }
+                if memW > 0 {
+                    Rectangle().fill(LamoTheme.Colors.accent.opacity(0.8))
+                        .frame(width: geo.size.width * memW)
+                }
+                if toolW > 0 {
+                    Rectangle().fill(.orange.opacity(0.7))
+                        .frame(width: geo.size.width * toolW)
+                }
+                if msgW > 0 {
+                    Rectangle().fill(.white.opacity(0.25))
+                        .frame(width: geo.size.width * msgW)
+                }
+                if bufW > 0 {
+                    Rectangle().fill(.white.opacity(0.08))
+                        .frame(width: geo.size.width * bufW)
+                }
+            }
+        }
+        .frame(height: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func breakdownRow(
+        icon: String,
+        label: String,
+        tokens: Int,
+        total: Int,
+        isEstimate: Bool = false,
+        bold: Bool = false,
+        muted: Bool = false
+    ) -> some View {
+        let pct = total > 0 ? Int(Double(tokens) / Double(total) * 100) : 0
+        return HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(muted ? .white.opacity(0.3) : LamoTheme.Colors.accent.opacity(0.6))
+                .frame(width: 20)
+
+            Text(label)
+                .font(.system(size: 13, design: .monospaced).weight(bold ? .semibold : .regular))
+                .foregroundStyle(muted ? .white.opacity(0.3) : .white.opacity(bold ? 0.9 : 0.7))
+
+            if !muted {
+                Text("\(pct)%")
+                    .font(.system(size: 10, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.2))
+            }
+
+            Spacer()
+
+            Text("\(isEstimate ? "~" : "")\(ContextTracker.formatTokens(tokens))")
+                .font(.system(size: 13, design: .monospaced).weight(bold ? .bold : .semibold))
+                .foregroundStyle(
+                    bold
+                        ? LamoTheme.Colors.accent
+                        : muted
+                        ? .white.opacity(0.3)
+                        : .white.opacity(0.6)
+                )
+        }
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Messages
+
+    private func messagesSection(_ t: ContextTracker) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LamoTheme.Colors.accent)
+                Text("Messages".uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(LamoTheme.Colors.accent.opacity(0.8))
+                    .tracking(1)
+                Spacer()
+                Text("\(t.includedCount)/\(t.totalCountExcludingStreaming) in context")
+                    .font(.system(size: 10, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.25))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.05), in: Capsule())
+            }
+
+            ForEach(Array(t.messageUsages.enumerated()), id: \.element.id) { i, msg in
+                if i > 0 {
+                    Rectangle()
+                        .fill(.white.opacity(0.05))
+                        .frame(height: 0.5)
+                        .padding(.leading, 26)
+                }
+                messageRow(msg)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func messageRow(_ msg: ContextTracker.MessageUsage) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Role dot
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(
+                        msg.role == "user"
+                            ? .white.opacity(0.4)
+                            : LamoTheme.Colors.accent.opacity(0.6)
+                    )
+                    .frame(width: 7, height: 7)
+                    .padding(.top, 4)
+            }
+
+            // Content
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(msg.role == "user" ? "You" : "AI")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(
+                            msg.role == "user"
+                                ? .white.opacity(0.25)
+                                : LamoTheme.Colors.accent.opacity(0.6)
+                        )
+                        .textCase(.uppercase)
+
+                    Text("\(msg.charCount) chars")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.18))
+                    Text("·")
+                        .foregroundStyle(.white.opacity(0.15))
+                    Text(ContextTracker.formatTokens(msg.tokenCount))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.18))
+                }
+
+                Text(msg.preview.isEmpty ? "—" : msg.preview)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(msg.isInContext ? .white.opacity(0.75) : .white.opacity(0.25))
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            // Status
+            if msg.isStreaming {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(LamoTheme.Colors.accent)
+                        .frame(width: 4, height: 4)
+                    Text("now")
+                        .font(.system(size: 9, design: .monospaced).weight(.medium))
+                }
+                .foregroundStyle(LamoTheme.Colors.accent.opacity(0.7))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(LamoTheme.Colors.accent.opacity(0.08), in: Capsule())
+            } else if !msg.isInContext {
+                Text("dropped")
+                    .font(.system(size: 9, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.2))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.04), in: Capsule())
+            }
+        }
         .padding(.vertical, 8)
-        .clipShape(RoundedRectangle(cornerRadius: LamoTheme.CornerRadius.sm))
+    }
+
+    // MARK: - Helpers
+
+    private func statPill(icon: String, value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 8, weight: .medium))
+                Text(label)
+                    .font(.system(size: 10, design: .monospaced).weight(.medium))
+            }
+            .foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func legendDot(color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.3))
+        }
+    }
+
+    private var thinDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.06))
+            .frame(height: 0.5)
     }
 
     private var memoryColor: Color {
@@ -200,195 +563,10 @@ struct ContextDetailView: View {
         return .white.opacity(0.6)
     }
 
-    // MARK: - Breakdown
-
-    private func breakdownCard(_ t: ContextTracker) -> some View {
-        let total = max(t.budgetTokens, 1)
-        let sysW = Double(t.systemPromptTokens) / Double(total)
-        let memW = Double(t.memoryTokens) / Double(total)
-        let toolW = Double(t.toolTokens) / Double(total)
-        let msgTok = t.messageUsages.filter { $0.isInContext && !$0.isStreaming }.reduce(0) { $0 + $1.tokenCount }
-        let msgW = Double(msgTok) / Double(total)
-        let bufW = Double(t.reservedForReply) / Double(total)
-        return VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("Breakdown", icon: "chart.bar.fill")
-
-            GeometryReader { geo in
-                HStack(spacing: 1) {
-                    if sysW > 0 { Rectangle().fill(.white).frame(width: geo.size.width * sysW) }
-                    if memW > 0 { Rectangle().fill(LamoTheme.Colors.accent.opacity(0.6)).frame(width: geo.size.width * memW) }
-                    if toolW > 0 { Rectangle().fill(.orange.opacity(0.5)).frame(width: geo.size.width * toolW) }
-                    if msgW > 0 { Rectangle().fill(.white.opacity(0.3)).frame(width: geo.size.width * msgW) }
-                    if bufW > 0 { Rectangle().fill(.white.opacity(0.1)).frame(width: geo.size.width * bufW) }
-                }
-            }
-            .frame(height: 8)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .padding(.bottom, LamoTheme.Spacing.sm)
-
-            HStack(spacing: 14) {
-                legendDot(color: .white, label: "System")
-                if t.memoryTokens > 0 { legendDot(color: LamoTheme.Colors.accent, label: "Memory") }
-                if t.toolTokens > 0 { legendDot(color: .orange, label: "Tools") }
-                legendDot(color: .white.opacity(0.3), label: "Messages")
-                legendDot(color: .white.opacity(0.1), label: "Buffer")
-            }
-
-            thinDivider.padding(.vertical, LamoTheme.Spacing.sm)
-
-            breakdownRow(icon: "terminal", label: "System prompt", value: t.systemPromptTokens)
-            if t.memoryTokens > 0 {
-                breakdownRow(icon: "brain", label: "Memory facts", value: t.memoryTokens)
-            }
-            if t.toolTokens > 0 {
-                let label = t.toolCountTotal > t.toolCount
-                    ? "Tools (\(t.toolCount)/\(t.toolCountTotal) active)"
-                    : "Tools (\(t.toolCount))"
-                breakdownRow(icon: "wrench.and.screwdriver", label: label, value: t.toolTokens)
-            }
-            breakdownRow(icon: "bubble.left.and.bubble.right", label: "Messages", value: msgTok)
-            breakdownRow(icon: "arrowshape.down", label: "Reply buffer", value: t.reservedForReply, isEstimate: true)
-            thinDivider.padding(.vertical, LamoTheme.Spacing.sm)
-            breakdownRow(icon: "sum", label: "Total used", value: t.usedTokens)
-            breakdownRow(icon: "tray.full", label: "Budget limit", value: t.totalLimit)
-        }
-        .padding(LamoTheme.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func breakdownRow(icon: String, label: String, value: Int, isEstimate: Bool = false) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundStyle(LamoTheme.Colors.accent.opacity(0.6))
-                .frame(width: 18)
-            Text(label)
-                .font(.system(.subheadline, design: .monospaced))
-                .foregroundStyle(.white)
-            Spacer()
-            Text("\(isEstimate ? "~" : "")\(ContextTracker.formatTokens(value))")
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(.white.opacity(0.5))
-        }
-        .padding(.vertical, 8)
-    }
-
-    // MARK: - Messages
-
-    private func messageCard(_ t: ContextTracker) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                sectionLabel("Messages", icon: "bubble.left.and.bubble.right")
-                Spacer()
-                Text("\(t.includedCount)/\(t.totalCountExcludingStreaming) in context")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.3))
-            }
-            .padding(.bottom, LamoTheme.Spacing.sm)
-
-            ForEach(Array(t.messageUsages.enumerated()), id: \.element.id) { i, msg in
-                if i > 0 { thinDivider }
-                messageRow(msg)
-            }
-        }
-        .padding(LamoTheme.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func messageRow(_ msg: ContextTracker.MessageUsage) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            // Role indicator
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(msg.role == "user" ? .white.opacity(0.3) : LamoTheme.Colors.accent.opacity(0.4))
-                    .frame(width: 8, height: 8)
-                    .padding(.top, 5)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                // Role label
-                Text(msg.role == "user" ? "You" : "AI")
-                    .font(.system(size: 9, design: .monospaced).weight(.bold))
-                    .foregroundStyle(msg.role == "user" ? .white.opacity(0.25) : LamoTheme.Colors.accent.opacity(0.5))
-                    .textCase(.uppercase)
-
-                // Preview
-                Text(msg.preview.isEmpty ? "—" : msg.preview)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(msg.isInContext ? .white.opacity(0.8) : .white.opacity(0.3))
-                    .lineLimit(2)
-
-                // Meta
-                HStack(spacing: 6) {
-                    Text("\(msg.charCount) chars")
-                    Text("·")
-                    Text(ContextTracker.formatTokens(msg.tokenCount))
-                }
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.22))
-            }
-
-            Spacer(minLength: 0)
-
-            if msg.isStreaming {
-                HStack(spacing: 3) {
-                    Circle().fill(LamoTheme.Colors.accent).frame(width: 5, height: 5)
-                    Text("now").font(.system(.caption2, design: .monospaced))
-                }
-                .foregroundStyle(LamoTheme.Colors.accent.opacity(0.6))
-            } else if !msg.isInContext {
-                Text("dropped")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.15))
-            }
-        }
-        .padding(.vertical, 10)
-    }
-
-    // MARK: - Helpers
-
-    private func sectionLabel(_ text: String, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(LamoTheme.Colors.accent)
-            Text(text)
-                .font(.system(size: 10, design: .monospaced).weight(.bold))
-                .foregroundStyle(LamoTheme.Colors.accent.opacity(0.8))
-                .textCase(.uppercase)
-        }
-    }
-
-    private func statCell(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.system(.subheadline, design: .monospaced).weight(.bold))
-                .foregroundStyle(.white)
-            HStack(spacing: 2) {
-                Image(systemName: icon).font(.system(size: 7))
-                Text(label)
-            }
-            .font(.system(.caption2, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.3))
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private func ringColor(_ t: ContextTracker) -> Color {
         if t.fillRatio >= 0.9 { return .orange }
         if t.fillRatio >= 0.7 { return LamoTheme.Colors.accent }
         return .white.opacity(0.5)
-    }
-
-    private var thinDivider: some View {
-        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
-    }
-
-    private func legendDot(color: Color, label: String) -> some View {
-        HStack(spacing: 3) {
-            Circle().fill(color).frame(width: 5, height: 5)
-            Text(label).font(.system(.caption2, design: .monospaced)).foregroundStyle(.white.opacity(0.35))
-        }
     }
 }
 
@@ -403,24 +581,6 @@ struct SystemMetrics {
     let batteryCharging: Bool
     let modelName: String
     let backend: String
-
-    var memoryString: String {
-        if memoryUsedMB >= 1024 { return String(format: "%.1fG", memoryUsedMB / 1024) }
-        return String(format: "%.0fM", memoryUsedMB)
-    }
-    var cpuString: String { String(format: "%.0f%%", cpuPercent) }
-    var batteryString: String { String(format: "%.0f%%", batteryLevel * 100) }
-    var batteryIcon: String { batteryCharging ? "battery.100.bolt" : batteryLevel >= 0.8 ? "battery.75" : batteryLevel >= 0.4 ? "battery.50" : "battery.25" }
-
-    var thermalString: String {
-        switch thermalState {
-        case .nominal:  return "Cool"
-        case .fair:     return "Warm"
-        case .serious:  return "Hot"
-        case .critical: return "Critical"
-        @unknown default: return "—"
-        }
-    }
 
     static func snapshot() -> SystemMetrics {
         // Memory
@@ -470,5 +630,40 @@ struct SystemMetrics {
             batteryCharging: charging,
             modelName: modelName, backend: backend
         )
+    }
+
+    var memoryString: String {
+        memoryUsedMB >= 1024
+            ? String(format: "%.1fG", memoryUsedMB / 1024)
+            : String(format: "%.0fM", memoryUsedMB)
+    }
+
+    var cpuString: String {
+        String(format: "%.0f%%", cpuPercent)
+    }
+
+    var thermalString: String {
+        switch thermalState {
+        case .nominal:  return "Cool"
+        case .fair:     return "Warm"
+        case .serious:  return "Hot"
+        case .critical: return "Critical"
+        @unknown default: return "—"
+        }
+    }
+
+    var batteryString: String {
+        batteryCharging
+            ? "\(Int(batteryLevel * 100))% ⚡"
+            : "\(Int(batteryLevel * 100))%"
+    }
+
+    var batteryIcon: String {
+        if batteryCharging { return "battery.100percent.bolt" }
+        if batteryLevel < 0.1 { return "battery.0percent" }
+        if batteryLevel < 0.4 { return "battery.25percent" }
+        if batteryLevel < 0.7 { return "battery.50percent" }
+        if batteryLevel < 0.9 { return "battery.75percent" }
+        return "battery.100percent"
     }
 }
