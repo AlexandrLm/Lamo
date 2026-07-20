@@ -11,7 +11,7 @@ enum ToolFilter {
 
     /// Categories for tool grouping. Used for both filtering and system prompt.
     enum Category: String, CaseIterable {
-        case core          // always included
+        case core          // reserved for future always-on tools (currently empty)
         case knowledge     // web search, wikipedia, fetch
         case productivity  // calendar, contacts, notes, reminders
         case system        // device, location, weather, shortcuts
@@ -21,7 +21,7 @@ enum ToolFilter {
 
     /// Maps tool name → categories. Tools can belong to multiple categories.
     private static let toolCategories: [String: Set<Category>] = [
-        "calculator":             [.code, .core],
+        "calculator":             [.code],
 
         "web_search":             [.knowledge],
         "wikipedia":              [.knowledge],
@@ -84,13 +84,13 @@ enum ToolFilter {
         }
 
         // If no specific categories matched (only .core), return only core tools.
-        // This prevents context bloat on vague/greeting queries.
+        // If core is empty too (calculator removed), return empty — model chats fine without tools.
         if activeCategories.count == 1 {
             let coreOnly = toolNames.filter { name in
                 guard let cats = toolCategories[name] else { return false }
                 return cats.contains(.core)
             }
-            return coreOnly.isEmpty ? toolNames : coreOnly
+            return coreOnly
         }
 
         // Filter: keep tools that belong to any active category
