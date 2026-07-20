@@ -185,30 +185,41 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         // Reset plan state for this new turn
         await AgenticLoopState.shared.cancelPlan()
 
-        // --- Inject current date/time so model always knows it (no tool call needed) ---
+        // --- Inject current time into system prompt ---
+        // First message: full info (date, weekday, tz, unix). Subsequent: time only.
         let now = Date()
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "yyyy-MM-dd"
-        let todayStr = df.string(from: now)
-        df.dateFormat = "HH:mm:ss"
-        let timeStr = df.string(from: now)
-        df.dateFormat = "EEEE"
-        let weekdayStr = df.string(from: now)
-        let tz = TimeZone.current
-        let utcOffset = tz.secondsFromGMT(for: now) / 3600
-        systemPrompt += """
 
+        if messages.count <= 1 {
+            // First message — full context so model knows all time-related facts
+            df.dateFormat = "yyyy-MM-dd"
+            let todayStr = df.string(from: now)
+            df.dateFormat = "HH:mm:ss"
+            let timeStr = df.string(from: now)
+            df.dateFormat = "EEEE"
+            let weekdayStr = df.string(from: now)
+            let tz = TimeZone.current
+            let utcOffset = tz.secondsFromGMT(for: now) / 3600
+            systemPrompt += """
 
-        <current_time>
-          iso_date: \(todayStr)
-          time: \(timeStr)
-          weekday: \(weekdayStr)
-          timezone: \(tz.identifier)
-          utc_offset_hours: \(utcOffset >= 0 ? "+" : "")\(utcOffset)
-          unix_timestamp: \(Int(now.timeIntervalSince1970))
-        </current_time>
-        """
+            <current_time>
+              iso_date: \(todayStr)
+              time: \(timeStr)
+              weekday: \(weekdayStr)
+              timezone: \(tz.identifier)
+              utc_offset_hours: \(utcOffset >= 0 ? "+" : "")\(utcOffset)
+              unix_timestamp: \(Int(now.timeIntervalSince1970))
+            </current_time>
+            """
+        } else {
+            // Subsequent messages — only time (date/tz/weekday don't change mid-session)
+            df.dateFormat = "HH:mm:ss"
+            systemPrompt += """
+
+            <current_time>\(df.string(from: now))</current_time>
+            """
+        }
         await AgenticLoopBudget.shared.reset()
 
         // --- Build LiteRT-LM messages ---
