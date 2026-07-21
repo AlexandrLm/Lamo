@@ -51,6 +51,7 @@ final class ChatViewModel {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingImages.isEmpty || !pendingFiles.isEmpty else { return }
 
+        ProviderManager.shared.lastCompression = nil
         let imagesToProcess = pendingImages
         pendingImages = []
         let filesToProcess = pendingFiles
@@ -418,8 +419,14 @@ final class ChatViewModel {
         Task { await refreshContextTracker() }
         if success == true {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            // Auto-generate summary if old messages were dropped from context
-            // and the model hasn't created one via update_memory tool yet
+            // Proactive summarization: if KV-cache exceeds configured threshold, compress.
+            let threshold = ProviderManager.shared.compressionThreshold
+            if let tracker = contextTracker,
+               tracker.fillRatio > threshold,
+               messages.count > 6 {
+                Task { await compressConversation() }
+            }
+            // Fallback: if messages were dropped from context, generate a basic summary.
             if (contextTracker?.hasDroppedMessages ?? false)
                 && conversation.summary.isEmpty && messages.count > 15 {
                 Task { await generateConversationSummary() }
@@ -494,6 +501,28 @@ final class ChatViewModel {
         let summary = "Earlier in this conversation:\n\(droppedMessages)"
         conversation.summary = String(summary.prefix(500))
         save()
+    }
+
+    /// Compress conversation history using LLM summarization when KV-cache exceeds 60%.
+    /// Stores result in conversation.summary, which is injected into system prompt on next turn.
+    private func compressConversation() async {
+        // Don't compress if already done recently (summary exists and messages haven't doubled since)
+        if !conversation.summary.isEmpty, messages.count < 25 { return }
+
+        let chatMessages = self.chatMessages
+        guard chatMessages.count > 4 else { return }
+
+        // Exclude the last exchange (user+assistant) — keep context for continuity
+        let toCompress = Array(chatMessages.dropLast(2))
+        guard toCompress.count >= 4 else { return }
+
+        guard let summary = await ProviderManager.shared.summarizeMessages(toCompress) else { return }
+
+        conversation.summary = summary
+        save()
+        ProviderManager.shared.lastCompression = (oldCount: toCompress.count, summary: summary)
+        // Clear the UI notification after the next message is sent
+        LamoLogger.ui.info("Conversation compressed: \(toCompress.count) messages → \(summary.count) chars summary")
     }
 
 

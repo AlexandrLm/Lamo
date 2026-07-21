@@ -16,6 +16,7 @@ struct GenerationComputeSection: View {
     @State private var samplerTemp: Double
     @State private var samplerTopK: Double
     @State private var samplerTopP: Double
+    @State private var compressionPct: Double = 0.6
 
     init(vm: SettingsViewModel) {
         self.vm = vm
@@ -26,6 +27,7 @@ struct GenerationComputeSection: View {
         _samplerTemp = State(initialValue: vm.temperature)
         _samplerTopK = State(initialValue: Double(vm.topK))
         _samplerTopP = State(initialValue: vm.topP)
+        _compressionPct = State(initialValue: ProviderManager.shared.compressionThreshold)
     }
 
     var body: some View {
@@ -33,8 +35,8 @@ struct GenerationComputeSection: View {
             VStack(spacing: LamoTheme.Spacing.md) {
                 samplingCard
                 engineCard
+                compressionCard
                 systemPromptRow
-                resetButton
             }
             .padding(.horizontal, LamoTheme.Spacing.lg)
             .padding(.vertical, LamoTheme.Spacing.md)
@@ -430,5 +432,40 @@ struct GenerationComputeSection: View {
             .font(.system(.caption2, design: .monospaced))
             .foregroundStyle(active ? .white.opacity(0.7) : .white.opacity(0.25))
             .fontWeight(active ? .semibold : .regular)
+    }
+
+    private var compressionCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(icon: "compress", title: "Auto-Compression")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Automatically summarize conversation when context fills up")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Slider(value: $compressionPct, in: 0.2...0.9, step: 0.05) {
+                    Text("Threshold")
+                }
+                .tint(LamoTheme.Colors.accent)
+
+                HStack {
+                    Text("Trigger at \(Int(compressionPct * 100))% KV-cache fill")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Spacer()
+                    Text(compressionPct >= 0.8 ? "Late" : compressionPct <= 0.35 ? "Early" : "Balanced")
+                        .font(.system(.caption2, design: .monospaced).weight(.medium))
+                        .foregroundStyle(compressionPct >= 0.8 ? .orange : compressionPct <= 0.35 ? .blue : .green)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .padding(LamoTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
+        .onChange(of: compressionPct) { _, newValue in
+            ProviderManager.shared.compressionThreshold = newValue
+        }
     }
 }

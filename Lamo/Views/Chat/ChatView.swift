@@ -167,6 +167,15 @@ struct ChatView: View {
                 .id(message.id)
             }
 
+            // Compression notification
+            if let compression = provider.lastCompression {
+                CompressionCard(oldCount: compression.oldCount, summary: compression.summary) {
+                    provider.lastCompression = nil
+                }
+                .id("compression")
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+
             if viewModel.isStreaming && (viewModel.messages.last?.content.isEmpty ?? true) {
                 StreamingIndicator()
                     .id("streaming")

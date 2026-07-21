@@ -70,6 +70,10 @@ enum AppDefaults {
     // Web
     static var webAutoFetch = UserDefault("web_auto_fetch", default: true)
 
+    // MARK: - Summarization
+    /// KV-cache fill ratio that triggers automatic compression (0.0–1.0, default 0.6 = 60%)
+    static var compressionThreshold = UserDefault("compressionThreshold", default: 0.6)
+
     // MARK: - Tool Toggles (all enabled by default)
 
     static var toolWebSearch = UserDefault("tool_web_search", default: true)
