@@ -84,6 +84,10 @@ enum AppDefaults {
     static var toolContacts = UserDefault("tool_contacts", default: true)
     static var toolShortcuts = UserDefault("tool_shortcuts", default: true)
     static var toolHealth = UserDefault("tool_health", default: true)
+    static var toolCodeSandbox = UserDefault("tool_code_sandbox", default: true)
+    static var toolCalendarAvailability = UserDefault("tool_calendar_availability", default: true)
+    static var toolNotes = UserDefault("tool_notes", default: true)
+    static var toolPlanner = UserDefault("tool_planner", default: true)
 
     /// Reset all defaults to their factory values.
     static func resetAll() {
@@ -111,5 +115,9 @@ enum AppDefaults {
         toolContacts.wrappedValue = true
         toolShortcuts.wrappedValue = true
         toolHealth.wrappedValue = true
+        toolCodeSandbox.wrappedValue = true
+        toolCalendarAvailability.wrappedValue = true
+        toolNotes.wrappedValue = true
+        toolPlanner.wrappedValue = true
     }
 }
