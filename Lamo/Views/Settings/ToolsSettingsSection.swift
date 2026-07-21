@@ -364,38 +364,6 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolCalendar.wrappedValue },
             setEnabled: { AppDefaults.toolCalendar.wrappedValue = $0 }
         ),
-
-        ToolInfo(
-            id: "calendar_availability",
-            displayName: "Calendar Availability",
-            headline: "Find free time slots in your schedule. Perfect for scheduling meetings without back-and-forth.",
-            icon: "calendar.badge.clock",
-            color: .orange,
-            capabilities: [
-                "Scans your calendar for gaps between events",
-                "Customizable slot duration, working hours, and search range",
-                "Returns date, start/end time, and duration for each free slot",
-                "Configurable maximum number of slots to return",
-                "Respects your working hours (e.g., 9:00–18:00)",
-            ],
-            parameters: [
-                ToolParamInfo(name: "durationMinutes", description: "Minimum slot duration in minutes (default 60)"),
-                ToolParamInfo(name: "startDate", description: "Search range start in YYYY-MM-DD format (default: today)"),
-                ToolParamInfo(name: "endDate", description: "Search range end (default: today + 7 days)"),
-                ToolParamInfo(name: "workHoursStart", description: "Working hours start, 0–23 (default 9)"),
-                ToolParamInfo(name: "workHoursEnd", description: "Working hours end, 0–23 (default 18)"),
-                ToolParamInfo(name: "maxSlots", description: "Maximum number of slots to return (default 10)"),
-            ],
-            examples: [
-                "When am I free for a 30-minute call this week?",
-                "Find 2-hour blocks on Friday afternoon",
-                "Show me available slots next Monday between 10am and 4pm",
-            ],
-            requirementsNote: "Requires Calendar permission. Uses EventKit for read-only schedule access.",
-            isEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue },
-            setEnabled: { AppDefaults.toolCalendarAvailability.wrappedValue = $0 }
-        ),
-
         ToolInfo(
             id: "contacts",
             displayName: "Contacts",
@@ -421,36 +389,6 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolContacts.wrappedValue },
             setEnabled: { AppDefaults.toolContacts.wrappedValue = $0 }
         ),
-
-        ToolInfo(
-            id: "notes",
-            displayName: "Notes",
-            headline: "Manage personal notes stored on device. Create, read, search, and delete notes as plain text.",
-            icon: "note.text",
-            color: .orange,
-            capabilities: [
-                "List all notes with titles, content previews, and timestamps",
-                "Search notes by keyword — matches title and content",
-                "Create new notes with title and body text",
-                "Read full content of any note by title",
-                "Delete notes by exact title",
-            ],
-            parameters: [
-                ToolParamInfo(name: "mode", description: "\"list\", \"search\", \"read\", \"create\", or \"delete\""),
-                ToolParamInfo(name: "title", description: "Note title (required for read, create, delete modes)"),
-                ToolParamInfo(name: "query", description: "Search keyword (required for search mode)"),
-                ToolParamInfo(name: "content", description: "Note body text (required for create mode)"),
-            ],
-            examples: [
-                "Show me all my notes",
-                "Create a note called \"Shopping List\" with milk and eggs",
-                "Search my notes for anything about travel",
-            ],
-            requirementsNote: "Notes stored locally in app sandbox. No cloud sync — fully private.",
-            isEnabled: { AppDefaults.toolNotes.wrappedValue },
-            setEnabled: { AppDefaults.toolNotes.wrappedValue = $0 }
-        ),
-
         // ── Health & System ──
         ToolInfo(
             id: "health",
@@ -536,33 +474,6 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolCalculator.wrappedValue },
             setEnabled: { AppDefaults.toolCalculator.wrappedValue = $0 }
         ),
-
-        ToolInfo(
-            id: "code_sandbox",
-            displayName: "Code Sandbox",
-            headline: "Execute JavaScript in an isolated sandbox. Use for calculations, data processing, and text manipulation.",
-            icon: "curlybraces",
-            color: .purple,
-            capabilities: [
-                "Full JavaScript execution via JavaScriptCore engine",
-                "Sandboxed — no file system, network, or system access",
-                "5-second timeout prevents infinite loops",
-                "Capture output via \"result\" variable or expression return value",
-                "Error messages include exception details for debugging",
-            ],
-            parameters: [
-                ToolParamInfo(name: "code", description: "JavaScript code to execute. Use `result` variable to return output."),
-            ],
-            examples: [
-                "Sort this list alphabetically: [\"zebra\", \"apple\", \"monkey\"]",
-                "Calculate the median of [12, 5, 8, 19, 3, 15]",
-                "Convert this JSON to a formatted table",
-            ],
-            requirementsNote: "Runs locally in JavaScriptCore. No network access. Code is sandboxed and cannot access device data.",
-            isEnabled: { AppDefaults.toolCodeSandbox.wrappedValue },
-            setEnabled: { AppDefaults.toolCodeSandbox.wrappedValue = $0 }
-        ),
-
         // ── Memory & Planning ──
         ToolInfo(
             id: "update_memory",
@@ -591,33 +502,6 @@ struct ToolInfo: Identifiable {
             requirementsNote: "Controlled by the Memory toggle in General Settings. All facts stored locally in SwiftData — never leaves the device.",
             isEnabled: { MemoryService.shared.isEnabled },
             setEnabled: { AppDefaults.memoryEnabled.wrappedValue = $0; MemoryService.shared.isEnabled = $0 }
-        ),
-
-        ToolInfo(
-            id: "create_plan",
-            displayName: "Planner",
-            headline: "Create multi-step plans for complex tasks. The model declares steps up front, then executes them in order.",
-            icon: "list.bullet.clipboard",
-            color: .teal,
-            capabilities: [
-                "Declarative planning: model outlines all steps before executing",
-                "Visual progress tracking in the chat UI",
-                "Each step specifies which tool to call and what it should do",
-                "Plan progress persists across tool calls — model knows what's done",
-                "Failed steps don't block the plan — model can adapt",
-            ],
-            parameters: [
-                ToolParamInfo(name: "goal", description: "Short description of the overall goal, e.g., \"Plan a weekend trip to SPb\""),
-                ToolParamInfo(name: "steps", description: "JSON array: [{\"tool\":\"weather\",\"description\":\"Check weekend forecast\"}, {\"tool\":\"calendar\",\"description\":\"Find free slots\"}]"),
-            ],
-            examples: [
-                "Plan a trip to Paris this weekend — check weather, flights, and hotels",
-                "Help me prepare for a job interview: research the company, find my resume, check calendar",
-                "Create a plan to learn Swift: find resources, set up Xcode, write first app",
-            ],
-            requirementsNote: "Meta-tool — orchestrates other tools. Steps auto-advance when each tool completes.",
-            isEnabled: { AppDefaults.toolPlanner.wrappedValue },
-            setEnabled: { AppDefaults.toolPlanner.wrappedValue = $0 }
         ),
     ]
 }

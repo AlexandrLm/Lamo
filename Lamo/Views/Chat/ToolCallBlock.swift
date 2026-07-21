@@ -131,20 +131,9 @@ struct ToolCallBlock: View {
                 return "\(events.count) events"
             }
             return dict["mode"] as? String
-        case "calendar_availability":
-            let count = dict["count"] as? Int ?? 0
-            return "\(count) slots"
         case "contacts":
             let count = dict["count"] as? Int ?? 0
             return "\(count) found"
-        case "notes":
-            return dict["mode"] as? String
-        case "code_sandbox":
-            if let out = dict["output"] as? String { return String(out.prefix(40)) }
-            if dict["error"] != nil { return "Error" }
-        case "create_plan":
-            let steps = dict["total_steps"] as? Int ?? 0
-            return "\(steps) steps"
         default: break
         }
         return nil
@@ -207,13 +196,9 @@ struct ToolResultView: View {
         case "update_memory":         MemoryResult(d: d)
         case "fetch_url":            FetchResult(d: d)
         case "calendar":             CalendarCard(d: d)
-        case "calendar_availability": CalendarAvailabilityCard(d: d)
         case "contacts":             ContactsCard(d: d)
         case "health":               HealthCard(d: d)
-        case "notes":                NotesCard(d: d)
         case "shortcuts":            ShortcutResult(d: d)
-        case "code_sandbox":         CodeSandboxCard(d: d)
-        case "create_plan":          PlanCard(d: d)
         default:                     PrettyJSON(d: d, title: toolName)
         }
     }
@@ -248,13 +233,9 @@ func toolIcon(name: String) -> String {
     case "update_memory":            return "brain.head.profile"
     case "think":                   return "lightbulb.max.fill"
     case "calendar":                return "calendar"
-    case "calendar_availability":    return "calendar.badge.clock"
     case "contacts":                return "person.crop.circle.fill"
     case "health":                  return "heart.fill"
-    case "notes":                   return "note.text"
     case "shortcuts":               return "bolt.fill"
-    case "code_sandbox":            return "chevron.left.forwardslash.chevron.right"
-    case "create_plan":             return "list.bullet.clipboard.fill"
     default:                        return "wrench.fill"
     }
 }
@@ -268,12 +249,8 @@ func toolColor(name: String) -> Color {
     case "get_location":         return Color(red: 0.90, green: 0.35, blue: 0.35)
     case "fetch_url":            return Color(red: 0.25, green: 0.70, blue: 0.60)
     case "calendar":             return Color(red: 0.85, green: 0.40, blue: 0.40)
-    case "calendar_availability": return Color(red: 0.35, green: 0.65, blue: 0.45)
     case "contacts":             return Color(red: 0.45, green: 0.55, blue: 0.80)
     case "health":               return Color(red: 0.90, green: 0.30, blue: 0.40)
-    case "notes":                return Color(red: 0.75, green: 0.65, blue: 0.20)
-    case "code_sandbox":         return Color(red: 0.50, green: 0.50, blue: 0.60)
-    case "create_plan":          return Color(red: 0.35, green: 0.55, blue: 0.90)
     case "shortcuts":            return Color(red: 0.90, green: 0.55, blue: 0.20)
     default:                     return Color(red: 0.45, green: 0.50, blue: 0.55)
     }

@@ -251,10 +251,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         if AppDefaults.toolContacts.wrappedValue { allTools.append(ContactsTool()) }
         if AppDefaults.toolShortcuts.wrappedValue { allTools.append(ShortcutsTool()) }
         if AppDefaults.toolHealth.wrappedValue { allTools.append(HealthTool()) }
-        if AppDefaults.toolCodeSandbox.wrappedValue { allTools.append(CodeSandboxTool()) }
-        if AppDefaults.toolCalendarAvailability.wrappedValue { allTools.append(CalendarAvailabilityTool()) }
-        if AppDefaults.toolNotes.wrappedValue { allTools.append(NotesTool()) }
-        if AppDefaults.toolPlanner.wrappedValue { allTools.append(PlannerTool()) }
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
         // Internet-dependent tools
         if networkAvailable {
