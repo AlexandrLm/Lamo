@@ -102,11 +102,6 @@ struct ToolCallBlock: View {
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         switch call.name {
-        case "calculator":
-            if let r = dict["result"] as? Double {
-                return r == floor(r) && r.isFinite ? "\(Int(r))" : String(format: "%.4g", r)
-            }
-            if let e = dict["error"] as? String { return "⚠ \(e)" }
         case "weather":
             let t = dict["temperature_c"] as? Double
             let c = dict["conditions"] as? String ?? ""
@@ -131,9 +126,6 @@ struct ToolCallBlock: View {
                 return "\(events.count) events"
             }
             return dict["mode"] as? String
-        case "contacts":
-            let count = dict["count"] as? Int ?? 0
-            return "\(count) found"
         default: break
         }
         return nil
@@ -186,8 +178,6 @@ struct ToolResultView: View {
         switch toolName {
         case "weather":              WeatherCard(d: d)
         case "web_search":           SearchResults(d: d)
-        case "wikipedia":            WikipediaResult(d: d)
-        case "calculator":           CalculatorResult(d: d)
         case "get_current_time":     TimeCard(d: d)
         case "get_location":         LocationCard(d: d)
         case "get_device_info":      DeviceCard(d: d)
@@ -196,9 +186,6 @@ struct ToolResultView: View {
         case "update_memory":         MemoryResult(d: d)
         case "fetch_url":            FetchResult(d: d)
         case "calendar":             CalendarCard(d: d)
-        case "contacts":             ContactsCard(d: d)
-        case "health":               HealthCard(d: d)
-        case "shortcuts":            ShortcutResult(d: d)
         default:                     PrettyJSON(d: d, title: toolName)
         }
     }
@@ -223,9 +210,7 @@ func toolIcon(name: String) -> String {
     case "web_search":              return "magnifyingglass.circle.fill"
     case "fetch_url":               return "doc.text.magnifyingglass"
     case "get_current_time":        return "clock.fill"
-    case "calculator":              return "function"
     case "open_url":                return "safari"
-    case "wikipedia":               return "book.pages.fill"
     case "get_location":            return "location.fill"
     case "get_device_info":         return "iphone.gen3"
     case "weather":                 return "cloud.sun.fill"
@@ -233,9 +218,6 @@ func toolIcon(name: String) -> String {
     case "update_memory":            return "brain.head.profile"
     case "think":                   return "lightbulb.max.fill"
     case "calendar":                return "calendar"
-    case "contacts":                return "person.crop.circle.fill"
-    case "health":                  return "heart.fill"
-    case "shortcuts":               return "bolt.fill"
     default:                        return "wrench.fill"
     }
 }
@@ -243,15 +225,11 @@ func toolIcon(name: String) -> String {
 func toolColor(name: String) -> Color {
     switch name {
     case "weather":              return Color(red: 0.30, green: 0.70, blue: 0.95)
-    case "calculator":           return Color(red: 0.55, green: 0.40, blue: 0.90)
     case "web_search":           return Color(red: 0.25, green: 0.60, blue: 0.95)
     case "get_current_time":     return Color(red: 0.50, green: 0.65, blue: 0.85)
     case "get_location":         return Color(red: 0.90, green: 0.35, blue: 0.35)
     case "fetch_url":            return Color(red: 0.25, green: 0.70, blue: 0.60)
     case "calendar":             return Color(red: 0.85, green: 0.40, blue: 0.40)
-    case "contacts":             return Color(red: 0.45, green: 0.55, blue: 0.80)
-    case "health":               return Color(red: 0.90, green: 0.30, blue: 0.40)
-    case "shortcuts":            return Color(red: 0.90, green: 0.55, blue: 0.20)
     default:                     return Color(red: 0.45, green: 0.50, blue: 0.55)
     }
 }

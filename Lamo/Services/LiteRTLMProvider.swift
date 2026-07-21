@@ -244,19 +244,14 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         // Build tool list. Web tools only included when network is available.
         let networkAvailable = Self.checkNetworkAvailable()
         var allTools: [LiteRTLM.Tool] = []
-        if AppDefaults.toolCalculator.wrappedValue { allTools.append(CalculatorTool()) }
         if AppDefaults.toolGetLocation.wrappedValue { allTools.append(GetLocationTool()) }
         if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
         if AppDefaults.toolCalendar.wrappedValue { allTools.append(CalendarTool()) }
-        if AppDefaults.toolContacts.wrappedValue { allTools.append(ContactsTool()) }
-        if AppDefaults.toolShortcuts.wrappedValue { allTools.append(ShortcutsTool()) }
-        if AppDefaults.toolHealth.wrappedValue { allTools.append(HealthTool()) }
         if MemoryService.shared.isEnabled { allTools.append(UpdateMemoryTool()) }
         // Internet-dependent tools
         if networkAvailable {
             if AppDefaults.toolWebSearch.wrappedValue { allTools.append(WebSearchTool()) }
             if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
-            if AppDefaults.toolWikipedia.wrappedValue { allTools.append(WikipediaTool()) }
         }
 
         // --- Tokenize tool schemas using real getSchema() output ---

@@ -59,7 +59,7 @@ enum AppDefaults {
     static var visualTokenBudget = UserDefault("litertLMVisualTokenBudget", default: 560)
 
     // Prompt
-    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language.\n\nCRITICAL RULES:\n1. You do NOT have real-time knowledge. For these topics you MUST call tools — never answer from memory: weather/temperature/forecast → weather, math/calculations → calculator, facts/news/current events → web_search, location → get_location.\n2. Current date and time are provided in <current_time> — use them directly, no tool needed.\n3. After a tool returns data, describe it using EXACT values from the result. Never invent numbers or details.\n4. Use calendar tool for scheduling and date queries. Use contacts for people lookups.\n5. Be concise. Answer in 2-3 sentences unless the user asks for detail.")
+    static var systemPrompt = UserDefault("litertLMSystemPrompt", default: "You are a helpful assistant. Answer in the user's language.\n\nCRITICAL RULES:\n1. You do NOT have real-time knowledge. For these topics you MUST call tools — never answer from memory: weather/temperature/forecast → weather, facts/news/current events → web_search, location → get_location.\n2. Current date and time are provided in <current_time> — use them directly, no tool needed.\n3. After a tool returns data, describe it using EXACT values from the result. Never invent numbers or details.\n4. Use calendar tool for scheduling and date queries.\n5. Be concise. Answer in 2-3 sentences unless the user asks for detail.")
 
 
     // Memory
@@ -74,16 +74,10 @@ enum AppDefaults {
 
     static var toolWebSearch = UserDefault("tool_web_search", default: true)
     static var toolFetchURL = UserDefault("tool_fetch_url", default: true)
-    static var toolCalculator = UserDefault("tool_calculator", default: true)
-    static var toolWikipedia = UserDefault("tool_wikipedia", default: true)
     static var toolGetLocation = UserDefault("tool_get_location", default: true)
     static var toolWeather = UserDefault("tool_weather", default: true)
 
-    // MARK: Agent Tools (new)
     static var toolCalendar = UserDefault("tool_calendar", default: true)
-    static var toolContacts = UserDefault("tool_contacts", default: true)
-    static var toolShortcuts = UserDefault("tool_shortcuts", default: true)
-    static var toolHealth = UserDefault("tool_health", default: true)
 
     /// Reset all defaults to their factory values.
     static func resetAll() {
@@ -103,13 +97,8 @@ enum AppDefaults {
         webAutoFetch.wrappedValue = true
         toolWebSearch.wrappedValue = true
         toolFetchURL.wrappedValue = true
-        toolCalculator.wrappedValue = true
-        toolWikipedia.wrappedValue = true
         toolGetLocation.wrappedValue = true
         toolWeather.wrappedValue = true
         toolCalendar.wrappedValue = true
-        toolContacts.wrappedValue = true
-        toolShortcuts.wrappedValue = true
-        toolHealth.wrappedValue = true
     }
 }
