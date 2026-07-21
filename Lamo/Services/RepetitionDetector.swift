@@ -5,7 +5,7 @@ import os
 /// Monitors streamed text for repeating patterns and triggers a stop.
 /// Optimized: checks every N tokens instead of every token.
 final class RepetitionDetector: Sendable {
-    private let logger = Logger(subsystem: "com.lamo", category: "RepDetector")
+    private let logger = Logger(subsystem: LamoLogger.subsystem, category: "RepDetector")
 
     /// Mutable state protected by this lock — all mutations go through `withLock`.
     private let lock: OSAllocatedUnfairLock<State>

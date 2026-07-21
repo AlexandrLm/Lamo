@@ -53,7 +53,7 @@ final class MemoryService: ObservableObject {
     /// Last user query text — used for semantic fact selection in buildMemoryContext.
     private var lastQueryText: String = ""
     /// Cached embedding for last query.
-    private var lastQueryEmbedding: [Float]? = nil
+    private var lastQueryEmbedding: [Double]? = nil
 
     // MARK: - Init
 
@@ -80,8 +80,8 @@ final class MemoryService: ObservableObject {
             // Fast text-based pre-filter
             if isDuplicateText(trimmed) { continue }
 
-            // Embedding-based semantic check (async, deeper check)
-            if await isDuplicateEmbedding(trimmed) { continue }
+            // Embedding-based semantic check (deeper check)
+            if isDuplicateEmbedding(trimmed) { continue }
 
             // Check for conflicting fact (same subject, different statement)
             if let conflictID = findConflictingFact(trimmed) {
@@ -106,7 +106,7 @@ final class MemoryService: ObservableObject {
             // Pre-compute embedding in background (non-blocking for store speed)
             if embeddings.isAvailable {
                 Task { @MainActor [entry] in
-                    _ = await embeddings.embedding(for: entry.id, text: trimmed)
+                    _ = embeddings.embedding(for: entry.id, text: trimmed)
                 }
             }
         }
@@ -225,6 +225,7 @@ final class MemoryService: ObservableObject {
             return a.timestamp > b.timestamp
         }
 
+        var totalChars = 0
         var includedFacts: [MemoryEntry] = []
         for fact in sorted.prefix(maxFacts) {
             let line = "• \(fact.text)\n"
@@ -262,6 +263,18 @@ final class MemoryService: ObservableObject {
         // usageCount amplifies frequently-referenced facts.
         let usageBoost = 1.0 + Double(fact.usageCount) * 0.5
         return usageBoost * decay
+    }
+
+    /// Blended score: relevance (usage count + recency) combined with semantic similarity.
+    /// When embeddings are available, semantic relevance dominates (0.7 weight).
+    private func blendedScore(fact: MemoryEntry, now: Date, useSemantic: Bool, queryVec: [Double]?) -> Double {
+        let base = relevanceScore(fact: fact, now: now)
+        guard useSemantic, let queryVec,
+              let factVec = embeddings.embedding(for: fact.id, text: fact.text) else {
+            return base
+        }
+        let semantic = Double(embeddings.cosineSimilarity(queryVec, factVec))
+        return base * 0.3 + semantic * 0.7
     }
 
     /// Build the full system prompt with memory + conversation summary injected.
@@ -422,13 +435,13 @@ final class MemoryService: ObservableObject {
     /// Async embedding-based duplicate check.
     /// Computes embedding for the new fact and checks cosine similarity against all cached facts.
     /// Falls back to false (not a duplicate) if embeddings are unavailable or computation fails.
-    private func isDuplicateEmbedding(_ newFact: String) async -> Bool {
+    private func isDuplicateEmbedding(_ newFact: String) -> Bool {
         guard embeddings.isAvailable else { return false }
 
-        guard let newVec = await embeddings.embed(newFact) else { return false }
+        guard let newVec = embeddings.embed(newFact) else { return false }
 
         for existing in factsCache {
-            guard let existingVec = await embeddings.embedding(for: existing.id, text: existing.text) else {
+            guard let existingVec = embeddings.embedding(for: existing.id, text: existing.text) else {
                 continue
             }
             let sim = embeddings.cosineSimilarity(newVec, existingVec)

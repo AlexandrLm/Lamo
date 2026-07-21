@@ -52,7 +52,10 @@ struct CodeSandboxTool: Tool {
                 return (nil, "Execution timed out after 5 seconds")
             }
 
-            let first = await group.next()!
+            guard let first = await group.next() else {
+                group.cancelAll()
+                return (nil, "Execution cancelled")
+            }
             group.cancelAll()
             return first
         }

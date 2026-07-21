@@ -1,6 +1,6 @@
 import Foundation
 
-enum LamoError: LocalizedError {
+enum LamoError: LocalizedError, Equatable {
     case modelNotFound(String)
     case engineInitFailed(String)
     case modelCorrupted(String)

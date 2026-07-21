@@ -16,7 +16,6 @@ struct LamoApp: App {
     var body: some Scene {
         WindowGroup {
             MainView()
-                .preferredColorScheme(.dark)
                 .onAppear {
                     if !hasSetupMemory {
                         hasSetupMemory = true

@@ -16,3 +16,10 @@
 "copy" = "Copy";
 "take_photo" = "Take photo";
 "attach_image" = "Attach image";
+"file.truncated %1$d %2$d" = "File truncated — showing first %1$d characters of %2$d";
+"pdf.page %d" = "--- Page %d ---";
+"pdf.no_text_layer" = "PDF has no text layer — content sent as images";
+"pptx.slide %d" = "--- Slide %d ---";
+"pptx.no_text" = "PPTX contains no text";
+"extract.unsupported_format %@" = "Could not read file: %@. Unsupported format.";
+"extract.read_error %@" = "Error reading file: %@";

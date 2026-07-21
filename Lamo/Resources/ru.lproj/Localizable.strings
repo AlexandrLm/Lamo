@@ -1,0 +1,25 @@
+/* Lamo Localization - Russian */
+
+"app.name" = "Lamo";
+"chat.new" = "Новый чат";
+"chat.send" = "Отправить";
+"chat.stop" = "Стоп";
+"chat.retry" = "Повторить";
+"settings.title" = "Настройки";
+"settings.gpu" = "Ускорение GPU";
+"settings.memory" = "Память";
+"empty.select_chat" = "Выберите чат";
+"empty.no_chat" = "Выберите диалог или начните новый";
+"empty.download_model" = "Скачайте модель";
+"loading.model" = "Загрузка модели...";
+"delete" = "Удалить";
+"copy" = "Копировать";
+"take_photo" = "Снять фото";
+"attach_image" = "Прикрепить фото";
+"file.truncated %1$d %2$d" = "Файл обрезан — показаны первые %1$d символов из %2$d";
+"pdf.page %d" = "--- Страница %d ---";
+"pdf.no_text_layer" = "PDF без текстового слоя — содержимое отправлено как изображения";
+"pptx.slide %d" = "--- Слайд %d ---";
+"pptx.no_text" = "PPTX без текста";
+"extract.unsupported_format %@" = "Не удалось прочитать файл: %@. Формат не поддерживается.";
+"extract.read_error %@" = "Ошибка чтения файла: %@";

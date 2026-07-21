@@ -2,7 +2,8 @@ import Foundation
 import os
 
 enum LamoLogger {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.lamo"
+    /// Centralized subsystem identifier. Use `LamoLogger.subsystem` instead of hardcoding "com.lamo".
+    static let subsystem = Bundle.main.bundleIdentifier ?? "com.lamo"
 
     static let general = Logger(subsystem: subsystem, category: "general")
     static let engine = Logger(subsystem: subsystem, category: "engine")

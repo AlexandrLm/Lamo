@@ -75,7 +75,10 @@ actor LocationService {
                 try await Task.sleep(for: .seconds(timeout))
                 throw LocationServiceError.timeout
             }
-            let loc = try await group.next()!
+            guard let loc = try await group.next() else {
+                group.cancelAll()
+                throw LocationServiceError.unavailable
+            }
             group.cancelAll()
 
             let name = try? await reverseGeocode(loc)

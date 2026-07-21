@@ -32,6 +32,9 @@ final class ChatViewModel {
     private var lastFlushTime: Date = .distantPast
     private let flushInterval: TimeInterval = 0.15 // 150ms throttle
 
+    /// Override for testing. When non-nil, used instead of ProviderManager.shared.currentProvider.
+    var llmProviderOverride: (any LLMProvider)?
+
     init(
         conversation: Conversation,
         modelContext: ModelContext
@@ -253,7 +256,8 @@ final class ChatViewModel {
 
         // Always resolve fresh provider from ProviderManager — if the user
         // switched models in Settings, the old provider wraps a stale engine.
-        let provider = ProviderManager.shared.currentProvider
+        // llmProviderOverride is for testing — injected mock takes precedence.
+        let provider = llmProviderOverride ?? ProviderManager.shared.currentProvider
         streamingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             for await token in provider.streamResponse(messages: chatMessages) {
@@ -275,7 +279,7 @@ final class ChatViewModel {
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
                         // Delete the botched partial message
-                        if let msgIdx = messages.firstIndex(where: { $0.id == streamingMessageID }) {
+                        if let msgIdx = messages.firstIndex(where: { $0.id == self.streamingMessageID }) {
                             modelContext.delete(messages[msgIdx])
                             messages.remove(at: msgIdx)
                         }
@@ -420,7 +424,7 @@ final class ChatViewModel {
                 && conversation.summary.isEmpty && messages.count > 15 {
                 Task { await generateConversationSummary() }
             }
-            Task { await autoFetchUnfetchedURLs(from: messages[index].content) }
+            Task { await refreshContextTracker() }
         }
     }
 
@@ -492,92 +496,6 @@ final class ChatViewModel {
         save()
     }
 
-    // MARK: - Auto-Fetch Unfetched URLs
-
-    /// Heuristic words indicating the model intended to fetch but didn't.
-    private static let fetchIntentPatterns = [
-        "проверь", "проверю", "посмотрю", "прочитаю", "извлеку", "подождите", "подожди",
-        "let me check", "let me read", "let me fetch", "please wait", "i'll check",
-        "i will check", "i'll read", "i will read", "i'll fetch", "give me a moment",
-        "just a moment", "one moment"
-    ]
-
-    /// After streaming completes, detect URLs the model mentioned but didn't actually fetch.
-    /// If found, fetch them automatically and send a follow-up so the model can answer.
-    /// Skipped if the response contains tool call indicators (model already used tools).
-    private func autoFetchUnfetchedURLs(from response: String) async {
-        // Skip if the model already used tools — detected by tool call markers in the response.
-        // LiteRT-LM tool calls produce JSON blocks with "name" and "arguments" fields.
-        let toolCallMarkers = ["\"name\":", "\"arguments\":", "web_search", "fetch_url"]
-        let lowerResponse = response.lowercased()
-        let hasToolCall = toolCallMarkers.contains { lowerResponse.contains($0) }
-        guard !hasToolCall else { return }
-
-        let urlPattern = #"https?://[^\s<>"'\)\],;:!?"#
-        guard let regex = try? NSRegularExpression(pattern: urlPattern) else { return }
-        let range = NSRange(response.startIndex..., in: response)
-        let matches = regex.matches(in: response, range: range)
-
-        guard !matches.isEmpty else { return }
-
-        let urls = matches.compactMap { match -> URL? in
-            guard let r = Range(match.range, in: response) else { return nil }
-            let urlString = String(response[r]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?\\"))
-            return URL(string: urlString)
-        }.filter { $0.scheme == "http" || $0.scheme == "https" }
-
-        guard !urls.isEmpty else { return }
-
-        // Check if the response looks like a "failed tool call" — model mentioned
-        // a URL and expressed intent to fetch but didn't actually do it
-        // (lowerResponse already declared above for tool call check)
-        let hasFetchIntent = Self.fetchIntentPatterns.contains { lowerResponse.contains($0) }
-
-        guard hasFetchIntent else { return }
-
-        // De-duplicate: skip URLs that appear in very short snippets (< 20 chars around them)
-        // which usually means the model already fetched and quoted them
-        let unfetchedURLs = urls.filter { url in
-            if let urlRange = response.range(of: url.absoluteString) {
-                let beforeStart = response.index(urlRange.lowerBound, offsetBy: -100, limitedBy: response.startIndex) ?? response.startIndex
-                let afterEnd = response.index(urlRange.upperBound, offsetBy: 100, limitedBy: response.endIndex) ?? response.endIndex
-                let nearbyText = String(response[beforeStart..<afterEnd])
-                // If there's substantial content near the URL (>500 chars context),
-                // the model probably already fetched and quoted it.
-                return nearbyText.count < 500
-            }
-            return true
-        }
-
-        guard !unfetchedURLs.isEmpty else { return }
-
-        LamoLogger.ui.info("Auto-fetching \(unfetchedURLs.count) unfetched URLs")
-
-        var fetchedContent = ""
-        var fetchedCount = 0
-        for url in unfetchedURLs.prefix(2) { // Max 2 URLs to avoid token overflow
-            do {
-                let content = try await WebFetcher.fetch(url: url)
-                fetchedContent += "\n\n[Page content \(url.absoluteString)]:\n\(content.prefix(3000))"
-                fetchedCount += 1
-            } catch {
-                LamoLogger.ui.warning("Auto-fetch failed for \(url): \(error.localizedDescription)")
-            }
-        }
-
-        // Don't send follow-up if every fetch failed — error messages would confuse the model
-        guard fetchedCount > 0 else { return }
-        guard !fetchedContent.isEmpty else { return }
-
-        let followUp = Message(
-            content: "Here is the content of the pages you wanted to check:\(fetchedContent)\n\nNow, based on this information, answer the user's question.",
-            role: .user,
-            conversation: conversation
-        )
-        addMessage(followUp)
-
-        startAssistantResponse()
-    }
 
     /// Save UIImages to Documents/Attachments as JPEG (resized to max 1024px), return file paths.
     /// Stored in Documents so they persist until the conversation is explicitly deleted.

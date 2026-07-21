@@ -6,7 +6,7 @@ import os
 
 /// Extracts readable text from various file formats for LLM consumption.
 enum FileContentExtractor {
-    private static let logger = Logger(subsystem: "com.lamo", category: "FileExtractor")
+    private static let logger = Logger(subsystem: LamoLogger.subsystem, category: "FileExtractor")
 
     /// Max characters to extract per file (to stay within token budget).
     static let maxCharsPerFile = 15_000
@@ -40,7 +40,7 @@ enum FileContentExtractor {
         }
 
         let truncated = raw.count > maxCharsPerFile
-            ? String(raw.prefix(maxCharsPerFile)) + "\n\n[Файл обрезан — показаны первые \(maxCharsPerFile) символов из \(raw.count)]"
+            ? String(raw.prefix(maxCharsPerFile)) + "\n\n[\(String(localized: "file.truncated \(maxCharsPerFile) \(raw.count)"))]"
             : raw
 
         return """
@@ -114,11 +114,11 @@ enum FileContentExtractor {
         for i in 0..<doc.pageCount {
             if let page = doc.page(at: i),
                let text = page.string, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                pages.append("--- Страница \(i + 1) ---\n\(text)")
+                pages.append(String(localized: "pdf.page \(i + 1)") + "\n\(text)")
             }
         }
         guard !pages.isEmpty else {
-            return "[PDF без текстового слоя — содержимое отправлено как изображения]"
+            return "[\(String(localized: "pdf.no_text_layer"))]"
         }
         return pages.joined(separator: "\n\n")
     }
@@ -169,17 +169,17 @@ enum FileContentExtractor {
             guard let slideData = archive.readEntry(path) else { break }
             let text = extractTextFromOOXML(slideData)
             if !text.isEmpty {
-                slides.append("--- Слайд \(i) ---\n\(text)")
+                slides.append(String(localized: "pptx.slide \(i)") + "\n\(text)")
             }
         }
-        guard !slides.isEmpty else { return "[PPTX без текста]" }
+        guard !slides.isEmpty else { return "[\(String(localized: "pptx.no_text"))]" }
         return slides.joined(separator: "\n\n")
     }
 
     // MARK: - XML Helpers
 
     private static let xmlTextPattern: NSRegularExpression = {
-        try! NSRegularExpression(pattern: ">([^<]+)<", options: [])
+        (try? NSRegularExpression(pattern: ">([^<]+)<", options: [])) ?? NSRegularExpression()
     }()
 
     private static func extractTextFromOOXML(_ data: Data) -> String {
@@ -202,10 +202,10 @@ enum FileContentExtractor {
     // MARK: - XLSX Helpers
 
     private static let xlsxRowPattern: NSRegularExpression = {
-        try! NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])
+        (try? NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
     }()
     private static let xlsxCellPattern: NSRegularExpression = {
-        try! NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])
+        (try? NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])) ?? NSRegularExpression()
     }()
 
     private static func parseXLSXSheet(_ data: Data, sharedStrings: [String]) -> String {
@@ -259,9 +259,9 @@ enum FileExtractorError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFormat(let name):
-            return "Не удалось прочитать файл: \(name). Формат не поддерживается."
+            return String(localized: "extract.unsupported_format \(name)")
         case .readError(let name):
-            return "Ошибка чтения файла: \(name)"
+            return String(localized: "extract.read_error \(name)")
         }
     }
 }

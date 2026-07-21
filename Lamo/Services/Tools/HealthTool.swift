@@ -37,13 +37,11 @@ struct HealthTool: Tool {
         }
 
         // Request authorization
-        let readTypes: Set<HKObjectType> = [
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .bodyMass)!,
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-        ]
+        let typeIdentifiers: [HKQuantityTypeIdentifier] = [.stepCount, .heartRate, .bodyMass, .activeEnergyBurned]
+        let categoryIdentifiers: [HKCategoryTypeIdentifier] = [.sleepAnalysis]
+        let quantityTypes = typeIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) }
+        let categoryTypes = categoryIdentifiers.compactMap { HKObjectType.categoryType(forIdentifier: $0) }
+        let readTypes = Set<HKObjectType>(quantityTypes + categoryTypes)
 
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
@@ -80,7 +78,7 @@ struct HealthTool: Tool {
 
     private func fetchSteps(days: Int) async throws -> [String: Any] {
         let endDate = Date()
-        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate)!
+        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate) ?? endDate.addingTimeInterval(Double(-days) * 86400)
 
         guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
             return ["error": "Step count type unavailable."]
@@ -125,7 +123,7 @@ struct HealthTool: Tool {
 
     private func fetchHeartRate(days: Int) async throws -> [String: Any] {
         let endDate = Date()
-        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate)!
+        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate) ?? endDate.addingTimeInterval(Double(-days) * 86400)
 
         guard let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
             return ["error": "Heart rate type unavailable."]
@@ -152,8 +150,9 @@ struct HealthTool: Tool {
 
         let values = samples.map { $0.quantity.doubleValue(for: HKUnit(from: "count/min")) }
         let avg = values.reduce(0, +) / Double(values.count)
-        let min = values.min()!
-        let max = values.max()!
+        guard let minHR = values.min(), let maxHR = values.max() else {
+            return ["mode": "heart_rate", "days": days, "sample_count": values.count, "message": "Could not compute heart rate stats."]
+        }
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -169,9 +168,9 @@ struct HealthTool: Tool {
             "mode": "heart_rate",
             "days": days,
             "sample_count": samples.count,
-            "min_bpm": Int(min),
+            "min_bpm": Int(minHR),
             "avg_bpm": Int(avg),
-            "max_bpm": Int(max),
+            "max_bpm": Int(maxHR),
             "recent": recentValues,
         ]
     }
@@ -180,7 +179,7 @@ struct HealthTool: Tool {
 
     private func fetchSleep(days: Int) async throws -> [String: Any] {
         let endDate = Date()
-        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate)!
+        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate) ?? endDate.addingTimeInterval(Double(-days) * 86400)
 
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
             return ["error": "Sleep analysis type unavailable."]

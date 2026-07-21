@@ -120,17 +120,16 @@ final class SettingsViewModel {
     }
 
     func resetAllDefaults() {
+        AppDefaults.resetAll()
+        // Sync instance state that mirrors AppDefaults via ProviderManager
         useGPU = true
         cpuThreadCount = 4
         kvCacheAuto = true
-        topK = 64
-        topP = 0.95
-        temperature = 1.0
         maxNumTokens = 4096
         speculativeDecoding = true
-        visualTokenBudget = 560
         memoryEnabled = true
-        systemPrompt = AppDefaults.systemPrompt.defaultValue
+        // Reload model info after path reset
+        loadModelInfo()
     }
 
     /// Current SamplerConfig built from published values.

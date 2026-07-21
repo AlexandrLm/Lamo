@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1FE324972FF0080E00681741 /* LiteRTLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FE324962FF0080E00681741 /* LiteRTLM */; };
+		1FE3249B2FF0080E00681741 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 1FE324982FF0080E00681741 /* Markdown */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1FE324972FF0080E00681741 /* LiteRTLM in Frameworks */,
+				1FE3249B2FF0080E00681741 /* Markdown in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			name = Lamo;
 			packageProductDependencies = (
 				1FE324962FF0080E00681741 /* LiteRTLM */,
+				1FE324982FF0080E00681741 /* Markdown */,
 			);
 			productName = Lamo;
 			productReference = 1FE3236E2FEFFCAE00681741 /* Lamo.app */;
@@ -97,11 +100,13 @@
 			knownRegions = (
 				en,
 				Base,
+				ru,
 			);
 			mainGroup = 1FE323652FEFFCAE00681741;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1FE324952FF0080E00681741 /* XCLocalSwiftPackageReference "Packages/LiteRT-LM" */,
+				1FE324992FF0080E00681741 /* XCLocalSwiftPackageReference "Packages/swift-markdown" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FE3236F2FEFFCAE00681741 /* Products */;
@@ -391,6 +396,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Packages/LiteRT-LM";
 		};
+		1FE324992FF0080E00681741 /* XCLocalSwiftPackageReference "Packages/swift-markdown" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Packages/swift-markdown";
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -398,6 +407,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1FE324952FF0080E00681741 /* XCLocalSwiftPackageReference "Packages/LiteRT-LM" */;
 			productName = LiteRTLM;
+		};
+		1FE324982FF0080E00681741 /* Markdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FE324992FF0080E00681741 /* XCLocalSwiftPackageReference "Packages/swift-markdown" */;
+			productName = Markdown;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

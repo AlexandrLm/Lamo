@@ -84,4 +84,32 @@ enum AppDefaults {
     static var toolContacts = UserDefault("tool_contacts", default: true)
     static var toolShortcuts = UserDefault("tool_shortcuts", default: true)
     static var toolHealth = UserDefault("tool_health", default: true)
+
+    /// Reset all defaults to their factory values.
+    static func resetAll() {
+        modelPath.wrappedValue = nil
+        useGPU.wrappedValue = true
+        cpuThreadCount.wrappedValue = 4
+        topK.wrappedValue = 64
+        topP.wrappedValue = 0.95
+        temperature.wrappedValue = 1.0
+        maxNumTokens.wrappedValue = 4096
+        kvCacheAuto.wrappedValue = true
+        speculativeDecoding.wrappedValue = true
+        visualTokenBudget.wrappedValue = 560
+        systemPrompt.wrappedValue = systemPrompt.defaultValue
+        thinkingMode.wrappedValue = false
+        memoryEnabled.wrappedValue = true
+        webAutoFetch.wrappedValue = true
+        toolWebSearch.wrappedValue = true
+        toolFetchURL.wrappedValue = true
+        toolCalculator.wrappedValue = true
+        toolWikipedia.wrappedValue = true
+        toolGetLocation.wrappedValue = true
+        toolWeather.wrappedValue = true
+        toolCalendar.wrappedValue = true
+        toolContacts.wrappedValue = true
+        toolShortcuts.wrappedValue = true
+        toolHealth.wrappedValue = true
+    }
 }

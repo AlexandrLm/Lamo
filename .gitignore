@@ -1,3 +1,25 @@
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Build artifacts
+build/
+*.build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/*/.build/
+
+# Project specific
 .mimocode
 all_swift_files.txt
 Packages/LiteRT-LM

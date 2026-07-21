@@ -66,9 +66,10 @@ struct CalendarAvailabilityTool: Tool {
 
         let rangeEnd: Date
         if let endStr = endDate, !endStr.isEmpty, let parsed = dateFormatter.date(from: endStr) {
-            rangeEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: parsed)) ?? cal.date(byAdding: .day, value: 8, to: today)!
+            let endOfDay = cal.startOfDay(for: parsed)
+            rangeEnd = cal.date(byAdding: .day, value: 1, to: endOfDay) ?? today.addingTimeInterval(8 * 86400)
         } else {
-            rangeEnd = cal.date(byAdding: .day, value: 8, to: today)!
+            rangeEnd = cal.date(byAdding: .day, value: 8, to: today) ?? today.addingTimeInterval(8 * 86400)
         }
 
         guard rangeStart < rangeEnd else {
@@ -107,7 +108,7 @@ struct CalendarAvailabilityTool: Tool {
         // Iterate day by day
         var dayCursor = rangeStart
         while dayCursor < rangeEnd && slots.count < maxSlotsCap {
-            let dayEnd = cal.date(byAdding: .day, value: 1, to: dayCursor)!
+            let dayEnd = cal.date(byAdding: .day, value: 1, to: dayCursor) ?? dayCursor.addingTimeInterval(86400)
 
             // Working hours for this day
             guard let workStartDate = cal.date(bySettingHour: workStart, minute: 0, second: 0, of: dayCursor),
@@ -165,7 +166,7 @@ struct CalendarAvailabilityTool: Tool {
             "total_found": slots.count,
             "duration_minutes": duration,
             "search_start": dateFormatter.string(from: rangeStart),
-            "search_end": dateFormatter.string(from: cal.date(byAdding: .day, value: -1, to: rangeEnd)!),
+            "search_end": dateFormatter.string(from: cal.date(byAdding: .day, value: -1, to: rangeEnd) ?? rangeEnd),
             "work_hours": "\(String(format: "%02d", workStart)):00–\(String(format: "%02d", workEnd)):00",
         ]
 
