@@ -46,30 +46,41 @@ struct WebSearchTool: Tool {
         let shouldFetch = AppDefaults.webAutoFetch.wrappedValue
         let result: Any
         if shouldFetch && !searchResults.isEmpty {
-            let topResults = Array(searchResults.prefix(3))
-            let urls = topResults.compactMap { URL(string: $0["url"] ?? "") }
+            // Smart fetch: only fetch pages with thin snippets (<100 chars).
+            // Results with substantial snippets are already useful to the model.
+            let toFetch = searchResults.enumerated().filter { i, sr in
+                let snippet = sr["snippet"] ?? ""
+                return snippet.count < 100 && i < 3
+            }
 
-            let fetchedContents = await withTaskGroup(of: (Int, String?).self) { group in
-                for (i, url) in urls.enumerated() {
-                    group.addTask {
-                        if let content = try? await WebFetcher.fetch(url: url) {
-                            return (i, String(content.prefix(2000)))
+            if !toFetch.isEmpty {
+                let fetchedContents = await withTaskGroup(of: (Int, String).self) { group in
+                    for (i, sr) in toFetch {
+                        guard let urlStr = sr["url"], let url = URL(string: urlStr) else { continue }
+                        group.addTask {
+                            if let content = try? await WebFetcher.fetch(url: url) {
+                                return (i, String(content.prefix(1500)))
+                            }
+                            return (i, "")
                         }
-                        return (i, nil)
                     }
+                    var results: [(Int, String)] = []
+                    for await r in group { if !r.1.isEmpty { results.append(r) } }
+                    return results
                 }
-                var results: [(Int, String)] = []
-                for await r in group { if let content = r.1 { results.append((r.0, content)) } }
-                return results
-            }
 
-            var enrichedResults: [[String: Any]] = []
-            for (i, sr) in searchResults.enumerated() {
-                var enriched: [String: Any] = ["title": sr["title"] ?? "", "snippet": sr["snippet"] ?? "", "url": sr["url"] ?? ""]
-                if let entry = fetchedContents.first(where: { $0.0 == i }) { enriched["content"] = entry.1 }
-                enrichedResults.append(enriched)
+                var enrichedResults: [[String: Any]] = []
+                for (i, sr) in searchResults.enumerated() {
+                    var enriched: [String: Any] = ["title": sr["title"] ?? "", "snippet": sr["snippet"] ?? "", "url": sr["url"] ?? ""]
+                    if let entry = fetchedContents.first(where: { $0.0 == i }) {
+                        enriched["content"] = entry.1
+                    }
+                    enrichedResults.append(enriched)
+                }
+                result = enrichedResults
+            } else {
+                result = searchResults
             }
-            result = enrichedResults
         } else {
             result = searchResults
         }
@@ -129,13 +140,3 @@ struct FetchUrlTool: Tool {
     }
 }
 
-enum FetchError: LocalizedError {
-    case invalidURL
-    case invalidEncoding
-    var errorDescription: String? {
-        switch self {
-        case .invalidURL: return "Invalid URL"
-        case .invalidEncoding: return "Could not decode response"
-        }
-    }
-}
