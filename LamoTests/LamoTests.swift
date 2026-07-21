@@ -152,64 +152,6 @@ struct LamoTests {
         #expect(result.usedTokens == 100)
     }
 
-    // MARK: - 3. ToolFilter category selection
-
-    @Test func toolFilterSelectsCorrectCategoriesByQuery() {
-        let allTools = [
-            "calculator", "web_search", "wikipedia", "fetch_url",
-            "calendar", "contacts", "update_memory",
-            "get_location", "weather", "shortcuts",
-            "health",
-        ]
-
-        // Knowledge query → knowledge tools
-        let knowledgeResult = ToolFilter.filter(toolNames: allTools, query: "search for latest news about AI")
-        #expect(knowledgeResult.contains("web_search"))
-        #expect(knowledgeResult.contains("wikipedia"))
-        #expect(knowledgeResult.contains("fetch_url"))
-        #expect(!knowledgeResult.contains("calendar"))
-        #expect(!knowledgeResult.contains("health"))
-
-        // Productivity query → productivity tools
-        let prodResult = ToolFilter.filter(toolNames: allTools, query: "schedule a meeting and remind me about it")
-        #expect(prodResult.contains("calendar"))
-        #expect(prodResult.contains("update_memory"))
-        #expect(!prodResult.contains("web_search"))
-        #expect(!prodResult.contains("weather"))
-
-        // System query → system tools
-        let sysResult = ToolFilter.filter(toolNames: allTools, query: "what is the weather forecast for today")
-        #expect(sysResult.contains("weather"))
-        #expect(sysResult.contains("get_location"))
-
-        // Health query → health tools
-        let healthResult = ToolFilter.filter(toolNames: allTools, query: "how many steps did I take today")
-        #expect(healthResult.contains("health"))
-        #expect(!healthResult.contains("calculator"))
-
-        // Code query → code tools
-        let codeResult = ToolFilter.filter(toolNames: allTools, query: "calculate 2+2 and run this script")
-        #expect(codeResult.contains("calculator"))
-
-        // Vague/greeting query → no category match → only core tools (core is empty → empty)
-        let vagueResult = ToolFilter.filter(toolNames: allTools, query: "hello how are you")
-        #expect(vagueResult.isEmpty)
-    }
-
-    @Test func toolFilterMultiCategoryQuery() {
-        let allTools = ["calculator", "web_search", "calendar", "weather", "health"]
-
-        // Query matching both knowledge and productivity
-        let result = ToolFilter.filter(
-            toolNames: allTools,
-            query: "search the web and add a calendar event"
-        )
-        #expect(result.contains("web_search"))
-        #expect(result.contains("calendar"))
-        // Tools from unmatched categories excluded
-        #expect(!result.contains("health"))
-        #expect(!result.contains("weather"))
-    }
 
     // MARK: - 5. RepetitionDetector loop detection
 

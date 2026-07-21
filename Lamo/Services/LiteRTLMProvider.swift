@@ -258,18 +258,10 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
             if AppDefaults.toolWikipedia.wrappedValue { allTools.append(WikipediaTool()) }
         }
-        let tools = allTools
-
-        // --- Smart tool filtering: only include relevant tools for this query ---
-        let lastUserQuery = messages.last(where: { $0.role == .user })?.content ?? ""
-        let toolNames = allTools.map { type(of: $0).name }
-        let filteredNames = Set(ToolFilter.filter(toolNames: toolNames, query: lastUserQuery))
-        let relevantTools = allTools.filter { filteredNames.contains(type(of: $0).name) }
-        LamoLogger.engine.debug("ToolFilter: \(allTools.count) → \(relevantTools.count) tools for query: \(lastUserQuery.prefix(50))")
 
         // --- Tokenize tool schemas using real getSchema() output ---
         var toolSchemaText = ""
-        for tool in relevantTools {
+        for tool in allTools {
             let schema = tool.getSchema()
             if let data = try? JSONSerialization.data(withJSONObject: schema, options: []),
                let json = String(data: data, encoding: .utf8) {
@@ -278,7 +270,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
         let toolDefTokens = await pm.tokenizeCount(toolSchemaText)
         pm.lastToolTokens = toolDefTokens
-        pm.lastToolCount = relevantTools.count
+        pm.lastToolCount = allTools.count
         pm.lastToolCountTotal = allTools.count
 
         // --- Accurate conversation tokens (real tokenizer, conservative fallback) ---
@@ -298,7 +290,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         let config = LiteRTLM.ConversationConfig(
             initialMessages: allMessages,
-            tools: relevantTools,
+            tools: allTools,
             samplerConfig: samplerConfig
         )
 
