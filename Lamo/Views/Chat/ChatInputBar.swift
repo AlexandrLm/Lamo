@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import os
-import Speech
 
 // MARK: - Constants
 
@@ -30,7 +29,6 @@ struct ChatInputBar: View {
     @State private var showFileImporter = false
     @State private var sendCount = 0
     @State private var pulseOpacity: Double = 0
-    @StateObject private var speechRecognizer = SpeechRecognizer()
     @ObservedObject private var provider = ProviderManager.shared
 
     var body: some View {
@@ -56,7 +54,6 @@ struct ChatInputBar: View {
             HStack(spacing: 10) {
                 plusButton
                 thinkingButton
-                micButton
                 Spacer()
                 sendButton
             }
@@ -109,9 +106,6 @@ struct ChatInputBar: View {
                 }
                 photoPickerItems = []
             }
-        }
-        .onChange(of: speechRecognizer.transcribedText) { _, newValue in
-            text = newValue
         }
     }
 
@@ -167,43 +161,6 @@ struct ChatInputBar: View {
                             : Color.white.opacity(0.1),
                             lineWidth: 1.5)
                 )
-        }
-        .buttonStyle(.plain)
-        .contentShape(Circle())
-    }
-
-    // MARK: - Microphone button
-
-    private var micButton: some View {
-        Button {
-            if speechRecognizer.isRecording {
-                speechRecognizer.stopRecording()
-            } else {
-                Task {
-                    let authorized = await speechRecognizer.requestAuthorization()
-                    guard authorized else { return }
-                    try? speechRecognizer.startRecording()
-                }
-            }
-        } label: {
-            Image(systemName: speechRecognizer.isRecording ? "mic.fill" : "mic")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(speechRecognizer.isRecording ? LamoTheme.Colors.accent : .white.opacity(0.3))
-                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
-                .background(
-                    Circle()
-                        .fill(speechRecognizer.isRecording
-                            ? LamoTheme.Colors.accent.opacity(0.2)
-                            : Color.white.opacity(0.05))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(speechRecognizer.isRecording
-                            ? LamoTheme.Colors.accent.opacity(0.6)
-                            : Color.white.opacity(0.1),
-                            lineWidth: 1.5)
-                )
-                .animation(.easeInOut(duration: 0.2), value: speechRecognizer.isRecording)
         }
         .buttonStyle(.plain)
         .contentShape(Circle())
