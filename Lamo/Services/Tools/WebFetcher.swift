@@ -363,7 +363,7 @@ enum FetchError: LocalizedError {
 // MARK: - HTML Entity Decoder
 
 enum HTMLEntityDecoder {
-    private static let entities: [(String, String)] = [
+    private nonisolated static let entities: [(String, String)] = [
         ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
         ("&#x27;", "'"), ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " "),
         ("&mdash;", "—"), ("&ndash;", "–"), ("&hellip;", "…"),

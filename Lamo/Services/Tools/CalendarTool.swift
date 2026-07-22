@@ -163,7 +163,7 @@ struct CalendarTool: Tool {
             return result
         }
 
-        return try await MainActor.run {
+        return await MainActor.run {
             let event = EKEvent(eventStore: store)
             event.title = title
             if let notes, !notes.isEmpty { event.notes = notes }

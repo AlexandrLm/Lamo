@@ -45,7 +45,7 @@ final class EmbeddingService {
 
     /// Synchronous test to verify embedding model loads and returns valid data.
     private static func testEmbedding(model: NLEmbedding) -> Bool {
-        guard let vector = try? model.vector(for: "test"),
+        guard let vector = model.vector(for: "test"),
               !vector.isEmpty else { return false }
         return !vector[0].isNaN
     }
@@ -56,7 +56,7 @@ final class EmbeddingService {
     /// Returns nil if embedding fails or service is unavailable.
     func embed(_ text: String) -> [Double]? {
         guard isAvailable, let model else { return nil }
-        guard let vector = try? model.vector(for: text), !vector.isEmpty else { return nil }
+        guard let vector = model.vector(for: text), !vector.isEmpty else { return nil }
         return vector
     }
 

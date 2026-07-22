@@ -178,12 +178,12 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
 
         // --- Inject plan progress scratchpad from previous turn (two-pass carryover) ---
-        let planSummary = await AgenticLoopState.shared.planSummary
+        let planSummary = AgenticLoopState.shared.planSummary
         if !planSummary.isEmpty {
             systemPrompt += "\n\n\(planSummary)"
         }
         // Reset plan state for this new turn
-        await AgenticLoopState.shared.cancelPlan()
+        AgenticLoopState.shared.cancelPlan()
 
         // --- Inject current time into system prompt ---
         // First message: full info (date, weekday, tz, unix). Subsequent: time only.

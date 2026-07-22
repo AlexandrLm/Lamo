@@ -364,7 +364,7 @@ final class ChatViewModel {
             return json
         }
         // For search results: truncate "content" in each result item
-        if var results = obj["results"] as? [[String: Any]] {
+        if let results = obj["results"] as? [[String: Any]] {
             obj["results"] = results.map { item in
                 var m = item
                 if let c = m["content"] as? String, c.count > 300 {

@@ -2,8 +2,13 @@ import Foundation
 import os
 
 enum LamoLogger {
-    /// Centralized subsystem identifier. Use `LamoLogger.subsystem` instead of hardcoding "com.lamo".
-    static let subsystem = Bundle.main.bundleIdentifier ?? "com.lamo"
+    /// Centralized subsystem identifier. Uses CFBundle to avoid @MainActor isolation.
+    nonisolated static let subsystem: String = {
+        if let id = CFBundleGetIdentifier(CFBundleGetMainBundle()) as String? {
+            return id
+        }
+        return "com.lamo"
+    }()
 
     static let general = Logger(subsystem: subsystem, category: "general")
     static let engine = Logger(subsystem: subsystem, category: "engine")

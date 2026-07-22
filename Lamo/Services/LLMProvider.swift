@@ -9,6 +9,18 @@ struct BenchmarkData: Codable, Sendable {
     let prefillTokenCount: Int
 }
 
+extension BenchmarkData {
+    static func decode(from json: String) -> BenchmarkData? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
+    }
+
+    func encode() -> String? {
+        guard let data = try? JSONEncoder().encode(self) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+}
+
 enum StreamingToken: @unchecked Sendable {
     case delta(String)
     case thinkingDelta(String)

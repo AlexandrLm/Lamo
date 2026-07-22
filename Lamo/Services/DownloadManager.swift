@@ -114,9 +114,10 @@ final class DownloadManager: ObservableObject {
         networkMonitor.pathUpdateHandler = { [weak self] path in
             let isExpensive = path.isExpensive
             let isConstrained = path.isConstrained
+            let manager = self
             Task { @MainActor in
-                self?.isExpensive = isExpensive
-                self?.isConstrained = isConstrained
+                manager?.isExpensive = isExpensive
+                manager?.isConstrained = isConstrained
             }
         }
         networkMonitor.start(queue: networkQueue)

@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import MapKit
 
 // MARK: - Location Result
 
@@ -121,14 +122,18 @@ actor LocationService {
     }
 
     // MARK: - Private
-
     private func reverseGeocode(_ location: CLLocation) async throws -> String {
-        let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
-        guard let place = placemarks.first else {
+        guard let request = MKReverseGeocodingRequest(location: location) else {
             return "\(location.coordinate.latitude), \(location.coordinate.longitude)"
         }
-        return [place.locality, place.administrativeArea, place.country]
-            .compactMap { $0 }.joined(separator: ", ")
+        let mapItems = try await request.mapItems
+        guard let addr = mapItems.first?.addressRepresentations else {
+            return "\(location.coordinate.latitude), \(location.coordinate.longitude)"
+        }
+        let parts = [addr.cityName, addr.regionName].compactMap { $0 }
+        return parts.isEmpty
+            ? "\(location.coordinate.latitude), \(location.coordinate.longitude)"
+            : parts.joined(separator: ", ")
     }
 }
 

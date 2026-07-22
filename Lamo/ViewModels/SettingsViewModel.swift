@@ -156,7 +156,6 @@ struct ModelInfo {
     let hasSpeculativeDecoding: Bool
 
     static func from(path: String) -> ModelInfo? {
-        let fileName = (path as NSString).lastPathComponent
         let fileSize: Int64
         if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
            let size = attrs[.size] as? Int64 {

@@ -193,7 +193,7 @@ final class MemoryService: ObservableObject {
         // Pre-compute query embedding in background
         if embeddings.isAvailable {
             Task { @MainActor [weak self, query] in
-                self?.lastQueryEmbedding = await self?.embeddings.embed(query)
+                self?.lastQueryEmbedding = self?.embeddings.embed(query)
             }
         }
     }

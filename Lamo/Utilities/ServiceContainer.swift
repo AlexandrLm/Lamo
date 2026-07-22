@@ -20,7 +20,12 @@ final class ServiceContainer {
     // MARK: - Shared
 
     /// The live container used by the app. Replace with `.mock` in tests.
-    @MainActor static let live = ServiceContainer()
+    @MainActor static let live: ServiceContainer = {
+        ServiceContainer(
+            memoryService: MemoryService.shared,
+            downloadManager: DownloadManager.shared
+        )
+    }()
 
     /// Empty mock container for tests — all services are no-ops.
     @MainActor static let mock = ServiceContainer(
@@ -36,8 +41,8 @@ final class ServiceContainer {
     // MARK: - Init
 
     init(
-        memoryService: MemoryServiceProtocol = MemoryService.shared,
-        downloadManager: DownloadManagerProtocol = DownloadManager.shared
+        memoryService: MemoryServiceProtocol,
+        downloadManager: DownloadManagerProtocol
     ) {
         self.memoryService = memoryService
         self.downloadManager = downloadManager

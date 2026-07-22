@@ -57,20 +57,18 @@ final class Message {
     var benchmark: BenchmarkData? {
         get {
             if let cached = benchmarkCache { return cached }
-            guard let json = benchmarkJSON,
-                  let data = json.data(using: .utf8) else { return nil }
-            let decoded = try? JSONDecoder().decode(BenchmarkData.self, from: data)
+            guard let json = benchmarkJSON else { return nil }
+            let decoded = BenchmarkData.decode(from: json)
             benchmarkCache = decoded
             return decoded
         }
         set {
             benchmarkCache = newValue
-            guard let newValue,
-                  let data = try? JSONEncoder().encode(newValue) else {
+            if let newValue {
+                benchmarkJSON = newValue.encode()
+            } else {
                 benchmarkJSON = nil
-                return
             }
-            benchmarkJSON = String(data: data, encoding: .utf8)
         }
     }
 

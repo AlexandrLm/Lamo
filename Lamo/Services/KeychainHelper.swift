@@ -4,8 +4,8 @@ import os
 
 /// Simple Keychain wrapper for storing secrets (API keys, tokens).
 enum KeychainHelper {
-    private static let service = LamoLogger.subsystem + ".keys"
-    private static let logger = Logger(subsystem: LamoLogger.subsystem, category: "keychain")
+    private nonisolated static let service = LamoLogger.subsystem + ".keys"
+    private nonisolated static let logger = Logger(subsystem: LamoLogger.subsystem, category: "keychain")
 
     nonisolated static func save(key: String, value: String) {
         let data = Data(value.utf8)
