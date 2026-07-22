@@ -134,6 +134,7 @@ final class MemoryService: ObservableObject {
         guard let conversation = try? context.fetch(descriptor).first else { return }
         conversation.summary = summary
         try? context.save()
+        invalidateCaches()
     }
 
     /// Remove facts by exact text match (called by UpdateMemoryTool).
@@ -566,7 +567,7 @@ final class MemoryService: ObservableObject {
     }
 
     /// Invalidate all caches that depend on memory facts.
-    private func invalidateCaches() {
+    func invalidateCaches() {
         memoryContextCache = nil
         systemPromptCache = nil
     }

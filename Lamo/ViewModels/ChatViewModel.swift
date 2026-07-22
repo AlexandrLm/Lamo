@@ -518,10 +518,14 @@ final class ChatViewModel {
 
         guard let summary = await ProviderManager.shared.summarizeMessages(toCompress) else { return }
 
+        // Guard: user may have sent a new message while we were summarizing.
+        // Don't show a stale compression card over new streaming content.
+        guard !isStreaming, streamingMessageID == nil else { return }
+
         conversation.summary = summary
         save()
+        MemoryService.shared.invalidateCaches()
         ProviderManager.shared.lastCompression = (oldCount: toCompress.count, summary: summary)
-        // Clear the UI notification after the next message is sent
         LamoLogger.ui.info("Conversation compressed: \(toCompress.count) messages → \(summary.count) chars summary")
     }
 
