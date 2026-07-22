@@ -11,9 +11,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run SwiftLint
+        run: |
+          if ! command -v swiftlint &> /dev/null; then
+            brew install swiftlint
+          fi
+          swiftlint --strict --quiet
+
   build-and-test:
     name: Build & Test
     runs-on: macos-15
+    needs: lint
 
     steps:
       - name: Checkout
@@ -24,6 +39,16 @@ jobs:
 
       - name: Show Xcode version
         run: xcodebuild -version
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Lamo.xcodeproj/project.pbxproj', 'Packages/LiteRT-LM/Package.swift', 'Packages/swift-markdown/Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
 
       - name: Build
         run: |

@@ -25,12 +25,8 @@ final class ChatViewModel {
     private let conversation: Conversation
     private var streamingMessageID: UUID?
     private var streamingTask: Task<Void, Never>?
-    /// Accumulated text buffer during streaming — avoids per-token SwiftData writes.
-    private var streamingBuffer: String = ""
-    private var streamingThinkingBuffer: String = ""
-    /// Timer for throttled SwiftData flushes during streaming.
-    private var lastFlushTime: Date = .distantPast
-    private let flushInterval: TimeInterval = 0.15 // 150ms throttle
+    /// Throttled buffer for streaming text — avoids per-token SwiftData writes.
+    private var streamBuffer = StreamBuffer()
 
     /// Override for testing. When non-nil, used instead of ProviderManager.shared.currentProvider.
     var llmProviderOverride: (any LLMProvider)?
@@ -185,10 +181,10 @@ final class ChatViewModel {
                 guard !Task.isCancelled else { break }
                 switch token {
                 case .delta(let delta):
-                    self.streamingBuffer += delta
+                    self.streamBuffer.append(text: delta)
                     self.flushStreamingBuffer()
                 case .thinkingDelta(let thought):
-                    self.streamingThinkingBuffer += thought
+                    self.streamBuffer.append(thinking: thought)
                     self.flushStreamingBuffer()
                 case .toolCall(let name, let params):
                     self.addToolCall(name: name, params: params)
@@ -206,8 +202,7 @@ final class ChatViewModel {
                         }
                         // Reset streaming state
                         streamingTask?.cancel()
-                        streamingBuffer = ""
-                        streamingThinkingBuffer = ""
+                        streamBuffer.reset()
                         streamingMessageID = nil
                         isStreaming = false
                         // Create a fresh message for the retry
@@ -237,21 +232,12 @@ final class ChatViewModel {
 
     /// Flush accumulated streaming text to the SwiftData model, throttled to avoid disk thrashing.
     private func flushStreamingBuffer(force: Bool = false) {
-        let now = Date()
-        guard force || now.timeIntervalSince(lastFlushTime) >= flushInterval else { return }
-        guard !streamingBuffer.isEmpty || !streamingThinkingBuffer.isEmpty else { return }
+        guard let (text, thinking) = streamBuffer.drain(force: force) else { return }
         guard let id = streamingMessageID,
               let index = messages.firstIndex(where: { $0.id == id }) else { return }
 
-        if !streamingBuffer.isEmpty {
-            messages[index].content += streamingBuffer
-            streamingBuffer = ""
-        }
-        if !streamingThinkingBuffer.isEmpty {
-            messages[index].thinkingContent += streamingThinkingBuffer
-            streamingThinkingBuffer = ""
-        }
-        lastFlushTime = now
+        messages[index].content += text
+        messages[index].thinkingContent += thinking
     }
 
 
@@ -310,8 +296,7 @@ final class ChatViewModel {
               let index = messages.firstIndex(where: { $0.id == id }) else {
             isStreaming = false
             streamingMessageID = nil
-            streamingBuffer = ""
-            streamingThinkingBuffer = ""
+            streamBuffer.reset()
             return
         }
         if success == false, let error {
@@ -330,8 +315,7 @@ final class ChatViewModel {
         messages[index].isStreaming = false
         streamingMessageID = nil
         isStreaming = false
-        streamingBuffer = ""
-        streamingThinkingBuffer = ""
+        streamBuffer.reset()
         conversation.updatedAt = .now
         save()
         // Free memory AFTER save: clear fileContent (transient), keep thinking visible

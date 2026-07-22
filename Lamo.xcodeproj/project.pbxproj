@@ -333,7 +333,9 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lamo reads your health data (steps, heart rate, sleep) to answer fitness and wellness questions. All data stays on your device.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lamo does not write health data.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Lamo needs your location to provide weather forecasts and location-aware responses.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is needed to transcribe your voice to text. All processing happens on-device.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Lamo creates reminders in the Reminders app when you ask.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to convert your voice to text. All processing happens on-device.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -389,7 +391,9 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lamo reads your health data (steps, heart rate, sleep) to answer fitness and wellness questions. All data stays on your device.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lamo does not write health data.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Lamo needs your location to provide weather forecasts and location-aware responses.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is needed to transcribe your voice to text. All processing happens on-device.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Lamo creates reminders in the Reminders app when you ask.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to convert your voice to text. All processing happens on-device.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

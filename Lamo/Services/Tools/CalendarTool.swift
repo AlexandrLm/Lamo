@@ -2,15 +2,6 @@ import Foundation
 import LiteRTLM
 import EventKit
 
-// MARK: - Helpers
-
-private func report(_ name: String, params: String) async {
-    await ToolCallReporter.shared.reportCall(name: name, params: params)
-}
-private func reportResult(_ name: String, _ result: Any) async {
-    await ToolCallReporter.shared.reportResult(name: name, result: result)
-}
-
 // MARK: - Calendar Tool
 
 struct CalendarTool: Tool {
@@ -55,7 +46,7 @@ struct CalendarTool: Tool {
         if let et = endTime { paramsDesc += ", \"end_time\": \"\(et)\"" }
         if let q = query { paramsDesc += ", \"query\": \"\(q)\"" }
         paramsDesc += "}"
-        await report(Self.name, params: paramsDesc)
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: paramsDesc)
 
         let store = EKEventStore()
 
@@ -68,7 +59,7 @@ struct CalendarTool: Tool {
 
         guard granted else {
             let result: [String: Any] = ["error": "Calendar access denied. Enable in Settings > Privacy > Calendars."]
-            await reportResult(Self.name, result)
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
             return result
         }
 
@@ -150,7 +141,7 @@ struct CalendarTool: Tool {
 
         let limit = await AgenticLoopBudget.shared.consumeIteration()
         let truncated = await TokenTruncator.truncateResult(result, maxTokens: limit)
-        await reportResult(Self.name, truncated)
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: truncated)
         return truncated
     }
 
@@ -159,7 +150,7 @@ struct CalendarTool: Tool {
     private func handleCreate(store: EKEventStore) async throws -> Any {
         guard let title, !title.isEmpty else {
             let result: [String: Any] = ["error": "Title is required for 'create' mode."]
-            await reportResult(Self.name, result)
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
             return result
         }
 
@@ -214,7 +205,7 @@ struct CalendarTool: Tool {
     private func handleSearch(store: EKEventStore) async throws -> Any {
         guard let query, !query.isEmpty else {
             let result: [String: Any] = ["error": "Query is required for 'search' mode."]
-            await reportResult(Self.name, result)
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
             return result
         }
 
@@ -254,7 +245,7 @@ struct CalendarTool: Tool {
 
         let limit = await AgenticLoopBudget.shared.consumeIteration()
         let truncated = await TokenTruncator.truncateResult(result, maxTokens: limit)
-        await reportResult(Self.name, truncated)
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: truncated)
         return truncated
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct GenerationComputeSection: View {
     @Bindable var vm: SettingsViewModel
     @State private var showSystemPrompt = false
+    @State private var selectedPresetID = "assistant"
 
     // Mirror VM toggles/values so conditional content + sliders re-render reliably.
     // @Observable computed properties backed by UserDefaults don't always
@@ -345,6 +346,29 @@ struct GenerationComputeSection: View {
             if showSystemPrompt {
                 thinDivider
                     .padding(.horizontal, LamoTheme.Spacing.lg)
+
+                // Preset picker
+                HStack {
+                    Label("Preset", systemImage: "rectangle.stack")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                    Spacer()
+                    Picker("Preset", selection: $selectedPresetID) {
+                        ForEach(PromptPreset.allPresets) { preset in
+                            Text(preset.name).tag(preset.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(LamoTheme.Colors.accent)
+                    .onChange(of: selectedPresetID) { _, newID in
+                        guard let preset = PromptPreset.preset(id: newID) else { return }
+                        vm.systemPrompt = preset.prompt
+                        if let temp = preset.temperature { vm.temperature = temp }
+                        if let topP = preset.topP { vm.topP = topP }
+                    }
+                }
+                .padding(.horizontal, LamoTheme.Spacing.lg)
+                .padding(.top, LamoTheme.Spacing.sm)
 
                 TextEditor(text: $vm.systemPrompt)
                     .font(.system(.caption, design: .monospaced))

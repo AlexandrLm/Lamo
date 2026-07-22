@@ -4,14 +4,6 @@ import UIKit
 import EventKit
 import CoreLocation
 
-// MARK: - Helpers
-
-private func report(_ name: String, params: String) async {
-    await ToolCallReporter.shared.reportCall(name: name, params: params)
-}
-private func reportResult(_ name: String, _ result: Any) async {
-    await ToolCallReporter.shared.reportResult(name: name, result: result)
-}
 
 
 // MARK: - Get Location (CoreLocation)
@@ -24,7 +16,7 @@ struct GetLocationTool: Tool {
     var ipOnly: Bool = false
 
     func run() async throws -> Any {
-        await report(Self.name, params: ipOnly ? "{\"ipOnly\": true}" : "{}")
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: ipOnly ? "{\"ipOnly\": true}" : "{}")
 
         let loc: LocationResult
         if ipOnly {
@@ -40,7 +32,7 @@ struct GetLocationTool: Tool {
             "horizontal_accuracy_m": loc.horizontalAccuracy,
             "location_name": loc.name,
         ]
-        await reportResult(Self.name, result)
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
         return result
     }
 }
@@ -59,7 +51,7 @@ struct WeatherTool: Tool {
 
     func run() async throws -> Any {
         let clampedDays = max(1, min(days, 7))
-        await report(Self.name, params: city.isEmpty ? "{\"city\": \"(auto-detected)\", \"days\": \(clampedDays)}" : "{\"city\": \"\(city)\", \"days\": \(clampedDays)}")
+        await ToolCallReporter.shared.reportCall(name: Self.name, params: city.isEmpty ? "{\"city\": \"(auto-detected)\", \"days\": \(clampedDays)}" : "{\"city\": \"\(city)\", \"days\": \(clampedDays)}")
 
         let coords: Coords
         if city.isEmpty {
@@ -69,7 +61,7 @@ struct WeatherTool: Tool {
             coords = try await geocode(city: city)
         }
         let result = try await fetchWeather(lat: coords.lat, lon: coords.lon, cityName: coords.name, days: clampedDays)
-        await reportResult(Self.name, result)
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
         return result
     }
 

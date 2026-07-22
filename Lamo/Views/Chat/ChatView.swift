@@ -44,7 +44,6 @@ struct ChatView: View {
             .animation(.easeInOut(duration: 1.5), value: provider.isEngineReady)
             .animation(.easeInOut(duration: 1.5), value: provider.engineError)
         }
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Menu {
@@ -264,6 +263,7 @@ struct ChatView: View {
         if provider.litertLMModelPath != nil { return .white.opacity(0.4) }
         return .white.opacity(0.2)
     }
+
 }
 
 // MARK: - Streaming Indicator (Pulsing Cursor)
