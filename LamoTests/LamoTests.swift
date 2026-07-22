@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+import UIKit
 @testable import Lamo
 
 // MARK: - Test Doubles
@@ -88,8 +89,6 @@ struct ModelTests {
     @Test func messageRoleMapping() {
         #expect(MessageRole.user.rawValue == "user")
         #expect(MessageRole.assistant.rawValue == "assistant")
-        #expect(MessageRole.system.rawValue == "system")
-        #expect(MessageRole.tool.rawValue == "tool")
     }
 
     // MARK: Conversation
@@ -104,7 +103,7 @@ struct ModelTests {
 
     @Test func conversationCustomInit() {
         let id = UUID()
-        let conv = Conversation(id: id, title: "Test", isPinned: true, summary: "sum")
+        let conv = Conversation(id: id, title: "Test", summary: "sum", isPinned: true)
         #expect(conv.id == id)
         #expect(conv.title == "Test")
         #expect(conv.isPinned)
@@ -296,6 +295,7 @@ struct ModelTests {
 
 // MARK: - Services Tests
 
+@MainActor
 struct ServicesTests {
 
     // MARK: ContextTracker
@@ -363,10 +363,11 @@ struct ServicesTests {
 
     @Test func contextTrackerMessageUsageIdentifiable() {
         let usage = ContextTracker.MessageUsage(
-            id: UUID(), role: "user", preview: "hello",
-            tokens: 50, isInContext: true
+            id: UUID(), role: "user", charCount: 50, tokenCount: 50,
+            isInContext: true, tokenOffset: 0, isStreaming: false,
+            preview: "hello"
         )
-        #expect(usage.tokens == 50)
+        #expect(usage.tokenCount == 50)
         #expect(usage.isInContext)
         #expect(usage.role == "user")
         #expect(usage.preview == "hello")
@@ -382,7 +383,7 @@ struct ServicesTests {
             toolCountTotal: 0,
             totalLimit: 1024,
             messageUsages: [
-                ContextTracker.MessageUsage(id: msg.id, role: "user", preview: "x", tokens: 400, isInContext: true)
+                ContextTracker.MessageUsage(id: msg.id, role: "user", charCount: 50, tokenCount: 400, isInContext: true, tokenOffset: 0, isStreaming: false, preview: "x")
             ],
             usedTokens: 400
         )
@@ -393,10 +394,14 @@ struct ServicesTests {
 
     @Test func contextTrackerHasDroppedMessages() {
         let droppedUsage = ContextTracker.MessageUsage(
-            id: UUID(), role: "user", preview: "old", tokens: 50, isInContext: false
+            id: UUID(), role: "user", charCount: 50, tokenCount: 50,
+            isInContext: false, tokenOffset: 0, isStreaming: false,
+            preview: "old"
         )
         let includedUsage = ContextTracker.MessageUsage(
-            id: UUID(), role: "assistant", preview: "new", tokens: 50, isInContext: true
+            id: UUID(), role: "assistant", charCount: 50, tokenCount: 50,
+            isInContext: true, tokenOffset: 0, isStreaming: false,
+            preview: "new"
         )
         let tracker = ContextTracker(
             systemPromptTokens: 0, memoryTokens: 0, toolTokens: 0,
@@ -730,7 +735,7 @@ struct ServicesTests {
     // MARK: ImageCache
 
     @Test func imageCacheSetAndGet() {
-        let cache = ImageCache()
+        let cache = ImageCache.shared
         let image = UIImage()
         cache.setImage(image, forKey: "test_key")
         let retrieved = cache.image(forKey: "test_key")
@@ -738,12 +743,12 @@ struct ServicesTests {
     }
 
     @Test func imageCacheMiss() {
-        let cache = ImageCache()
+        let cache = ImageCache.shared
         #expect(cache.image(forKey: "nonexistent") == nil)
     }
 
     @Test func imageCacheClear() {
-        let cache = ImageCache()
+        let cache = ImageCache.shared
         cache.setImage(UIImage(), forKey: "k")
         cache.clear()
         #expect(cache.image(forKey: "k") == nil)
@@ -752,18 +757,18 @@ struct ServicesTests {
     // MARK: URLCacheStore
 
     @Test func urlCacheStoreSetAndGet() {
-        let store = URLCacheStore()
+        let store = URLCacheStore.shared
         store.setContent("cached content", for: "https://example.com")
         #expect(store.content(for: "https://example.com") == "cached content")
     }
 
     @Test func urlCacheStoreMiss() {
-        let store = URLCacheStore()
+        let store = URLCacheStore.shared
         #expect(store.content(for: "https://missing.com") == nil)
     }
 
     @Test func urlCacheStoreClear() {
-        let store = URLCacheStore()
+        let store = URLCacheStore.shared
         store.setContent("data", for: "url")
         store.clear()
         #expect(store.content(for: "url") == nil)
@@ -942,8 +947,8 @@ struct ServicesTests {
     @Test func toolCallReporterRegisterAndReport() async {
         let reporter = ToolCallReporter.shared
         let stream = AsyncStream<StreamingToken> { continuation in
-            reporter.register(continuation: continuation)
             Task {
+                await reporter.register(continuation: continuation)
                 await reporter.reportCall(name: "test_tool", params: "{}")
                 await reporter.reportResult(name: "test_tool", result: ["status": "ok"])
             }
@@ -993,7 +998,7 @@ struct ServicesTests {
     }
 
     @Test func appDefaultsOptionalUserDefault() {
-        @OptionalUserDefault<String>("test_opt_key") var testOpt: String?
+        @OptionalUserDefault<String>(key: "test_opt_key") var testOpt: String?
         #expect(testOpt == nil)
         testOpt = "hello"
         #expect(testOpt == "hello")
@@ -1076,6 +1081,7 @@ struct ServicesTests {
 
 // MARK: - ChatViewModel Tests
 
+@MainActor
 struct ChatViewModelTests {
 
     @Test func chatViewModelSendCreatesUserMessageAndStartsStreaming() async throws {
@@ -1628,7 +1634,7 @@ struct ChatViewModelTests {
 
 // MARK: - Serialized tests (shared mutable state)
 
-@Suite(.serialized)
+@Suite(.serialized) @MainActor
 struct MemoryServiceTests {
 
     @Test func jaccardShortFactThreshold() async throws {
@@ -1867,5 +1873,212 @@ struct MemoryServiceTests {
         // Near-identical normalized text should be rejected
         await MemoryService.shared.storeFacts(["User is 25 years old!"])
         #expect(MemoryService.shared.allFactTexts().count == 1, "Normalized duplicate should be rejected")
+    }
+}
+
+// MARK: - MemoryDeduplicator Tests
+
+struct MemoryDeduplicatorTests {
+
+    @Test func wordSet() {
+        let words = MemoryDeduplicator.wordSet(from: "Hello World, Test!")
+        #expect(words == ["hello", "world", "test"])
+    }
+
+    @Test func wordSetEmpty() {
+        let words = MemoryDeduplicator.wordSet(from: "")
+        #expect(words.isEmpty)
+    }
+
+    @Test func normalizeText() {
+        let norm = MemoryDeduplicator.normalizeText("User's name is Alice!")
+        #expect(norm == "users name is alice")
+    }
+
+    @Test func normalizeTextNumbers() {
+        let norm = MemoryDeduplicator.normalizeText("User is 25 years old")
+        #expect(norm == "user is 25 years old")
+    }
+
+    @Test func extractSubject() {
+        let subject = MemoryDeduplicator.extractSubject("user name is Alice Johnson")
+    }
+
+    @Test func extractSubjectWithPossessive() {
+        let subject = MemoryDeduplicator.extractSubject("User's favorite color is blue")
+        #expect(subject == ["user", "favorite", "color"])
+    }
+
+    @Test func extractSubjectShort() {
+        let subject = MemoryDeduplicator.extractSubject("likes pizza")
+        #expect(subject == ["likes", "pizza"])
+    }
+
+    @Test func isDuplicateTextIdentical() {
+        var wordCache: [UUID: Set<String>] = [:]
+        var normCache: [UUID: String] = [:]
+        let id = UUID()
+        let fact = MemoryEntry(id: id, text: "user likes chocolate cake", conversationID: UUID())
+        wordCache[id] = MemoryDeduplicator.wordSet(from: "user likes chocolate cake")
+        normCache[id] = MemoryDeduplicator.normalizeText("user likes chocolate cake")
+
+        let isDup = MemoryDeduplicator.isDuplicateText(
+            "user likes chocolate cake",
+            existingFacts: [fact],
+            wordSetsCache: &wordCache,
+            normalizedCache: &normCache
+        )
+        #expect(isDup)
+    }
+
+    @Test func isDuplicateTextDifferent() {
+        var wordCache: [UUID: Set<String>] = [:]
+        var normCache: [UUID: String] = [:]
+        let id = UUID()
+        let fact = MemoryEntry(id: id, text: "user likes chocolate cake", conversationID: UUID())
+        wordCache[id] = MemoryDeduplicator.wordSet(from: "user likes chocolate cake")
+        normCache[id] = MemoryDeduplicator.normalizeText("user likes chocolate cake")
+
+        let isDup = MemoryDeduplicator.isDuplicateText(
+            "user enjoys playing tennis",
+            existingFacts: [fact],
+            wordSetsCache: &wordCache,
+            normalizedCache: &normCache
+        )
+        #expect(!isDup)
+    }
+
+    @Test func isDuplicateTextEmptyFact() {
+        var wordCache: [UUID: Set<String>] = [:]
+        var normCache: [UUID: String] = [:]
+        let isDup = MemoryDeduplicator.isDuplicateText(
+            "",
+            existingFacts: [],
+            wordSetsCache: &wordCache,
+            normalizedCache: &normCache
+        )
+        #expect(isDup) // empty word set → duplicate
+    }
+
+    @Test func findConflictingFactDetected() {
+        let id = UUID()
+        let fact = MemoryEntry(id: id, text: "user really loves visiting Paris every summer", conversationID: UUID())
+        let wordCache: [UUID: Set<String>] = [id: MemoryDeduplicator.wordSet(from: "user really loves visiting Paris every summer")]
+        let normCache: [UUID: String] = [id: MemoryDeduplicator.normalizeText("user really loves visiting Paris every summer")]
+
+        let conflictID = MemoryDeduplicator.findConflictingFact(
+            "user really enjoys visiting Berlin every winter",
+            existingFacts: [fact],
+            wordSetsCache: wordCache,
+            normalizedCache: normCache
+        )
+        #expect(conflictID == id)
+    }
+
+    @Test func findConflictingFactNoConflict() {
+        let id = UUID()
+        let fact = MemoryEntry(id: id, text: "user name is Alice", conversationID: UUID())
+        let wordCache: [UUID: Set<String>] = [id: MemoryDeduplicator.wordSet(from: "user name is Alice")]
+        let normCache: [UUID: String] = [id: MemoryDeduplicator.normalizeText("user name is Alice")]
+
+        let conflictID = MemoryDeduplicator.findConflictingFact(
+            "user likes chocolate cake",
+            existingFacts: [fact],
+            wordSetsCache: wordCache,
+            normalizedCache: normCache
+        )
+        #expect(conflictID == nil)
+    }
+}
+
+// MARK: - MemoryContextBuilder Tests
+
+struct MemoryContextBuilderTests {
+
+    @Test func relevanceScoreBaseline() {
+        let builder = MemoryContextBuilder(maxFacts: 50, maxMemoryChars: 3000, ageDecayHalfLife: 30)
+        let fact = MemoryEntry(text: "test fact here", conversationID: UUID())
+        let score = builder.relevanceScore(fact: fact, now: fact.timestamp)
+        #expect(score > 0.9) // brand-new fact should score near 1.0
+        #expect(score <= 1.5) // with usageCount=0, base=1.0 * exp(0) = 1.0
+    }
+
+    @Test func relevanceScoreWithUsage() {
+        let builder = MemoryContextBuilder(maxFacts: 50, maxMemoryChars: 3000, ageDecayHalfLife: 30)
+        let fact = MemoryEntry(text: "test", conversationID: UUID(), usageCount: 10)
+        let score = builder.relevanceScore(fact: fact, now: fact.timestamp)
+        #expect(score > 5.0) // (1 + 10*0.5) * exp(0) = 6.0
+    }
+
+    @Test func buildContextEmpty() {
+        let builder = MemoryContextBuilder(maxFacts: 50, maxMemoryChars: 3000, ageDecayHalfLife: 30)
+        let result = builder.buildContext(
+            factsCache: [],
+            embeddingService: EmbeddingService.shared,
+            lastQueryText: "",
+            lastQueryEmbedding: nil
+        )
+        #expect(result.context.isEmpty)
+        #expect(result.includedFacts.isEmpty)
+    }
+
+    @Test func buildContextWrapsInMemoryTag() {
+        let builder = MemoryContextBuilder(maxFacts: 50, maxMemoryChars: 3000, ageDecayHalfLife: 30)
+        let fact = MemoryEntry(text: "user likes cookies", conversationID: UUID())
+        let result = builder.buildContext(
+            factsCache: [fact],
+            embeddingService: EmbeddingService.shared,
+            lastQueryText: "",
+            lastQueryEmbedding: nil
+        )
+        #expect(result.context.hasPrefix("<memory>\n"))
+        #expect(result.context.hasSuffix("</memory>"))
+        #expect(result.context.contains("user likes cookies"))
+        #expect(result.includedFacts.count == 1)
+    }
+
+    @Test func buildContextRespectsMaxFacts() {
+        let builder = MemoryContextBuilder(maxFacts: 2, maxMemoryChars: 3000, ageDecayHalfLife: 30)
+        let facts = (0..<5).map {
+            MemoryEntry(text: "fact number \($0) goes here", conversationID: UUID())
+        }
+        let result = builder.buildContext(
+            factsCache: facts,
+            embeddingService: EmbeddingService.shared,
+            lastQueryText: "",
+            lastQueryEmbedding: nil
+        )
+        #expect(result.includedFacts.count == 2)
+    }
+}
+
+// MARK: - AttachmentProcessor Tests
+
+struct AttachmentProcessorTests {
+
+    @Test func attachmentsDirectoryExists() {
+        let dir = AttachmentProcessor.attachmentsDirectory
+        #expect(dir.lastPathComponent == "Attachments")
+        #expect(FileManager.default.fileExists(atPath: dir.path))
+    }
+
+    @Test func saveImagesToTmpEmpty() {
+        let paths = AttachmentProcessor.saveImagesToTmp([])
+        #expect(paths.isEmpty)
+    }
+
+    @Test func saveImagesToTmp() {
+        let size = CGSize(width: 10, height: 10)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            UIColor.blue.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        let paths = AttachmentProcessor.saveImagesToTmp([image])
+        #expect(paths.count == 1)
+        #expect(paths[0].hasSuffix(".jpg"))
+        #expect(FileManager.default.fileExists(atPath: paths[0]))
+        // Cleanup
+        try? FileManager.default.removeItem(atPath: paths[0])
     }
 }

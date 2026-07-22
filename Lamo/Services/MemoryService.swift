@@ -46,6 +46,9 @@ final class MemoryService: ObservableObject {
     /// Days for age-based relevance decay (half-life).
     private let ageDecayHalfLife: Double = 30
 
+    /// Context builder for ranking and formatting memory facts.
+    private let contextBuilder = MemoryContextBuilder(maxFacts: 50, maxMemoryChars: 3000, ageDecayHalfLife: 30)
+
     /// Embedding service for semantic similarity.
     private let embeddings = EmbeddingService.shared
     /// Cosine similarity threshold for considering two facts duplicates.
@@ -78,13 +81,13 @@ final class MemoryService: ObservableObject {
             guard trimmed.count >= 10 else { continue }
 
             // Fast text-based pre-filter
-            if isDuplicateText(trimmed) { continue }
+            if MemoryDeduplicator.isDuplicateText(trimmed, existingFacts: factsCache, wordSetsCache: &wordSetsCache, normalizedCache: &normalizedCache) { continue }
 
             // Embedding-based semantic check (deeper check)
-            if isDuplicateEmbedding(trimmed) { continue }
+            if MemoryDeduplicator.isDuplicateEmbedding(trimmed, existingFacts: factsCache, embeddingService: embeddings, threshold: embeddingDedupThreshold) { continue }
 
             // Check for conflicting fact (same subject, different statement)
-            if let conflictID = findConflictingFact(trimmed) {
+            if let conflictID = MemoryDeduplicator.findConflictingFact(trimmed, existingFacts: factsCache, wordSetsCache: wordSetsCache, normalizedCache: normalizedCache) {
                 // Replace the old conflicting fact with the new one
                 if let oldEntry = factsCache.first(where: { $0.id == conflictID }) {
                     context.delete(oldEntry)
@@ -100,8 +103,8 @@ final class MemoryService: ObservableObject {
             )
             context.insert(entry)
             factsCache.append(entry)
-            wordSetsCache[entry.id] = wordSet(from: trimmed)
-            normalizedCache[entry.id] = normalizeText(trimmed)
+            wordSetsCache[entry.id] = MemoryDeduplicator.wordSet(from: trimmed)
+            normalizedCache[entry.id] = MemoryDeduplicator.normalizeText(trimmed)
 
             // Pre-compute embedding in background (non-blocking for store speed)
             if embeddings.isAvailable {
@@ -201,7 +204,7 @@ final class MemoryService: ObservableObject {
 
     /// Build memory context string for injection into system prompt.
     /// Results are cached until facts are modified — avoids re-sorting on every call.
-    /// Facts are sorted by relevance score: blend of usage count and recency with age decay.
+    /// Delegates ranking and formatting to MemoryContextBuilder.
     func buildMemoryContext() -> String {
         guard isEnabled else { return "" }
         if !cacheLoaded { loadCache() }
@@ -211,37 +214,18 @@ final class MemoryService: ObservableObject {
             return cached
         }
 
-        var context = "<memory>\n"
-        // Sort by blended score: usage/recency + semantic similarity to query.
-        // When embeddings are available AND query context is set, semantic relevance
-        // dominates (0.7 weight); otherwise pure relevance score.
-        let now = Date()
-        let useSemantic = embeddings.isAvailable && lastQueryEmbedding != nil
-        let queryVec = lastQueryEmbedding
+        let result = contextBuilder.buildContext(
+            factsCache: factsCache,
+            embeddingService: embeddings,
+            lastQueryText: lastQueryText,
+            lastQueryEmbedding: lastQueryEmbedding
+        )
 
-        let sorted = factsCache.sorted { a, b in
-            let scoreA = blendedScore(fact: a, now: now, useSemantic: useSemantic, queryVec: queryVec)
-            let scoreB = blendedScore(fact: b, now: now, useSemantic: useSemantic, queryVec: queryVec)
-            if scoreA != scoreB { return scoreA > scoreB }
-            return a.timestamp > b.timestamp
-        }
-
-        var totalChars = 0
-        var includedFacts: [MemoryEntry] = []
-        for fact in sorted.prefix(maxFacts) {
-            let line = "• \(fact.text)\n"
-            if totalChars + line.count > maxMemoryChars { break }
-            context += line
-            totalChars += line.count
-            includedFacts.append(fact)
-        }
-
-        context += "</memory>"
-        memoryContextCache = context
+        memoryContextCache = result.context
 
         // Increment usageCount for included facts (async save, non-blocking)
-        if !includedFacts.isEmpty {
-            Task { @MainActor [includedFacts] in
+        if !result.includedFacts.isEmpty {
+            Task { @MainActor [includedFacts = result.includedFacts] in
                 guard let ctx = modelContext else { return }
                 for fact in includedFacts {
                     fact.usageCount += 1
@@ -250,32 +234,7 @@ final class MemoryService: ObservableObject {
             }
         }
 
-        return context
-    }
-
-    /// Relevance score for context sorting.
-    /// Combines usage frequency with recency using exponential decay.
-    /// - A fact used 10 times yesterday scores higher than one used 10 times 3 months ago.
-    /// - A fact never used (usageCount=0) still gets a small baseline from recency.
-    private func relevanceScore(fact: MemoryEntry, now: Date) -> Double {
-        let ageDays = max(0.0, now.timeIntervalSince(fact.timestamp)) / 86400.0
-        let decay = exp(-ageDays / ageDecayHalfLife)
-        // Base score of 1 ensures new facts get ranked even without usage.
-        // usageCount amplifies frequently-referenced facts.
-        let usageBoost = 1.0 + Double(fact.usageCount) * 0.5
-        return usageBoost * decay
-    }
-
-    /// Blended score: relevance (usage count + recency) combined with semantic similarity.
-    /// When embeddings are available, semantic relevance dominates (0.7 weight).
-    private func blendedScore(fact: MemoryEntry, now: Date, useSemantic: Bool, queryVec: [Double]?) -> Double {
-        let base = relevanceScore(fact: fact, now: now)
-        guard useSemantic, let queryVec,
-              let factVec = embeddings.embedding(for: fact.id, text: fact.text) else {
-            return base
-        }
-        let semantic = Double(embeddings.cosineSimilarity(queryVec, factVec))
-        return base * 0.3 + semantic * 0.7
+        return result.context
     }
 
     /// Build the full system prompt with memory + conversation summary injected.
@@ -374,134 +333,6 @@ final class MemoryService: ObservableObject {
         }
     }
 
-    // MARK: - Private: Deduplication
-
-    /// Check if a fact is too similar to any existing fact.
-    /// Uses two-stage detection:
-    /// 1. Jaccard similarity on word sets (fast, catches rephrasings)
-    /// 2. Normalized text comparison (catches near-identical text)
-    /// Threshold adapts to fact length — shorter facts need higher similarity to be duplicates.
-    private func isDuplicateText(_ newFact: String) -> Bool {
-        let newWords = wordSet(from: newFact)
-        guard !newWords.isEmpty else { return true }
-
-        let newNormalized = normalizeText(newFact)
-        let wordCount = newWords.count
-
-        // Stricter threshold for short facts (3-5 words can overlap by chance)
-        let jaccardThreshold: Float = wordCount <= 5 ? 0.75 : 0.60
-
-        for existing in factsCache {
-            let existingWords: Set<String>
-            if let cached = wordSetsCache[existing.id] {
-                existingWords = cached
-            } else {
-                // Fallback: compute on the fly if cache is missing
-                existingWords = wordSet(from: existing.text)
-                wordSetsCache[existing.id] = existingWords
-            }
-
-            // Jaccard similarity check
-            let intersection = newWords.intersection(existingWords)
-            let union = newWords.union(existingWords)
-            if !union.isEmpty {
-                let similarity = Float(intersection.count) / Float(union.count)
-                if similarity > jaccardThreshold { return true }
-            }
-
-            // Normalized text comparison (catches "User is 25" vs "User is 25 years old")
-            let existingNormalized: String
-            if let cached = normalizedCache[existing.id] {
-                existingNormalized = cached
-            } else {
-                existingNormalized = normalizeText(existing.text)
-                normalizedCache[existing.id] = existingNormalized
-            }
-            if newNormalized == existingNormalized { return true }
-
-            // One is a substring of the other after normalization
-            if newNormalized.count > 10 && existingNormalized.count > 10 {
-                if newNormalized.contains(existingNormalized) || existingNormalized.contains(newNormalized) {
-                    // Only flag if length ratio is close (avoids "I like pizza" matching "I like pizza with extra cheese and pepperoni")
-                    let ratio = Double(min(newNormalized.count, existingNormalized.count))
-                                / Double(max(newNormalized.count, existingNormalized.count))
-                    if ratio > 0.7 { return true }
-                }
-            }
-        }
-
-        return false
-    }
-
-    /// Async embedding-based duplicate check.
-    /// Computes embedding for the new fact and checks cosine similarity against all cached facts.
-    /// Falls back to false (not a duplicate) if embeddings are unavailable or computation fails.
-    private func isDuplicateEmbedding(_ newFact: String) -> Bool {
-        guard embeddings.isAvailable else { return false }
-
-        guard let newVec = embeddings.embed(newFact) else { return false }
-
-        for existing in factsCache {
-            guard let existingVec = embeddings.embedding(for: existing.id, text: existing.text) else {
-                continue
-            }
-            let sim = embeddings.cosineSimilarity(newVec, existingVec)
-            if sim > embeddingDedupThreshold {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Find an existing fact that conflicts with the new one.
-    /// Conflict = same subject entity but different/contradictory predicate.
-    /// Heuristic: extract the "subject" (first noun phrase or first 2-3 words)
-    /// and check if an existing fact shares the subject but differs in the rest.
-    private func findConflictingFact(_ newFact: String) -> UUID? {
-        // Extract subject: first few words (up to first significant word boundary)
-        let newSubject = extractSubject(newFact)
-        guard newSubject.count >= 2 else { return nil }
-
-        for existing in factsCache {
-            let existingSubject = extractSubject(existing.text)
-            guard existingSubject.count >= 2 else { continue }
-
-            // Same subject?
-            let subjectIntersection = Set(newSubject).intersection(Set(existingSubject))
-            guard subjectIntersection.count >= newSubject.count - 1 else { continue }
-
-            // But different rest of the fact? (not just a rephrase)
-            let newWords = wordSet(from: newFact)
-            let existingWords = wordSet(from: existing.text)
-            let intersection = newWords.intersection(existingWords)
-            let union = newWords.union(existingWords)
-            guard !union.isEmpty else { continue }
-            let similarity = Float(intersection.count) / Float(union.count)
-
-            // Same subject but low overall similarity → likely contradiction
-            if similarity < 0.5 {
-                return existing.id
-            }
-        }
-        return nil
-    }
-
-    /// Extract the "subject" of a fact — the first 2-3 content words.
-    /// Handles patterns like "User's name is X" → ["user", "name"]
-    /// or "User lives in City" → ["user", "lives"]
-    private func extractSubject(_ text: String) -> [String] {
-        let stopWords: Set<String> = ["a", "an", "the", "is", "are", "was", "were",
-                                       "has", "have", "had", "in", "on", "at", "to",
-                                       "for", "of", "with", "by", "from", "as", "or",
-                                       "and", "but", "not", "no", "yes", "very", "just",
-                                       "that", "this", "it", "its", "he", "she", "they",
-                                       "his", "her", "their", "my", "your", "our"]
-        let words = text.lowercased()
-            .split(separator: " ")
-            .map { String($0).trimmingCharacters(in: .punctuationCharacters) }
-            .filter { !$0.isEmpty && !stopWords.contains($0) }
-        return Array(words.prefix(3))
-    }
 
     // MARK: - Private: Pruning
 
@@ -530,25 +361,6 @@ final class MemoryService: ObservableObject {
         try? context.save()
     }
 
-    // MARK: - Private: Helpers
-
-    /// Extract lowercase word set from text for similarity comparison.
-    private func wordSet(from text: String) -> Set<String> {
-        let words = text.lowercased()
-            .split(separator: " ")
-            .map { String($0).trimmingCharacters(in: .punctuationCharacters) }
-            .filter { !$0.isEmpty }
-        return Set(words)
-    }
-
-    /// Normalize text for comparison: lowercase, strip punctuation, normalize whitespace.
-    private func normalizeText(_ text: String) -> String {
-        let lowercased = text.lowercased()
-        let allowed = CharacterSet.letters.union(.decimalDigits).union(.whitespaces)
-        let cleaned = String(lowercased.unicodeScalars.filter { allowed.contains($0) })
-        let words = cleaned.split(separator: " ").map(String.init)
-        return words.joined(separator: " ")
-    }
 
     private func loadCache() {
         guard let context = modelContext else { return }
@@ -560,8 +372,8 @@ final class MemoryService: ObservableObject {
         wordSetsCache.removeAll(keepingCapacity: true)
         normalizedCache.removeAll(keepingCapacity: true)
         for entry in factsCache {
-            wordSetsCache[entry.id] = wordSet(from: entry.text)
-            normalizedCache[entry.id] = normalizeText(entry.text)
+            wordSetsCache[entry.id] = MemoryDeduplicator.wordSet(from: entry.text)
+            normalizedCache[entry.id] = MemoryDeduplicator.normalizeText(entry.text)
         }
         cacheLoaded = true
     }
