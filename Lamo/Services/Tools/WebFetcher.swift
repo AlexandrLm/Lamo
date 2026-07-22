@@ -1,4 +1,5 @@
 import Foundation
+import os
 #if canImport(PDFKit)
 import PDFKit
 #endif
@@ -15,12 +16,17 @@ import PDFKit
 /// 5. Truncate at sentence boundary near maxLength
 actor WebFetcher {
     static let shared = WebFetcher()
-    private static let maxConcurrent = 3
-    private static var activeTasks = 0
-    private static var waiters: [CheckedContinuation<Void, Never>] = []
+    // MARK: - Shared State (lock-protected; static on actor = not actor-isolated)
 
-    // Content cache (per session)
-    private static var contentCache: [String: (content: String, timestamp: Date)] = [:]
+    private static let stateLock = OSAllocatedUnfairLock(initialState: State())
+
+    private struct State {
+        var activeTasks = 0
+        var waiters: [CheckedContinuation<Void, Never>] = []
+        var contentCache: [String: (content: String, timestamp: Date)] = [:]
+    }
+
+    private static let maxConcurrent = 3
     private static let contentCacheTTL: TimeInterval = 1800 // 30 min
 
     /// Fetch a URL and return plain text content.
@@ -32,7 +38,8 @@ actor WebFetcher {
     /// Fetch a URL and return structured metadata + content.
     static func fetchStructured(url: URL) async throws -> PageMetadata {
         let cacheKey = url.absoluteString
-        if let cached = contentCache[cacheKey], Date().timeIntervalSince(cached.timestamp) < contentCacheTTL {
+        if let cached = stateLock.withLock({ $0.contentCache[cacheKey] }),
+           Date().timeIntervalSince(cached.timestamp) < contentCacheTTL {
             return PageMetadata(title: nil, description: nil, contentType: nil, content: cached.content)
         }
 
@@ -49,7 +56,7 @@ actor WebFetcher {
             if attempt > 0 { try await Task.sleep(for: .seconds(1)) }
             do {
                 let result = try await fetchOnceStructured(url: url)
-                contentCache[cacheKey] = (content: result.content, timestamp: Date())
+                stateLock.withLock { $0.contentCache[cacheKey] = (content: result.content, timestamp: Date()) }
                 return result
             } catch {
                 lastError = error
@@ -59,19 +66,23 @@ actor WebFetcher {
     }
 
     private func enqueue(_ continuation: CheckedContinuation<Void, Never>) {
-        if Self.activeTasks < Self.maxConcurrent {
-            Self.activeTasks += 1
-            continuation.resume()
-        } else {
-            Self.waiters.append(continuation)
+        Self.stateLock.withLock { state in
+            if state.activeTasks < Self.maxConcurrent {
+                state.activeTasks += 1
+                continuation.resume()
+            } else {
+                state.waiters.append(continuation)
+            }
         }
     }
 
     private func releaseSlot() {
-        Self.activeTasks -= 1
-        if !Self.waiters.isEmpty {
-            Self.activeTasks += 1
-            Self.waiters.removeFirst().resume()
+        Self.stateLock.withLock { state in
+            state.activeTasks -= 1
+            if !state.waiters.isEmpty {
+                state.activeTasks += 1
+                state.waiters.removeFirst().resume()
+            }
         }
     }
 

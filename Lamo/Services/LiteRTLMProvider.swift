@@ -14,7 +14,7 @@ import os
 ///
 /// @unchecked Sendable: required because LiteRTLM.Engine is imported via
 /// @preconcurrency and Swift cannot verify its Sendable conformance. All
-/// stored properties are `let` constants — no mutable state to protect.
+/// mutable state is protected by OSAllocatedUnfairLock.
 final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     let name = "LiteRT-LM"
 
@@ -31,7 +31,8 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
     /// Cached SamplerConfig — avoids redundant UserDefaults reads.
     /// Cache key excludes seed (changes every call). Uses Float for comparison accuracy.
-    private var cachedSamplerConfig: (topK: Int, topP: Float, temperature: Float, seed: Int, config: LiteRTLM.SamplerConfig)?
+    /// Lock-protected — @unchecked Sendable class, so mutable state must be synchronized.
+    private let samplerConfigLock = OSAllocatedUnfairLock<(topK: Int, topP: Float, temperature: Float, seed: Int, config: LiteRTLM.SamplerConfig)?>(initialState: nil)
 
     /// Cached network availability — checked once per conversation build.
     /// Uses NWPathMonitor for a one-shot synchronous check via semaphore.
@@ -138,7 +139,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             cpuThreadCount: cpuThreadCount,
             maxNumTokens: maxNumTokens
         )
-        builder.samplerConfigCache = cachedSamplerConfig
+        builder.samplerConfigCache = samplerConfigLock.withLock { $0 }
 
         let conversation = try await builder.build(
             messages: messages,
@@ -146,7 +147,8 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             memoryContext: memoryContext,
             networkAvailable: networkAvailable
         )
-        cachedSamplerConfig = builder.samplerConfigCache
+        let config = builder.samplerConfigCache
+        samplerConfigLock.withLock { $0 = config }
 
         guard !Task.isCancelled else { return }
         try await streamLastMessage(

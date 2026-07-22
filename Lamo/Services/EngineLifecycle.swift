@@ -60,7 +60,7 @@ final class EngineLifecycle {
         if let fileAttrs = try? FileManager.default.attributesOfItem(atPath: resolvedPath),
            let fileSize = fileAttrs[.size] as? Int64 {
             let gb = Double(fileSize) / 1_073_741_824
-            if gb < 0.5 || gb < 1.5 {
+            if gb < 0.5 {
                 onEngineErrorChanged(.modelTooSmall(gb))
                 return
             }
