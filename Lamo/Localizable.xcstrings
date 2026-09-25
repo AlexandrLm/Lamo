@@ -1,0 +1,5258 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : ""
+          }
+        }
+      }
+    },
+    "\n\n[Context window full — start a new chat for longer conversations.]" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "\n\n[Context window заполнен — начните новый чат для более длинных разговоров.]"
+          }
+        }
+      }
+    },
+    "\nFirst: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "\nПервый: %@"
+          }
+        }
+      }
+    },
+    "--- Page %lld ---" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "--- Страница %lld ---"
+          }
+        }
+      }
+    },
+    "--- Slide %lld ---" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "--- Слайд %lld ---"
+          }
+        }
+      }
+    },
+    "-%lld removed" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "-%lld удалено"
+          }
+        }
+      }
+    },
+    "·" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "·"
+          }
+        }
+      }
+    },
+    "· %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "· %@"
+          }
+        }
+      }
+    },
+    "· approximate" : {
+
+    },
+    "\"" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "«"
+          }
+        }
+      }
+    },
+    "\"facts\" (save), \"forget\" (remove by number), \"summary\", or \"include_existing\" (list all)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "«facts» (сохранить), «forget» (удалить по номеру), «summary» (сводка) или «include_existing» (показать все)"
+          }
+        }
+      }
+    },
+    "\"list\" (upcoming events), \"create\" (new event), or \"search\" (find by keyword)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "«list» (предстоящие события), «create» (новое событие) или «search» (поиск по ключевому слову)"
+          }
+        }
+      }
+    },
+    "(unknown)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "(неизвестно)"
+          }
+        }
+      }
+    },
+    "[Audio file: %@]" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "[Аудиофайл: %@]"
+          }
+        }
+      }
+    },
+    "[Error reading file %@: %@]" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "[Error reading file %1$@: %2$@]"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "[Ошибка чтения файла %1$@: %2$@]"
+          }
+        }
+      }
+    },
+    "[PDF — text extraction failed: %@]" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "[PDF — не удалось извлечь текст: %@]"
+          }
+        }
+      }
+    },
+    "[Retrying…]" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "[Повтор попытки…]"
+          }
+        }
+      }
+    },
+    "[Scanned PDF: %@ — %lld pages sent as images]" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Scanned PDF: %1$@ — %2$lld page sent as an image]"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Scanned PDF: %1$@ — %2$lld pages sent as images]"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Scanned PDF: %1$@ — %2$lld pages sent as images]"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Отсканированный PDF: %1$@ — %2$lld страницы отправлены в виде изображений]"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Отсканированный PDF: %1$@ — %2$lld страниц отправлено в виде изображений]"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Отсканированный PDF: %1$@ — %2$lld страница отправлена в виде изображений]"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Отсканированный PDF: %1$@ — %2$lld страниц отправлено в виде изображений]"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "[Отсканированный PDF: %1$@ — %2$lld страниц отправлено в виде изображений]"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%"
+          }
+        }
+      }
+    },
+    "%.0f MB" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%.0f MB"
+          }
+        }
+      }
+    },
+    "%.2f GB" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%.2f GB"
+          }
+        }
+      }
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ free · ~%@ reserved for reply" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ free · ~%2$@ reserved for reply"
+          }
+        }
+      }
+    },
+    "%@ free / %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ free / %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$@ свободно / %2$@"
+          }
+        }
+      }
+    },
+    "%@ GB RAM" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%@ GB RAM"
+          }
+        }
+      }
+    },
+    "%@ is %@. This may use significant cellular data." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is %2$@. This may use significant cellular data."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%@ — это %@. Это может использовать значительный объём сотовых данных."
+          }
+        }
+      }
+    },
+    "%@ is ready to use." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "«%@» готов к использованию."
+          }
+        }
+      }
+    },
+    "%@ t" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%@ t"
+          }
+        }
+      }
+    },
+    "%@ tok/s" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%@ tok/s"
+          }
+        }
+      }
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@ tokens" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ tokens"
+          }
+        }
+      }
+    },
+    "%@, %@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@%3$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$@, %2$@%3$@"
+          }
+        }
+      }
+    },
+    "%@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$@%2$@"
+          }
+        }
+      }
+    },
+    "%@s" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%@s"
+          }
+        }
+      }
+    },
+    "%lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld / %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "%lld chars" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld char"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld chars"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld chars"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld символа"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld символов"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld символ"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld символов"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld символов"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld CPU" : {
+
+    },
+    "%lld ctx" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lld ctx"
+          }
+        }
+      }
+    },
+    "%lld facts" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld fact"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld facts"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld facts"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld факта"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld фактов"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld факт"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld фактов"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld фактов"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld facts · On" : {
+
+    },
+    "%lld km/h" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lld km/h"
+          }
+        }
+      }
+    },
+    "%lld messages summarized" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld message summarized"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld messages summarized"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld messages summarized"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld сообщения суммировано"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld сообщений суммировано"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld сообщение суммировано"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld сообщений суммировано"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld сообщений суммировано"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld of %lld on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld on"
+          }
+        }
+      }
+    },
+    "%lld oldest messages outside context window" : {
+
+    },
+    "%lld results" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld result"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld results"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld results"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld результата"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld результатов"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld результат"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld результатов"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "%lld результатов"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld tokens" : {
+
+    },
+    "%lld tokens per image — higher sees better, answers slower" : {
+
+    },
+    "%lld." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lld."
+          }
+        }
+      }
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "%lld/%lld enabled" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld enabled"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Включено: %1$lld из %2$lld"
+          }
+        }
+      }
+    },
+    "%lld/%lld in context" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld in context"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$lld/%2$lld в context"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lld%%"
+          }
+        }
+      }
+    },
+    "%lld°" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lld°"
+          }
+        }
+      }
+    },
+    "%lld° %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld° %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%1$lld° %2$@"
+          }
+        }
+      }
+    },
+    "%lldm" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "%lldm"
+          }
+        }
+      }
+    },
+    "•" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "•"
+          }
+        }
+      }
+    },
+    "^[%lld event](inflect: true)" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld event](inflect: true)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld events](inflect: true)"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld events](inflect: true)"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld события](inflect: true)"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld событий](inflect: true)"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld событие](inflect: true)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld событий](inflect: true)"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld событий](inflect: true)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "^[%lld note](inflect: true)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld note](inflect: true)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld note](inflect: true)"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld note](inflect: true)"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld заметки](inflect: true)"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld заметок](inflect: true)"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld заметка](inflect: true)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld заметок](inflect: true)"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld заметок](inflect: true)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "^[%lld result](inflect: true)" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld result](inflect: true)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld result](inflect: true)"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld result](inflect: true)"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld результата](inflect: true)"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld результатов](inflect: true)"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld результат](inflect: true)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld результатов](inflect: true)"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "^[%lld результатов](inflect: true)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "°C" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "°C"
+          }
+        }
+      }
+    },
+    "→ %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "→ %@"
+          }
+        }
+      }
+    },
+    "+%lld stored" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "+%lld сохранено"
+          }
+        }
+      }
+    },
+    "±%lldm" : {
+
+    },
+    "⚠ %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "⚠ %@"
+          }
+        }
+      }
+    },
+    "💧%lld%%" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "💧%lld%%"
+          }
+        }
+      }
+    },
+    "📎 %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "📎 %@"
+          }
+        }
+      }
+    },
+    "70" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "70"
+          }
+        }
+      }
+    },
+    "140" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "140"
+          }
+        }
+      }
+    },
+    "280" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "280"
+          }
+        }
+      }
+    },
+    "560" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "560"
+          }
+        }
+      }
+    },
+    "1024" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "1024"
+          }
+        }
+      }
+    },
+    "1120" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "1120"
+          }
+        }
+      }
+    },
+    "16384" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "16384"
+          }
+        }
+      }
+    },
+    "Active" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Активная"
+          }
+        }
+      }
+    },
+    "ACTIVE" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "АКТИВНАЯ"
+          }
+        }
+      }
+    },
+    "AI" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AI"
+          }
+        }
+      }
+    },
+    "AI calls them itself when needed" : {
+
+    },
+    "AI remembers key facts across chats" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AI запоминает ключевые факты между чатами"
+          }
+        }
+      }
+    },
+    "All %lld on" : {
+
+    },
+    "ALL DAY" : {
+
+    },
+    "All off" : {
+
+    },
+    "All processing on device" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Вся обработка на устройстве"
+          }
+        }
+      }
+    },
+    "All search providers failed — try again later" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Все поисковые провайдеры не сработали — попробуйте ещё раз позже"
+          }
+        }
+      }
+    },
+    "Apple FM" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Apple FM"
+          }
+        }
+      }
+    },
+    "Apple Intelligence" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Apple Intelligence doesn't support this language or locale yet. Try a supported language, or switch to a local model in Settings." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Apple Intelligence пока не поддерживает этот язык или локаль. Попробуйте использовать поддерживаемый язык или переключитесь на локальную модель в Настройках."
+          }
+        }
+      }
+    },
+    "Apple Intelligence error: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ошибка Apple Intelligence: %@"
+          }
+        }
+      }
+    },
+    "Apple Intelligence is unavailable" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Apple Intelligence недоступна"
+          }
+        }
+      }
+    },
+    "Apple Intelligence model is downloading or not yet ready" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модель Apple Intelligence загружается или ещё не готова"
+          }
+        }
+      }
+    },
+    "Apple Intelligence unavailable: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Apple Intelligence недоступен: %@"
+          }
+        }
+      }
+    },
+    "Attachment" : {
+
+    },
+    "Attachments" : {
+
+    },
+    "Attention" : {
+
+    },
+    "Auto" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Авто"
+          }
+        }
+      }
+    },
+    "Auto context" : {
+
+    },
+    "Auto ctx" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Авто ctx"
+          }
+        }
+      }
+    },
+    "Auto-Compression" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Авто-компрессия"
+          }
+        }
+      }
+    },
+    "Auto-fetch off" : {
+
+    },
+    "Auto-fetch on" : {
+
+    },
+    "Auto-fetch top results" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Автоматически получать топ-результаты"
+          }
+        }
+      }
+    },
+    "Automatic city detection from Get Location tool result" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Автоматическое определение города по результату инструмента Get Location"
+          }
+        }
+      }
+    },
+    "Automatic duplicate detection using semantic similarity (on-device BERT embeddings)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Автоматическое обнаружение дубликатов на основе семантической схожести (эмбеддинги BERT на устройстве)"
+          }
+        }
+      }
+    },
+    "Automatic fallback from GPS to IP when GPS unavailable" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Автоматический переход с GPS на IP, когда GPS недоступен"
+          }
+        }
+      }
+    },
+    "Automatically summarize conversation when context fills up" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Автоматически суммировать разговор, когда context заполняется"
+          }
+        }
+      }
+    },
+    "AVAILABLE TOOLS" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ДОСТУПНЫЕ ИНСТРУМЕНТЫ"
+          }
+        }
+      }
+    },
+    "Backend" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Backend"
+          }
+        }
+      }
+    },
+    "Balanced" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сбалансированный"
+          }
+        }
+      }
+    },
+    "Balanced · %@" : {
+
+    },
+    "Balanced · Custom" : {
+
+    },
+    "Battery" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Батарея"
+          }
+        }
+      }
+    },
+    "Brave + SearXNG" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Brave + SearXNG"
+          }
+        }
+      }
+    },
+    "Brave API key" : {
+
+    },
+    "BRAVE API KEY (OPTIONAL)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "КЛЮЧ API BRAVE (НЕОБЯЗАТЕЛЬНО)"
+          }
+        }
+      }
+    },
+    "Brave key · optional" : {
+
+    },
+    "Brave linked" : {
+
+    },
+    "BRAVE_API_KEY" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "BRAVE_API_KEY"
+          }
+        }
+      }
+    },
+    "Breakdown" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Разбивка"
+          }
+        }
+      }
+    },
+    "Brief 2–3 sentence recap of the conversation so far" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Краткое резюме разговора в 2–3 предложениях на текущий момент"
+          }
+        }
+      }
+    },
+    "Budget" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Бюджет"
+          }
+        }
+      }
+    },
+    "Budget limit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Лимит бюджета"
+          }
+        }
+      }
+    },
+    "Buffer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Буфер"
+          }
+        }
+      }
+    },
+    "Built-in · Private · Nothing to download" : {
+
+    },
+    "Built-in search" : {
+
+    },
+    "Built-in SearXNG · Free" : {
+
+    },
+    "Built-in system language model · No download needed · A17 Pro / M1+" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Встроенная системная языковая модель · Скачивание не требуется · A17 Pro / M1+"
+          }
+        }
+      }
+    },
+    "cached" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "из кэша"
+          }
+        }
+      }
+    },
+    "Caches fetched content in memory for the session" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Кэширует загруженный контент в памяти на время сессии"
+          }
+        }
+      }
+    },
+    "Calendar" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Календарь"
+          }
+        }
+      }
+    },
+    "Calendar access denied." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Доступ к календарю запрещён."
+          }
+        }
+      }
+    },
+    "Calendar permission requested on first use" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Разрешение на доступ к календарю запрашивается при первом использовании"
+          }
+        }
+      }
+    },
+    "Camera" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Камера"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Отмена"
+          }
+        }
+      }
+    },
+    "Capabilities" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Возможности"
+          }
+        }
+      }
+    },
+    "Catalog" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Каталог"
+          }
+        }
+      }
+    },
+    "CHARS" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "СИМВОЛОВ"
+          }
+        }
+      }
+    },
+    "Chat name" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Название чата"
+          }
+        }
+      }
+    },
+    "Chats" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Чаты"
+          }
+        }
+      }
+    },
+    "Chats and memory never leave the phone" : {
+
+    },
+    "Chats, models and memory stay on the phone" : {
+
+    },
+    "Choose a conversation from the list\nor start a new one with ⌘N" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Выберите разговор из списка\nили начните новый с помощью ⌘N"
+          }
+        }
+      }
+    },
+    "City name (e.g., \"London\"). Leave empty for auto-detect from your location" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Название города (например, «London»). Оставьте пустым для автоопределения по вашему местоположению"
+          }
+        }
+      }
+    },
+    "City not found: '%@'" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Город не найден: «%@»"
+          }
+        }
+      }
+    },
+    "City not found. Try a more specific name." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Город не найден. Попробуйте указать более точное название."
+          }
+        }
+      }
+    },
+    "Clear" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Очистить"
+          }
+        }
+      }
+    },
+    "Clear All" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Очистить всё"
+          }
+        }
+      }
+    },
+    "Clear All Facts" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Очистить все факты"
+          }
+        }
+      }
+    },
+    "Clear all facts?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Очистить все факты?"
+          }
+        }
+      }
+    },
+    "Close attachments" : {
+
+    },
+    "Close viewer" : {
+
+    },
+    "Collapse summary" : {
+
+    },
+    "Compact multimodal model. Fast inference, supports images." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Компактная мультимодальная модель. Быстрый инференс, поддерживает изображения."
+          }
+        }
+      }
+    },
+    "Context" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Context"
+          }
+        }
+      }
+    },
+    "Context Compressed" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Context сжат"
+          }
+        }
+      }
+    },
+    "Context limit" : {
+
+    },
+    "Context Window" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Context Window"
+          }
+        }
+      }
+    },
+    "Context window exceeded (4096 tokens). Start a new conversation or shorten your message." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Context window превышен (4096 токенов). Начните новый разговор или сократите сообщение."
+          }
+        }
+      }
+    },
+    "Contradictory old facts are automatically replaced with new ones" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Противоречивые старые факты автоматически заменяются новыми"
+          }
+        }
+      }
+    },
+    "Controlled by the Memory toggle in General Settings. All facts stored locally in SwiftData — never leaves the device." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Управляется переключателем Memory в общих настройках. Все факты хранятся локально в SwiftData — никогда не покидают устройство."
+          }
+        }
+      }
+    },
+    "Conversation summarization for long context windows" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Суммирование разговора для длинных context windows"
+          }
+        }
+      }
+    },
+    "Cool" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нормально"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скопировано"
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Копировать"
+          }
+        }
+      }
+    },
+    "Could not decode response" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось декодировать ответ"
+          }
+        }
+      }
+    },
+    "Could not determine location. Try again." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось определить местоположение. Попробуйте ещё раз."
+          }
+        }
+      }
+    },
+    "Could not fetch content from this page." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось получить содержимое с этой страницы."
+          }
+        }
+      }
+    },
+    "Could not open" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось открыть"
+          }
+        }
+      }
+    },
+    "Could not read file: %@. Unsupported format." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось прочитать файл: %@. Неподдерживаемый формат."
+          }
+        }
+      }
+    },
+    "CPU" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "CPU"
+          }
+        }
+      }
+    },
+    "CPU Threads" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Потоки CPU"
+          }
+        }
+      }
+    },
+    "CPU×%lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "CPU×%lld"
+          }
+        }
+      }
+    },
+    "Create a meeting called \"Design Review\" next Monday 2-3pm" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Создайте встречу под названием «Design Review» в следующий понедельник в 2-3pm"
+          }
+        }
+      }
+    },
+    "Create new events with title, notes, location, start/end time" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Создаёт новые события с названием, заметками, местоположением и временем начала/окончания"
+          }
+        }
+      }
+    },
+    "Created %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Создано %@"
+          }
+        }
+      }
+    },
+    "Created: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Создано: %@"
+          }
+        }
+      }
+    },
+    "Creative" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Креативный"
+          }
+        }
+      }
+    },
+    "Creative · %@" : {
+
+    },
+    "Critical" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Критический"
+          }
+        }
+      }
+    },
+    "Current conditions: temperature, humidity, wind speed, cloud cover" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Текущие условия: температура, влажность, скорость ветра, облачность"
+          }
+        }
+      }
+    },
+    "Defaults" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "По умолчанию"
+          }
+        }
+      }
+    },
+    "Delete" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалить"
+          }
+        }
+      }
+    },
+    "Delete \"%@\" and all its messages?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалить «%@» и все его сообщения?"
+          }
+        }
+      }
+    },
+    "Delete %@?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалить «%@»?"
+          }
+        }
+      }
+    },
+    "Delete Chat?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалить чат?"
+          }
+        }
+      }
+    },
+    "Delete fact" : {
+
+    },
+    "Delete Model?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалить модель?"
+          }
+        }
+      }
+    },
+    "Deleted: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалено: %@"
+          }
+        }
+      }
+    },
+    "Determine your approximate location using GPS or IP geolocation. No sign-up or API key needed." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Определяет ваше примерное местоположение с помощью GPS или IP-геолокации. Не требуется регистрация или API-ключ."
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+
+    },
+    "Done" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Готово"
+          }
+        }
+      }
+    },
+    "Download" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скачать"
+          }
+        }
+      }
+    },
+    "Download a Model" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скачать модель"
+          }
+        }
+      }
+    },
+    "Download and extract readable content from any webpage. Caches results for repeated access." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скачивает и извлекает читаемое содержимое с любой веб-страницы. Кэширует результаты для повторного доступа."
+          }
+        }
+      }
+    },
+    "Download Anyway" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Всё равно скачать"
+          }
+        }
+      }
+    },
+    "Download failed: no data" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скачивание не удалось: нет данных"
+          }
+        }
+      }
+    },
+    "Download or import a model to get started" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скачайте или импортируйте модель, чтобы начать"
+          }
+        }
+      }
+    },
+    "Download over cellular?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скачать через сотовую сеть?"
+          }
+        }
+      }
+    },
+    "Draft" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Черновик"
+          }
+        }
+      }
+    },
+    "dropped" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалено"
+          }
+        }
+      }
+    },
+    "Early" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Раннее"
+          }
+        }
+      }
+    },
+    "Eco" : {
+
+    },
+    "Edit" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Изменить"
+          }
+        }
+      }
+    },
+    "Empty message — nothing to respond to." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Пустое сообщение — нечего отвечать."
+          }
+        }
+      }
+    },
+    "Empty search query" : {
+
+    },
+    "Enable to let AI extract and remember important facts from your conversations." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Включите, чтобы AI извлекал и запоминал важные факты из ваших разговоров."
+          }
+        }
+      }
+    },
+    "End date/time in same format" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Дата/время окончания в том же формате"
+          }
+        }
+      }
+    },
+    "End time '%@' is not after start time '%@'." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End time '%1$@' is not after start time '%2$@'."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Время окончания «%1$@» должно быть позже времени начала «%2$@»."
+          }
+        }
+      }
+    },
+    "Engine" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Движок"
+          }
+        }
+      }
+    },
+    "Engine initialization failed: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось инициализировать движок: %@"
+          }
+        }
+      }
+    },
+    "Error" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ошибка"
+          }
+        }
+      }
+    },
+    "Error: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ошибка: %@"
+          }
+        }
+      }
+    },
+    "Event created" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Событие создано"
+          }
+        }
+      }
+    },
+    "Event title (required for create mode)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Название события (обязательно для режима создания)"
+          }
+        }
+      }
+    },
+    "Executed (no output)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Выполнено (нет вывода)"
+          }
+        }
+      }
+    },
+    "Expand summary" : {
+
+    },
+    "Extracts title, description, and content type metadata" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Извлекает заголовок, описание и метаданные типа контента"
+          }
+        }
+      }
+    },
+    "FACTS" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ФАКТЫ"
+          }
+        }
+      }
+    },
+    "Facts appear automatically as you chat.\nThe AI extracts key details and remembers them." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Факты появляются автоматически во время общения.\nAI извлекает ключевые детали и запоминает их."
+          }
+        }
+      }
+    },
+    "Facts are injected into context so AI can reference them in future conversations." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Факты внедряются в context, чтобы AI мог ссылаться на них в будущих разговорах."
+          }
+        }
+      }
+    },
+    "Facts listed with numbers for easy reference and removal" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Факты перечислены с номерами для удобного просмотра и удаления"
+          }
+        }
+      }
+    },
+    "Failed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось"
+          }
+        }
+      }
+    },
+    "Failed to encode arguments" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось закодировать аргументы"
+          }
+        }
+      }
+    },
+    "Failed to fetch the page: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось загрузить страницу: %@"
+          }
+        }
+      }
+    },
+    "Failed to fetch weather data" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось получить данные о погоде"
+          }
+        }
+      }
+    },
+    "Failed to geocode city name" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось геокодировать название города"
+          }
+        }
+      }
+    },
+    "Failed to save the event: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось сохранить событие: %@"
+          }
+        }
+      }
+    },
+    "Falls back between providers automatically on failure" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Автоматически переключается между провайдерами при сбое"
+          }
+        }
+      }
+    },
+    "feels" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ощущается"
+          }
+        }
+      }
+    },
+    "Fetch the latest release notes from the GitHub page" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Получить последние примечания к выпуску со страницы GitHub"
+          }
+        }
+      }
+    },
+    "Fetch URL" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Получить URL"
+          }
+        }
+      }
+    },
+    "Fetches full webpage content as clean extracted text" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Загружает полное содержимое веб-страницы в виде чистого извлечённого текста"
+          }
+        }
+      }
+    },
+    "Fetching page content..." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Загрузка содержимого страницы..."
+          }
+        }
+      }
+    },
+    "File integrity check failed. Please re-download." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Проверка целостности файла не пройдена. Скачайте файл заново."
+          }
+        }
+      }
+    },
+    "File truncated — showing first %lld of %lld characters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "File truncated — showing first %1$lld of %2$lld characters"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Файл обрезан — показаны первые %1$lld из %2$lld символов"
+          }
+        }
+      }
+    },
+    "Files" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Файлы"
+          }
+        }
+      }
+    },
+    "Filling up" : {
+
+    },
+    "Filter facts…" : {
+
+    },
+    "Find all events with \"dentist\" in the title" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Найди все события со словом «dentist» в названии"
+          }
+        }
+      }
+    },
+    "Find me the best pizza places in Brooklyn with reviews" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Найди лучшие пиццерии в Бруклине с отзывами"
+          }
+        }
+      }
+    },
+    "Focused" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сфокусированный"
+          }
+        }
+      }
+    },
+    "Focused · %@" : {
+
+    },
+    "Forecast days (1–7, default 3)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Дней прогноза (1–7, по умолчанию 3)"
+          }
+        }
+      }
+    },
+    "Forget everything about my previous job" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Забудь всё о моей предыдущей работе"
+          }
+        }
+      }
+    },
+    "Found %lld results" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Found %lld result"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Found %lld results"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Found %lld results"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Найдено %lld результата"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Найдено %lld результатов"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Найдено %lld результат"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Найдено %lld результатов"
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Найдено %lld результатов"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Free" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Свободно"
+          }
+        }
+      }
+    },
+    "FREE" : {
+
+    },
+    "Full access to your device calendar. List, search, and create events with natural language." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Полный доступ к календарю вашего устройства. Просматривайте, ищите и создавайте события с помощью естественного языка."
+          }
+        }
+      }
+    },
+    "Full URL to fetch (must start with http:// or https://)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Полный URL для загрузки (должен начинаться с http:// или https://)"
+          }
+        }
+      }
+    },
+    "Fully on-device · No network" : {
+
+    },
+    "Generation failed" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ошибка генерации"
+          }
+        }
+      }
+    },
+    "Get a free key at brave.com" : {
+
+    },
+    "Get Location" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Get Location"
+          }
+        }
+      }
+    },
+    "Getting tight" : {
+
+    },
+    "GPS mode: precise coordinates via CoreLocation (requires permission)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Режим GPS: точные координаты через CoreLocation (требуется разрешение)"
+          }
+        }
+      }
+    },
+    "GPS requires Location permission in Settings > Privacy. IP mode works without any permissions." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Для GPS требуется разрешение на доступ к местоположению в Настройках > Конфиденциальность. IP-режим работает без каких-либо разрешений."
+          }
+        }
+      }
+    },
+    "GPU" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "GPU"
+          }
+        }
+      }
+    },
+    "GPU Acceleration" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ускорение GPU"
+          }
+        }
+      }
+    },
+    "H: %lld°  L: %lld°" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "H: %1$lld°  L: %2$lld°"
+          }
+        }
+      }
+    },
+    "Handles all-day events and multi-hour meetings" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поддерживает события на весь день и встречи длительностью несколько часов"
+          }
+        }
+      }
+    },
+    "Handles redirects and common HTTP error codes" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Обрабатывает перенаправления и распространённые коды ошибок HTTP"
+          }
+        }
+      }
+    },
+    "High" : {
+
+    },
+    "Hot" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Горячий"
+          }
+        }
+      }
+    },
+    "How can I help you today?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Чем я могу помочь сегодня?"
+          }
+        }
+      }
+    },
+    "HTML Output" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "HTML-вывод"
+          }
+        }
+      }
+    },
+    "HuggingFace" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "HuggingFace"
+          }
+        }
+      }
+    },
+    "If true, skips GPS and uses IP-based location only (faster)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Если true, пропускает GPS и использует только местоположение на основе IP (быстрее)"
+          }
+        }
+      }
+    },
+    "Image attachment" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Вложение изображения"
+          }
+        }
+      }
+    },
+    "Import .litertlm File" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Импортировать файл .litertlm"
+          }
+        }
+      }
+    },
+    "Import Error" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ошибка импорта"
+          }
+        }
+      }
+    },
+    "Importing model…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Импорт модели…"
+          }
+        }
+      }
+    },
+    "In context" : {
+
+    },
+    "Inference" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Инференс"
+          }
+        }
+      }
+    },
+    "Inference settings, %@" : {
+
+    },
+    "Insufficient memory. Available: %@GB, required: %@GB" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Insufficient memory. Available: %1$@GB, required: %2$@GB"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Недостаточно памяти. Доступно: %1$@GB, требуется: %2$@GB"
+          }
+        }
+      }
+    },
+    "Invalid %@ date: '%@'" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Invalid %1$@ date: '%2$@'"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверная %1$@ дата: «%2$@»"
+          }
+        }
+      }
+    },
+    "Invalid %@ time: '%@'" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Invalid %1$@ time: '%2$@'"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверное %1$@ время: «%2$@»"
+          }
+        }
+      }
+    },
+    "Invalid mode: '%@'" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверный режим: «%@»"
+          }
+        }
+      }
+    },
+    "Invalid response from search engine" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверный ответ от поисковой системы"
+          }
+        }
+      }
+    },
+    "Invalid search URL" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверный поисковый URL"
+          }
+        }
+      }
+    },
+    "Invalid URL" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверный URL"
+          }
+        }
+      }
+    },
+    "Invalid URL: '%@'" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неверный URL: «%@»"
+          }
+        }
+      }
+    },
+    "IP mode: approximate city-level location via ipapi.co (no permission)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Режим IP: примерное местоположение на уровне города через ipapi.co (без разрешений)"
+          }
+        }
+      }
+    },
+    "JSON array of fact strings to save, e.g., [\"User lives in Berlin\", \"User is vegetarian\"]" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Массив JSON с фактами для сохранения, например: [«Пользователь живёт в Берлине», «Пользователь — вегетарианец»]"
+          }
+        }
+      }
+    },
+    "Lamo" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Lamo"
+          }
+        }
+      }
+    },
+    "Lamo · v%@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Lamo · v%@"
+          }
+        }
+      }
+    },
+    "Larger multimodal model with vision and tool calling support." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Более крупная мультимодальная модель с поддержкой vision и вызова инструментов."
+          }
+        }
+      }
+    },
+    "LAST" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ПОСЛЕДНЕЕ"
+          }
+        }
+      }
+    },
+    "Late" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поздно"
+          }
+        }
+      }
+    },
+    "Later" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Позже"
+          }
+        }
+      }
+    },
+    "Library" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Библиотека"
+          }
+        }
+      }
+    },
+    "Limit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Лимит"
+          }
+        }
+      }
+    },
+    "List upcoming events with date range and limit controls" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Перечисляет предстоящие события с настройками диапазона дат и лимита"
+          }
+        }
+      }
+    },
+    "LiteRT-LM" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "LiteRT-LM"
+          }
+        }
+      }
+    },
+    "Loading" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Загрузка"
+          }
+        }
+      }
+    },
+    "Loads full content from top 3 results" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Загружает полное содержимое из топ‑3 результатов"
+          }
+        }
+      }
+    },
+    "Loads short excerpts from top 2 results" : {
+
+    },
+    "Location · Web · Calendar" : {
+
+    },
+    "Location permission denied. Enable in Settings > Privacy > Location Services." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Доступ к местоположению запрещён. Включите его в Настройки > Конфиденциальность > Службы геолокации."
+          }
+        }
+      }
+    },
+    "Location request timed out. Try again with a clearer sky view." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Запрос местоположения превысил время ожидания. Попробуйте ещё раз при более ясном небе."
+          }
+        }
+      }
+    },
+    "Location unavailable: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Местоположение недоступно: %@"
+          }
+        }
+      }
+    },
+    "Low" : {
+
+    },
+    "LPM" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "LPM"
+          }
+        }
+      }
+    },
+    "Manual city search: \"weather in Tokyo\"" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ручной поиск города: «weather in Tokyo»"
+          }
+        }
+      }
+    },
+    "Max" : {
+
+    },
+    "Max 50 facts, ~3000 character limit — oldest/least-used auto-pruned" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Макс. 50 фактов, лимит ~3000 символов — старые/редко используемые автоматически удаляются"
+          }
+        }
+      }
+    },
+    "Memory" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Память"
+          }
+        }
+      }
+    },
+    "Memory facts" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Факты памяти"
+          }
+        }
+      }
+    },
+    "Memory read" : {
+
+    },
+    "Memory settings" : {
+
+    },
+    "Memory updated" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Память обновлена"
+          }
+        }
+      }
+    },
+    "Messages" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сообщения"
+          }
+        }
+      }
+    },
+    "Missing event title." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Отсутствует название события."
+          }
+        }
+      }
+    },
+    "Missing search keyword." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Отсутствует ключевое слово для поиска."
+          }
+        }
+      }
+    },
+    "Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модель"
+          }
+        }
+      }
+    },
+    "Model file corrupted: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Файл модели повреждён: %@"
+          }
+        }
+      }
+    },
+    "Model file not found at: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Файл модели не найден по пути: %@"
+          }
+        }
+      }
+    },
+    "Model file too small (%@ GB). Re-download recommended." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Файл модели слишком мал (%@ GB). Рекомендуется скачать заново."
+          }
+        }
+      }
+    },
+    "Model Imported" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модель импортирована"
+          }
+        }
+      }
+    },
+    "Model not found: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модель не найдена: %@"
+          }
+        }
+      }
+    },
+    "Model stuck in a loop. Try rephrasing your message or adjusting temperature in Settings." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модель зациклилась. Попробуйте переформулировать сообщение или изменить temperature в Настройках."
+          }
+        }
+      }
+    },
+    "Models" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модели"
+          }
+        }
+      }
+    },
+    "Models directory not found. Create ~/Documents/models/ and place a .litertlm file there." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Папка моделей не найдена. Создайте ~/Documents/models/ и поместите туда файл .litertlm."
+          }
+        }
+      }
+    },
+    "Multi-day forecast with daily highs, lows, and conditions" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Прогноз на несколько дней с дневными максимумами, минимумами и погодными условиями"
+          }
+        }
+      }
+    },
+    "N/A" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "н/д"
+          }
+        }
+      }
+    },
+    "New Chat" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Новый чат"
+          }
+        }
+      }
+    },
+    "No .litertlm files found in ~/Documents/models/. Download a model first." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Файлы .litertlm не найдены в ~/Documents/models/. Сначала скачайте модель."
+          }
+        }
+      }
+    },
+    "No calendar available." : {
+
+    },
+    "No changes" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Изменений нет"
+          }
+        }
+      }
+    },
+    "No Chats Yet" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Чатов пока нет"
+          }
+        }
+      }
+    },
+    "No conversation" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нет разговора"
+          }
+        }
+      }
+    },
+    "No events" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нет событий"
+          }
+        }
+      }
+    },
+    "No facts match this filter" : {
+
+    },
+    "No Facts Yet" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Пока нет фактов"
+          }
+        }
+      }
+    },
+    "No memory changes requested" : {
+
+    },
+    "NO MODEL" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "НЕТ МОДЕЛИ"
+          }
+        }
+      }
+    },
+    "No model available. Download a model in Settings." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нет доступной модели. Скачайте модель в Настройках."
+          }
+        }
+      }
+    },
+    "No model loaded" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Модель не загружена"
+          }
+        }
+      }
+    },
+    "No models yet — download or import below" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Моделей пока нет — скачайте или импортируйте ниже"
+          }
+        }
+      }
+    },
+    "No new facts to store" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нет новых фактов для сохранения"
+          }
+        }
+      }
+    },
+    "No Results" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ничего не найдено"
+          }
+        }
+      }
+    },
+    "No results returned" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Результаты не получены"
+          }
+        }
+      }
+    },
+    "No user message found" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сообщение пользователя не найдено"
+          }
+        }
+      }
+    },
+    "None" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нет"
+          }
+        }
+      }
+    },
+    "Not enough storage. Free up at least 1 GB." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Недостаточно места на диске. Освободите как минимум 1 GB."
+          }
+        }
+      }
+    },
+    "Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Заметка"
+          }
+        }
+      }
+    },
+    "now" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "сейчас"
+          }
+        }
+      }
+    },
+    "Number of results to return (1–10, default 5)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Количество результатов для возврата (1–10, по умолчанию 5)"
+          }
+        }
+      }
+    },
+    "of %@ tokens" : {
+
+    },
+    "Off" : {
+
+    },
+    "OK" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ОК"
+          }
+        }
+      }
+    },
+    "Older" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ранее"
+          }
+        }
+      }
+    },
+    "Older messages dropped to fit context" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Старые сообщения удалены, чтобы вписаться в context"
+          }
+        }
+      }
+    },
+    "On-Device" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "На устройстве"
+          }
+        }
+      }
+    },
+    "ON-DEVICE" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "НА УСТРОЙСТВЕ"
+          }
+        }
+      }
+    },
+    "On-device · No internet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "На устройстве · Без интернета"
+          }
+        }
+      }
+    },
+    "On-device · Private · No model needed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "На устройстве · Приватно · Модель не требуется"
+          }
+        }
+      }
+    },
+    "On-device · Works offline" : {
+
+    },
+    "On-device AI · Web only when you ask" : {
+
+    },
+    "On-device inference · No network required" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Инференс на устройстве · Сеть не требуется"
+          }
+        }
+      }
+    },
+    "Open in browser" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Открыть в браузере"
+          }
+        }
+      }
+    },
+    "Open Models Folder" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Открыть папку моделей"
+          }
+        }
+      }
+    },
+    "Opened" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Открыто"
+          }
+        }
+      }
+    },
+    "Opened in browser" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Открыто в браузере"
+          }
+        }
+      }
+    },
+    "Optional event location" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Необязательное местоположение события"
+          }
+        }
+      }
+    },
+    "Optional event notes/description" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Необязательные заметки/описание события"
+          }
+        }
+      }
+    },
+    "Optional: \"day\", \"week\", \"month\", \"year\"" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Необязательно: «day», «week», «month», «year»"
+          }
+        }
+      }
+    },
+    "Optionally auto-fetches full page content from top 3 results" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "При необходимости автоматически загружает полное содержимое страницы из топ‑3 результатов"
+          }
+        }
+      }
+    },
+    "OPTIONS" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ПАРАМЕТРЫ"
+          }
+        }
+      }
+    },
+    "Output" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Вывод"
+          }
+        }
+      }
+    },
+    "Outside window" : {
+
+    },
+    "PAGE CONTENT" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "СОДЕРЖИМОЕ СТРАНИЦЫ"
+          }
+        }
+      }
+    },
+    "Page too large (%lld bytes, limit 2 MB)" : {
+
+    },
+    "Parameters" : {
+
+    },
+    "PDF has no text layer — content sent as images" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "В PDF нет текстового слоя — содержимое отправляется в виде изображений"
+          }
+        }
+      }
+    },
+    "Persistent semantic memory. The model remembers facts about you across conversations — fully on-device." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Постоянная семантическая память. Модель запоминает факты о вас между разговорами — полностью на устройстве."
+          }
+        }
+      }
+    },
+    "Photo" : {
+
+    },
+    "Photo Library" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Фототека"
+          }
+        }
+      }
+    },
+    "Pick a model to start chatting on-device" : {
+
+    },
+    "Pin" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Закрепить"
+          }
+        }
+      }
+    },
+    "Pinned" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Закреплённые"
+          }
+        }
+      }
+    },
+    "Plenty of room" : {
+
+    },
+    "PPTX contains no text" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "В PPTX нет текста"
+          }
+        }
+      }
+    },
+    "Preset" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Пресет"
+          }
+        }
+      }
+    },
+    "Press ⌘N or tap + to start" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Нажмите ⌘N или коснитесь +, чтобы начать"
+          }
+        }
+      }
+    },
+    "Previous 7 Days" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Последние 7 дней"
+          }
+        }
+      }
+    },
+    "Private" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Приватно"
+          }
+        }
+      }
+    },
+    "PRO" : {
+
+    },
+    "Provider" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Провайдер"
+          }
+        }
+      }
+    },
+    "query: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "запрос: %@"
+          }
+        }
+      }
+    },
+    "Read this article: https://example.com/article" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Прочитайте эту статью: https://example.com/article"
+          }
+        }
+      }
+    },
+    "Ready" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Готово"
+          }
+        }
+      }
+    },
+    "Real-time weather and multi-day forecast via Open-Meteo. Free, no API key, global coverage." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Погода в реальном времени и прогноз на несколько дней через Open-Meteo. Бесплатно, без API-ключа, покрытие по всему миру."
+          }
+        }
+      }
+    },
+    "Remember that I live in Berlin and I'm vegetarian" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Запомни, что я живу в Берлине и я вегетарианец"
+          }
+        }
+      }
+    },
+    "Remembered" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Запомнено"
+          }
+        }
+      }
+    },
+    "Remembers across chats" : {
+
+    },
+    "Remove %@ from your device?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удалить «%@» с устройства?"
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Переименовать"
+          }
+        }
+      }
+    },
+    "Rename Chat" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Переименовать чат"
+          }
+        }
+      }
+    },
+    "Reply buffer" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Буфер ответа"
+          }
+        }
+      }
+    },
+    "Reply to Lamo" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ответьте Lamo"
+          }
+        }
+      }
+    },
+    "Requirements" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Требования"
+          }
+        }
+      }
+    },
+    "Requires Calendar permission on first use. Uses EventKit for read/write access." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Требуется разрешение на доступ к календарю при первом использовании. Использует EventKit для чтения и записи."
+          }
+        }
+      }
+    },
+    "Requires internet connection for weather data. City-to-coordinates lookup uses Open-Meteo geocoding API." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Для данных о погоде требуется подключение к интернету. Поиск координат города использует геокодирующий API Open-Meteo."
+          }
+        }
+      }
+    },
+    "Requires internet connection." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Требуется подключение к интернету."
+          }
+        }
+      }
+    },
+    "Requires internet connection. Falls back to offline-only tools when disconnected." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Требуется подключение к интернету. При отсутствии подключения используются только офлайн-инструменты."
+          }
+        }
+      }
+    },
+    "Requires iOS 27 or macOS 27" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Требуется iOS 27 или macOS 27"
+          }
+        }
+      }
+    },
+    "Reset" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сбросить"
+          }
+        }
+      }
+    },
+    "Reset Sampling" : {
+
+    },
+    "Reset Settings?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сбросить настройки?"
+          }
+        }
+      }
+    },
+    "Reset to Defaults" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сбросить к значениям по умолчанию"
+          }
+        }
+      }
+    },
+    "Results cached for 2 minutes to avoid repeated requests" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Результаты кэшируются на 2 минуты, чтобы избежать повторных запросов"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Повторить"
+          }
+        }
+      }
+    },
+    "Retry generation" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Повторить генерацию"
+          }
+        }
+      }
+    },
+    "Returns titles, snippets, and URLs for each result" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Возвращает заголовки, сниппеты и URL для каждого результата"
+          }
+        }
+      }
+    },
+    "Reverse geocoding: translates coordinates to city, region, country" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Обратное геокодирование: преобразует координаты в город, регион, страну"
+          }
+        }
+      }
+    },
+    "Run test" : {
+
+    },
+    "Run Test Search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Запустить тестовый поиск"
+          }
+        }
+      }
+    },
+    "running" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Выполняется"
+          }
+        }
+      }
+    },
+    "Running" : {
+
+    },
+    "Running 100% on your device" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Работает на 100% на вашем устройстве"
+          }
+        }
+      }
+    },
+    "Sampling" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сэмплирование"
+          }
+        }
+      }
+    },
+    "Save" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сохранить"
+          }
+        }
+      }
+    },
+    "Saves facts as plain text — each fact is one short sentence" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сохраняет факты в виде обычного текста — каждый факт — одно короткое предложение"
+          }
+        }
+      }
+    },
+    "Search chats" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поиск чатов"
+          }
+        }
+      }
+    },
+    "Search engine" : {
+
+    },
+    "SEARCH ENGINE" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ПОИСКОВАЯ СИСТЕМА"
+          }
+        }
+      }
+    },
+    "Search events by keyword in title, notes, or location" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поиск событий по ключевому слову в названии, заметках или местоположении"
+          }
+        }
+      }
+    },
+    "Search for recent papers about on-device LLM inference" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Найди свежие статьи об инференсе LLM на устройстве"
+          }
+        }
+      }
+    },
+    "Search keyword (for search mode)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Ключевое слово для поиска (для режима поиска)"
+          }
+        }
+      }
+    },
+    "Search query — be specific, use natural language" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поисковый запрос — будьте конкретны, используйте естественный язык"
+          }
+        }
+      }
+    },
+    "Search the internet in real time via multiple search engines. Fetches page content for top results." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Выполняет поиск в интернете в реальном времени через несколько поисковых систем. Загружает содержимое страниц для лучших результатов."
+          }
+        }
+      }
+    },
+    "Searches the web using SearXNG, Brave, DuckDuckGo, or Google" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Выполняет поиск в интернете с помощью SearXNG, Brave, DuckDuckGo или Google"
+          }
+        }
+      }
+    },
+    "SearXNG" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "SearXNG"
+          }
+        }
+      }
+    },
+    "SearXNG + Brave" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "SearXNG + Brave"
+          }
+        }
+      }
+    },
+    "SearXNG + Brave · Faster" : {
+
+    },
+    "Select a Chat" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Выберите чат"
+          }
+        }
+      }
+    },
+    "Send message" : {
+
+    },
+    "Server returned status %lld" : {
+
+    },
+    "Settings" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Настройки"
+          }
+        }
+      }
+    },
+    "Share" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поделиться"
+          }
+        }
+      }
+    },
+    "Show me the 5-day forecast for Barcelona" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Покажи прогноз на 5 дней для Барселоны"
+          }
+        }
+      }
+    },
+    "Spec. Decoding" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Спек. декодирование"
+          }
+        }
+      }
+    },
+    "Speed" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Скорость"
+          }
+        }
+      }
+    },
+    "Start date/time in \"yyyy-MM-dd HH:mm\" format" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Дата/время начала в формате «yyyy-MM-dd HH:mm»"
+          }
+        }
+      }
+    },
+    "Stop generation" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Остановить генерацию"
+          }
+        }
+      }
+    },
+    "Storage" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Хранилище"
+          }
+        }
+      }
+    },
+    "Strips ads, navigation, and boilerplate from pages" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Удаляет рекламу, навигацию и шаблонный контент со страниц"
+          }
+        }
+      }
+    },
+    "SUMMARY" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "СВОДКА"
+          }
+        }
+      }
+    },
+    "Sunrise/sunset times included in forecast" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Время восхода и заката включено в прогноз"
+          }
+        }
+      }
+    },
+    "Supports time-based filtering: day, week, month, year" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поддерживает фильтрацию по времени: day, week, month, year"
+          }
+        }
+      }
+    },
+    "Switching restarts the engine" : {
+
+    },
+    "System" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Система"
+          }
+        }
+      }
+    },
+    "System defaults" : {
+
+    },
+    "System prompt" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Системный prompt"
+          }
+        }
+      }
+    },
+    "System Prompt" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Системный prompt"
+          }
+        }
+      }
+    },
+    "Takes effect after the engine restarts automatically" : {
+
+    },
+    "Temperature" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Температура"
+          }
+        }
+      }
+    },
+    "TEST" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "ТЕСТ"
+          }
+        }
+      }
+    },
+    "Test query" : {
+
+    },
+    "Testing…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Тестирование…"
+          }
+        }
+      }
+    },
+    "That file isn't a .litertlm model. Pick a file ending in .litertlm." : {
+
+    },
+    "Thermal" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Температура"
+          }
+        }
+      }
+    },
+    "Thinking" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Думает…"
+          }
+        }
+      }
+    },
+    "Thinking mode" : {
+
+    },
+    "This device does not support Apple Intelligence" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Это устройство не поддерживает Apple Intelligence"
+          }
+        }
+      }
+    },
+    "This removes all %lld remembered facts. AI will start fresh." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "This removes all %lld remembered fact. AI will start fresh."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "This removes all %lld remembered facts. AI will start fresh."
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "This removes all %lld remembered facts. AI will start fresh."
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Это удалит все %lld запомненных факта. AI начнет с чистого листа."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Это удалит все %lld запомненных фактов. AI начнет с чистого листа."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Это удалит все %lld запомненный факт. AI начнет с чистого листа."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Это удалит все %lld запомненных фактов. AI начнет с чистого листа."
+                }
+              },
+              "zero" : {
+                "stringUnit" : {
+                  "state" : "machine_translated",
+                  "value" : "Это удалит все %lld запомненных фактов. AI начнет с чистого листа."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "This will remove the model from your device." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Это удалит модель с вашего устройства."
+          }
+        }
+      }
+    },
+    "This will restore all settings to their defaults." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Это вернёт все настройки к значениям по умолчанию."
+          }
+        }
+      }
+    },
+    "Threshold" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Порог"
+          }
+        }
+      }
+    },
+    "Today" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Сегодня"
+          }
+        }
+      }
+    },
+    "Tool execution failed: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось выполнить инструмент: %@"
+          }
+        }
+      }
+    },
+    "Tool failed" : {
+
+    },
+    "Tools" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Инструменты"
+          }
+        }
+      }
+    },
+    "Tools (%lld)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Инструменты (%lld)"
+          }
+        }
+      }
+    },
+    "Tools (%lld/%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tools (%1$lld/%2$lld)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Инструменты (%1$lld/%2$lld)"
+          }
+        }
+      }
+    },
+    "Tools settings, %@" : {
+
+    },
+    "Top-K" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Top-K"
+          }
+        }
+      }
+    },
+    "Top-P" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Top-P"
+          }
+        }
+      }
+    },
+    "Total used" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Всего использовано"
+          }
+        }
+      }
+    },
+    "Trigger at %lld%% KV-cache fill" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Срабатывание при заполнении KV-cache на %lld%%"
+          }
+        }
+      }
+    },
+    "Trimming history" : {
+
+    },
+    "Try a different search" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Попробуйте другой запрос"
+          }
+        }
+      }
+    },
+    "Try a search…" : {
+
+    },
+    "Try asking" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Попробуйте спросить"
+          }
+        }
+      }
+    },
+    "Turn all off" : {
+
+    },
+    "Turn all on" : {
+
+    },
+    "Turn on to remember" : {
+
+    },
+    "Unknown" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неизвестно"
+          }
+        }
+      }
+    },
+    "Unknown tool type" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неизвестный тип инструмента"
+          }
+        }
+      }
+    },
+    "Unknown tool: '%@'" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Неизвестный инструмент: «%@»"
+          }
+        }
+      }
+    },
+    "Unpin" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Открепить"
+          }
+        }
+      }
+    },
+    "Updated" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Обновлено"
+          }
+        }
+      }
+    },
+    "Updated: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Обновлено: %@"
+          }
+        }
+      }
+    },
+    "Uptime %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Время работы %@"
+          }
+        }
+      }
+    },
+    "Use" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Использовать"
+          }
+        }
+      }
+    },
+    "Use Now" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Использовать сейчас"
+          }
+        }
+      }
+    },
+    "Used" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Использовано"
+          }
+        }
+      }
+    },
+    "Used %lld×" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Использовано %lld×"
+          }
+        }
+      }
+    },
+    "Vision Budget" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Бюджет vision"
+          }
+        }
+      }
+    },
+    "Warm" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Тепло"
+          }
+        }
+      }
+    },
+    "Weather" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Погода"
+          }
+        }
+      }
+    },
+    "Weather lookup failed: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Не удалось получить данные о погоде: %@"
+          }
+        }
+      }
+    },
+    "Web Search" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поиск в интернете"
+          }
+        }
+      }
+    },
+    "Web search failed: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Поиск в интернете не удался: %@"
+          }
+        }
+      }
+    },
+    "Web search settings" : {
+
+    },
+    "What are my current GPS coordinates?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Какие у меня сейчас GPS-координаты?"
+          }
+        }
+      }
+    },
+    "What are the latest developments in nuclear fusion?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Какие последние достижения в области термоядерного синтеза?"
+          }
+        }
+      }
+    },
+    "What city am I in?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "В каком я городе?"
+          }
+        }
+      }
+    },
+    "What do you remember about me?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Что ты обо мне помнишь?"
+          }
+        }
+      }
+    },
+    "What does the documentation at this URL say?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Что говорится в документации по этому URL?"
+          }
+        }
+      }
+    },
+    "What's on my calendar for tomorrow?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Что у меня в календаре на завтра?"
+          }
+        }
+      }
+    },
+    "What's the weather like today?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Какая сегодня погода?"
+          }
+        }
+      }
+    },
+    "Where am I right now?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Где я сейчас нахожусь?"
+          }
+        }
+      }
+    },
+    "Will it rain in Berlin this weekend?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Будет ли дождь в Берлине в эти выходные?"
+          }
+        }
+      }
+    },
+    "Yesterday" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Вчера"
+          }
+        }
+      }
+    },
+    "You" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "Вы"
+          }
+        }
+      }
+    },
+    "You: " : {
+
+    }
+  },
+  "version" : "1.3"
+}

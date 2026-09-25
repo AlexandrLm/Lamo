@@ -1,0 +1,95 @@
+import Foundation
+
+/// Benchmark stats captured after each inference response.
+struct BenchmarkData: Codable, Sendable {
+    let timeToFirstToken: Double   // seconds
+    let decodeTokensPerSec: Double // tok/s
+    let decodeTokenCount: Int      // total decoded tokens
+    let prefillTokensPerSec: Double // tok/s (for context)
+    let prefillTokenCount: Int
+}
+
+extension BenchmarkData {
+    static func decode(from json: String) -> BenchmarkData? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
+    }
+
+    func encode() -> String? {
+        guard let data = try? JSONEncoder().encode(self) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+}
+
+enum StreamingToken: @unchecked Sendable {
+    case delta(String)
+    case thinkingDelta(String)
+    case toolCall(name: String, params: String)
+    case toolResult(name: String, result: String)
+    case benchmark(BenchmarkData)
+    case loopDetected
+    case done
+    case error(any Error & Sendable)
+}
+
+struct ChatMessage: Sendable {
+    let id: UUID
+    let role: MessageRole
+    let content: String
+    let imagePaths: [String]
+    let attachedFilePaths: [String]
+    let attachedFileNames: [String]
+    let attachedFileSizes: [String]
+    /// Extracted text from attached files, sent as separate context to the model.
+    let fileContent: String
+    /// Owning conversation — flows through the pipeline so tools can persist
+    /// per-conversation state (e.g. memory facts) without app-global mutable state.
+    let conversationID: UUID?
+
+    init(
+        id: UUID = UUID(),
+        role: MessageRole,
+        content: String,
+        imagePaths: [String] = [],
+        attachedFilePaths: [String] = [],
+        attachedFileNames: [String] = [],
+        attachedFileSizes: [String] = [],
+        fileContent: String = "",
+        conversationID: UUID? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.imagePaths = imagePaths
+        self.attachedFilePaths = attachedFilePaths
+        self.attachedFileNames = attachedFileNames
+        self.attachedFileSizes = attachedFileSizes
+        self.fileContent = fileContent
+        self.conversationID = conversationID
+    }
+}
+
+// MARK: - Provider Selection
+
+enum ProviderType: String, CaseIterable, Sendable {
+    case litertLM
+#if canImport(FoundationModels)
+    case foundationModels
+#endif
+
+    var displayName: String {
+        switch self {
+        case .litertLM: return "LiteRT-LM"
+#if canImport(FoundationModels)
+        case .foundationModels: return "Apple Intelligence"
+#endif
+        }
+    }
+}
+
+// MARK: - Provider Protocol
+
+protocol LLMProvider: Sendable {
+    var name: String { get }
+    func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken>
+}
