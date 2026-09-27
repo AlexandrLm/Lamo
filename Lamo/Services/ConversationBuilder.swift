@@ -35,6 +35,52 @@ struct ConversationBuilder {
     let cpuThreadCount: Int
     let maxNumTokens: Int?
 
+    // MARK: - Shared constants and caches
+
+    /// Hard cap for file text injected into a single message.
+    static let maxFileChars = 15_000
+    /// Hard cap for the auto-summarization request payload.
+    static let maxSummaryChars = 8_000
+    /// Tool schema JSON per tool-set key. Tool sets change only in Settings,
+    /// so caching avoids re-serializing every schema on each turn.
+    private static let toolSchemaTextCache = OSAllocatedUnfairLock(initialState: [String: String]())
+
+    /// Cached tool-schema text for one tool-set key.
+    static func toolSchemaText(for key: String, build: () -> String) -> String {
+        toolSchemaTextCache.withLock { cache in
+            if let cached = cache[key] { return cached }
+            let text = build()
+            cache[key] = text
+            // Settings can only produce a handful of distinct combinations;
+            // a full reset is cheaper than maintaining LRU metadata here.
+            if cache.count > 16 { cache.removeAll() }
+            return text
+        }
+    }
+    /// `DateFormatter` is not thread-safe; one lock guards all three instances.
+    static let formatterLock = NSLock()
+
+    static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEEE"
+        return f
+    }()
+
     // MARK: - Conversation Building
 
     /// Build a conversation with token-accurate budget and auto-summarization.
@@ -126,10 +172,7 @@ struct ConversationBuilder {
         // --- Tokenize tool schemas using real getSchema() output ---
         // Schema text cached per tool-set key; counts via TokenBudget cache.
         let toolKey = "\(AppDefaults.toolGetLocation.wrappedValue)-\(AppDefaults.toolWeather.wrappedValue)-\(AppDefaults.toolCalendar.wrappedValue)-\(AppDefaults.memoryEnabled.wrappedValue)-\(networkAvailable)-\(AppDefaults.toolWebSearch.wrappedValue)-\(AppDefaults.toolFetchURL.wrappedValue)"
-        let toolSchemaText: String
-        if let cached = Self.toolSchemaTextCache[toolKey] {
-            toolSchemaText = cached
-        } else {
+        let toolSchemaText = Self.toolSchemaText(for: toolKey) {
             var text = ""
             for tool in allTools {
                 let schema = tool.getSchema()
@@ -138,9 +181,7 @@ struct ConversationBuilder {
                     text += json + "\n"
                 }
             }
-            toolSchemaText = text
-            Self.toolSchemaTextCache[toolKey] = text
-            if Self.toolSchemaTextCache.count > 16 { Self.toolSchemaTextCache.removeAll() }
+            return text
         }
         let toolDefTokens = await pm.tokenizeCount(toolSchemaText)
         pm.lastToolTokens = toolDefTokens

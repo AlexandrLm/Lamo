@@ -26,6 +26,7 @@ enum LamoError: LocalizedError, Equatable {
         case .modelTooSmall(let size): return String(localized: "Model file too small (\(size, format: .number.precision(.fractionLength(2))) GB). Re-download recommended.")
         case .noModelAvailable: return String(localized: "No model available. Download a model in Settings.")
         case .modelStuckInLoop: return String(localized: "Model stuck in a loop. Try rephrasing your message or adjusting temperature in Settings.")
+        case .engineNotReady: return String(localized: "The model engine is not ready yet. Open the app and wait for it to finish loading, then retry.")
         case .foundationModelsUnavailable(let reason): return String(localized: "Apple Intelligence unavailable: \(reason)")
         case .foundationModelsError(let message): return String(localized: "Apple Intelligence error: \(message)")
         }
@@ -41,6 +42,7 @@ enum LamoError: LocalizedError, Equatable {
         case .modelTooSmall: return String(localized: "Delete the partial file and re-download the model.")
         case .noModelAvailable: return String(localized: "Open Settings > Models and download a model.")
         case .modelStuckInLoop: return String(localized: "Rephrase your message or lower the temperature in Settings.")
+        case .engineNotReady: return String(localized: "Wait for the model to finish loading, then try again.")
         case .foundationModelsUnavailable: return String(localized: "Check that Apple Intelligence is enabled and the device supports it.")
         case .foundationModelsError: return String(localized: "Try again. If the error persists, restart the app.")
         }
@@ -57,6 +59,7 @@ enum LamoError: LocalizedError, Equatable {
         case .modelTooSmall: return 1006
         case .noModelAvailable: return 1007
         case .modelStuckInLoop: return 1008
+        case .engineNotReady: return 1011
         case .foundationModelsUnavailable: return 1009
         case .foundationModelsError: return 1010
         }

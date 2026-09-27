@@ -29,7 +29,31 @@ struct ContextTracker {
     let usedTokens: Int
     /// Cached included-message count (set by `build`; nil for legacy
     /// initializers — falls back to computing from `messageUsages`).
-    let cachedIncludedCount: Int? = nil
+    let cachedIncludedCount: Int?
+
+    /// Explicit initializer: a `let` with a default value is omitted from the
+    /// synthesized memberwise init, so declare it here to keep the parameter.
+    init(
+        systemPromptTokens: Int,
+        memoryTokens: Int,
+        toolTokens: Int,
+        toolCount: Int,
+        toolCountTotal: Int,
+        totalLimit: Int,
+        messageUsages: [MessageUsage],
+        usedTokens: Int,
+        cachedIncludedCount: Int? = nil
+    ) {
+        self.systemPromptTokens = systemPromptTokens
+        self.memoryTokens = memoryTokens
+        self.toolTokens = toolTokens
+        self.toolCount = toolCount
+        self.toolCountTotal = toolCountTotal
+        self.totalLimit = totalLimit
+        self.messageUsages = messageUsages
+        self.usedTokens = usedTokens
+        self.cachedIncludedCount = cachedIncludedCount
+    }
 
     /// Tokens reserved for the model's reply.
     var reservedForReply: Int { Self.reservedForReply }
