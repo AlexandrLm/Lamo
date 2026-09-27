@@ -187,6 +187,7 @@ struct SidebarView: View {
             Button("Rename") {
                 let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                 conversation.title = trimmed.isEmpty ? String(localized: "New Chat") : trimmed
+                conversation.isUntitled = trimmed.isEmpty
                 try? modelContext.save()
             }
             Button("Cancel", role: .cancel) {}

@@ -19,44 +19,52 @@ final class RepetitionDetector: Sendable {
 
     private struct State {
         var buffer: String = ""
-        /// Cached buffer length to avoid O(n) .count on every call.
+        /// Cached window length to avoid O(n) String.count on every call.
         var bufferLength: Int = 0
+        /// Cumulative generated characters (window trimming must not reset this).
+        var totalCharacters: Int = 0
         /// Token counter for batched checking.
         var tokenCount: Int = 0
     }
 
     init(windowSize: Int = 2000, minBufferSize: Int = 200, checkFrequency: Int = 5) {
-        self.windowSize = windowSize
-        self.minBufferSize = minBufferSize
-        self.checkFrequency = checkFrequency
+        self.windowSize = max(1, windowSize)
+        self.minBufferSize = max(1, minBufferSize)
+        self.checkFrequency = max(1, checkFrequency)
         self.lock = OSAllocatedUnfairLock(initialState: State())
     }
 
     /// Feed a new chunk of text. Returns `true` if repetition detected.
     /// Only runs detection every `checkFrequency` tokens for performance.
     func feed(_ chunk: String) -> Bool {
-        lock.withLock { state in
+        // Snapshot the window under the lock, then detect outside of it: the
+        // scan is O(window) and must never block the streaming producer.
+        let textToInspect: String? = lock.withLock { state in
             state.buffer.append(chunk)
             state.bufferLength += chunk.count
+            state.totalCharacters += chunk.count
             state.tokenCount += 1
-            // Keep buffer bounded — use cached length to avoid O(n) .count
+
+            // Keep enough overlap to catch a pattern straddling the window edge.
             if state.bufferLength > windowSize * 3 {
                 state.buffer = String(state.buffer.suffix(windowSize * 2))
                 state.bufferLength = state.buffer.count
             }
-            guard state.bufferLength >= minBufferSize else { return false }
 
-            // Only check every N tokens — saves ~80% CPU during streaming
-            guard state.tokenCount % checkFrequency == 0 else { return false }
-
-            let text = String(state.buffer.suffix(windowSize))
-            return detectLoop(text: text)
+            guard state.bufferLength >= minBufferSize,
+                  state.tokenCount.isMultiple(of: checkFrequency) else {
+                return nil
+            }
+            return String(state.buffer.suffix(windowSize))
         }
+
+        guard let textToInspect else { return false }
+        return detectLoop(text: textToInspect)
     }
 
-    /// Total chars generated so far (O(1) — cached length, no recount).
+    /// Total characters generated so far, including text trimmed from the window.
     var totalChars: Int {
-        lock.withLock { $0.bufferLength }
+        lock.withLock { $0.totalCharacters }
     }
 
     /// Reset for a new generation.
@@ -64,6 +72,7 @@ final class RepetitionDetector: Sendable {
         lock.withLock { state in
             state.buffer = ""
             state.bufferLength = 0
+            state.totalCharacters = 0
             state.tokenCount = 0
         }
     }
@@ -116,7 +125,7 @@ final class RepetitionDetector: Sendable {
     /// Only 3-grams are checked; n-grams are hashed Ints instead of joined
     /// strings to avoid O(n) allocations per window.
     private nonisolated func detectNgramFlood(_ text: String) -> Bool {
-        let words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         let wordCount = words.count
         guard wordCount >= 20 else { return false }
 
@@ -142,7 +151,9 @@ final class RepetitionDetector: Sendable {
 
     /// Same line repeated 3+ times (common with code/list generation loops).
     private nonisolated func detectLineLoop(_ text: String) -> Bool {
-        let lines = text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let lines = text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
         guard lines.count >= 6 else { return false }
 
         // Check last N lines for repetition

@@ -14,6 +14,10 @@ final class Conversation {
     /// Summary of older messages that were dropped from context.
     var summary: String
     var isPinned: Bool
+    /// `true` until the first message produces a real title. Using an explicit
+    /// flag instead of comparing against a localized "New Chat" string keeps
+    /// the sentinel stable in every language.
+    var isUntitled: Bool
 
     @Relationship(deleteRule: .cascade)
     var messages: [Message]
@@ -24,6 +28,7 @@ final class Conversation {
         updatedAt: Date = .now,
         summary: String = "",
         isPinned: Bool = false,
+        isUntitled: Bool = true,
         messages: [Message] = []
     ) {
         self.id = id
@@ -31,6 +36,7 @@ final class Conversation {
         self.updatedAt = updatedAt
         self.summary = String(summary.prefix(Self.maxSummaryChars))
         self.isPinned = isPinned
+        self.isUntitled = isUntitled
         self.messages = messages
     }
 }

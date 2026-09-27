@@ -100,8 +100,9 @@ final class ChatViewModel {
             let titleText = text.isEmpty
                 ? (attachments.fileNames.first.map { String(localized: "📎 \($0)") } ?? String(localized: "New Chat"))
                 : String(text.prefix(40))
-            if conversation.title == String(localized: "New Chat") {
+            if conversation.isUntitled {
                 conversation.title = titleText
+                conversation.isUntitled = titleText == String(localized: "New Chat")
             }
 
             startAssistantResponse()

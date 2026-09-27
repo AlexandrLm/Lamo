@@ -84,31 +84,29 @@ enum PresetModel: String, CaseIterable, Identifiable {
         }
     }
 
-    var isDownloaded: Bool {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
-        let fileURL = modelsDir.appendingPathComponent(filename)
-        return FileManager.default.fileExists(atPath: fileURL.path)
+    /// Location of this model inside the app's models directory.
+    var localFileURL: URL {
+        ModelDiscovery.modelsDirectory.appendingPathComponent(filename)
     }
 
+    var isDownloaded: Bool {
+        FileManager.default.fileExists(atPath: localFileURL.path)
+    }
 
-    /// File exists on disk and is at least 50% of expected size (catches corrupted/partial downloads).
+    /// True only when the file is close to its expected size. A 50% threshold
+    /// treated a half-finished download as complete, so the downloader skipped
+    /// the resume and the engine later failed to load a truncated file.
     var isFileValid: Bool {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
-        let fileURL = modelsDir.appendingPathComponent(filename)
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: localFileURL.path),
               let size = attrs[.size] as? Int64 else { return false }
-        let minValidBytes = Int64(fileSizeGB * 0.5 * 1_073_741_824)
+        let expected = Int64(fileSizeGB * 1_073_741_824)
+        let minValidBytes = Int64(Double(expected) * 0.95)
         return size >= max(minValidBytes, 1)
     }
 
     /// Human-readable file size on disk
     var actualFileSizeString: String {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let modelsDir = documents.appendingPathComponent("models")
-        let fileURL = modelsDir.appendingPathComponent(filename)
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: localFileURL.path),
               let size = attrs[.size] as? Int64 else { return "unknown" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
@@ -167,7 +165,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
 
     /// Local path after download
     var localPath: String {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return documents.appendingPathComponent("models").appendingPathComponent(filename).path
+        localFileURL.path
     }
 }

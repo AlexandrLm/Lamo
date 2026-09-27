@@ -4,7 +4,7 @@ import MapKit
 
 // MARK: - Location Result
 
-struct LocationResult {
+nonisolated struct LocationResult: Sendable {
     let latitude: Double
     let longitude: Double
     let altitude: Double
@@ -65,6 +65,7 @@ actor LocationService {
             manager.requestWhenInUseAuthorization()
             let start = Date()
             while manager.authorizationStatus == .notDetermined {
+                try Task.checkCancellation()
                 if Date().timeIntervalSince(start) > 10 {
                     throw LocationServiceError.permissionDenied
                 }
@@ -127,33 +128,39 @@ actor LocationService {
         }
     }
 
+    private struct IpApiResponse: Decodable {
+        let latitude: Double
+        let longitude: Double
+        let city: String?
+        let region: String?
+        let country: String?
+
+        enum CodingKeys: String, CodingKey {
+            case latitude, longitude, city, region
+            case country = "country_name"
+        }
+    }
+
+    private struct IpWhoisResponse: Decodable {
+        let success: Bool
+        let latitude: Double
+        let longitude: Double
+        let city: String?
+        let region: String?
+        let country: String?
+    }
+
     private func ipViaIpapi() async throws -> LocationResult {
         guard let url = URL(string: "https://ipapi.co/json/") else {
             throw LocationServiceError.unavailable
         }
-        var request = URLRequest(url: url)
-        request.setValue("Lamo/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 8
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw LocationServiceError.unavailable
-        }
-        let city = json["city"] as? String ?? ""
-        let region = json["region"] as? String ?? ""
-        let country = json["country_name"] as? String ?? ""
-        let name = [city, region, country].filter { !$0.isEmpty }.joined(separator: ", ")
-        guard let lat = json["latitude"] as? Double, let lon = json["longitude"] as? Double else {
-            throw LocationServiceError.unavailable
-        }
-        return LocationResult(
-            latitude: lat,
-            longitude: lon,
-            altitude: 0,
-            horizontalAccuracy: 5000,
-            name: name.isEmpty ? "unknown" : name,
-            source: "ip"
+        let response: IpApiResponse = try await fetchJSON(from: url)
+        return try makeIPResult(
+            latitude: response.latitude,
+            longitude: response.longitude,
+            city: response.city,
+            region: response.region,
+            country: response.country
         )
     }
 
@@ -161,24 +168,46 @@ actor LocationService {
         guard let url = URL(string: "https://ipwho.is/") else {
             throw LocationServiceError.unavailable
         }
+        let response: IpWhoisResponse = try await fetchJSON(from: url)
+        guard response.success else { throw LocationServiceError.unavailable }
+        return try makeIPResult(
+            latitude: response.latitude,
+            longitude: response.longitude,
+            city: response.city,
+            region: response.region,
+            country: response.country
+        )
+    }
+
+    private func fetchJSON<T: Decodable>(from url: URL) async throws -> T {
         var request = URLRequest(url: url)
         request.setValue("Lamo/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 8
-
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let success = json["success"] as? Bool, success,
-              let lat = json["latitude"] as? Double, let lon = json["longitude"] as? Double else {
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
             throw LocationServiceError.unavailable
         }
-        let city = json["city"] as? String ?? ""
-        let region = json["region"] as? String ?? ""
-        let country = json["country"] as? String ?? ""
-        let name = [city, region, country].filter { !$0.isEmpty }.joined(separator: ", ")
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func makeIPResult(
+        latitude: Double,
+        longitude: Double,
+        city: String?,
+        region: String?,
+        country: String?
+    ) throws -> LocationResult {
+        guard (-90...90).contains(latitude), (-180...180).contains(longitude) else {
+            throw LocationServiceError.unavailable
+        }
+        let name = [city, region, country]
+            .map { $0?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
         return LocationResult(
-            latitude: lat,
-            longitude: lon,
+            latitude: latitude,
+            longitude: longitude,
             altitude: 0,
             horizontalAccuracy: 5000,
             name: name.isEmpty ? "unknown" : name,
@@ -210,7 +239,7 @@ actor LocationService {
 
 // MARK: - Errors
 
-enum LocationServiceError: LocalizedError {
+nonisolated enum LocationServiceError: LocalizedError, Sendable {
     case permissionDenied
     case unavailable
     case timeout
