@@ -9,7 +9,7 @@ import UIKit
 /// Polished HTML preview card with toolbar, source toggle, expand, and copy.
 struct HTMLCard: View, Equatable {
     let html: String
-    var title: String? = nil
+    var title: String?
     var maxHeight: CGFloat = 420
     /// Во время стриминга WKWebView не монтируем — каждый токен перезагружал бы страницу.
     var isStreaming: Bool = false
@@ -142,7 +142,6 @@ struct HTMLCard: View, Equatable {
 #endif
 }
 
-
 // MARK: - HTML Preview View (WKWebView)
 
 struct HTMLPreviewView: View {
@@ -241,12 +240,28 @@ struct HTMLPreviewView: View {
     }
 
     nonisolated private static func injectAdaptiveStyles(_ raw: String, dark: Bool) -> String {
-        let style: String
-        if dark {
-            style = "<style>:root{color-scheme:dark}body{font-family:-apple-system,sans-serif;background:#141414!important;color:#e5e5e7!important;padding:14px 16px;line-height:1.6}a{color:#64d2ff!important}img,video,svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{border:1px solid #3a3a3c;padding:8px 12px}th{background:#2c2c2e}code,pre{font-family:'SF Mono',Menlo,monospace}pre{background:#000;border:1px solid #333;border-radius:10px;padding:12px;overflow-x:auto}</style>"
-        } else {
-            style = "<style>:root{color-scheme:light}body{font-family:-apple-system,sans-serif;background:#f2f2f7!important;color:#1c1c1e!important;padding:14px 16px;line-height:1.6}a{color:#007aff!important}img,video,svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d1d1d6;padding:8px 12px}th{background:#e9e9ee}code,pre{font-family:'SF Mono',Menlo,monospace}pre{background:#fff;border:1px solid #d1d1d6;border-radius:10px;padding:12px;overflow-x:auto}</style>"
-        }
+        // Built from small pieces: one 500-char CSS literal is unreadable and
+        // trips the line-length lint rule.
+        let palette = dark
+            ? ("dark", "#141414", "#e5e5e7", "#64d2ff", "#3a3a3c", "#2c2c2e", "#000", "#333")
+            : ("light", "#f2f2f7", "#1c1c1e", "#007aff", "#d1d1d6", "#e9e9ee", "#fff", "#d1d1d6")
+        let (scheme, bg, fg, link, border, headBg, preBg, preBorder) = palette
+
+        let shared = """
+        img,video,svg{max-width:100%;height:auto}\
+        table{width:100%;border-collapse:collapse}\
+        th,td{border:1px solid \(border);padding:8px 12px}\
+        th{background:\(headBg)}\
+        code,pre{font-family:'SF Mono',Menlo,monospace}\
+        pre{background:\(preBg);border:1px solid \(preBorder);border-radius:10px;\
+        padding:12px;overflow-x:auto}
+        """
+        let style = """
+        <style>:root{color-scheme:\(scheme)}\
+        body{font-family:-apple-system,sans-serif;background:\(bg)!important;\
+        color:\(fg)!important;padding:14px 16px;line-height:1.6}\
+        a{color:\(link)!important}\(shared)</style>
+        """
         if let headEnd = raw.range(of: "</head>") {
             var result = raw
             result.replaceSubrange(headEnd, with: "\(style)\n</head>")
@@ -315,7 +330,6 @@ private struct HTMLWebView: UIViewRepresentable {
             lastReport = now
             DispatchQueue.main.async { self.parent.contentHeight = h + 8 }
         }
-
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             // Use MutationObserver for dynamic content, with fallback

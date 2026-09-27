@@ -104,7 +104,20 @@ nonisolated final class TokenBudget {
 
         let capped = min(requested, maxTokensFromMemory)
         let result = (capped / 256) * 256
-        LamoLogger.engine.debug("safeMaxTokens: kv=\(String(format: "%.0f", kvMBPer1K))MB/1K, available=\(String(format: "%.0f", availableMB))MB, safety=\(Int(safetyFactor*100))%, usable=\(String(format: "%.0f", usableMB))MB, maxFromMem=\(maxTokensFromMemory), requested=\(requested), result=\(result)")
+        // Assemble first, then log: OSLogMessage requires a literal at the call site.
+        let kvText = String(format: "%.0f", kvMBPer1K)
+        let availableText = String(format: "%.0f", availableMB)
+        let usableText = String(format: "%.0f", usableMB)
+        let detail = [
+            "kv=\(kvText)MB/1K",
+            "available=\(availableText)MB",
+            "safety=\(Int(safetyFactor * 100))%",
+            "usable=\(usableText)MB",
+            "maxFromMem=\(maxTokensFromMemory)",
+            "requested=\(requested)",
+            "result=\(result)",
+        ].joined(separator: ", ")
+        LamoLogger.engine.debug("safeMaxTokens: \(detail)")
         return result
     }
 

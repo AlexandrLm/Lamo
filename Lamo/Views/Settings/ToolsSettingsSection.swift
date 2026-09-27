@@ -25,7 +25,7 @@ struct ToolsSettingsSection: View {
     private func categoryBlock(_ category: ToolCategory, tools: [ToolInfo]) -> some View {
         // Читаем refreshTick, чтобы счётчики обновлялись без .id() —
         // .id() пересоздавал весь список и сбрасывал скролл наверх.
-        let _ = refreshTick
+        _ = refreshTick
         return VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
             HStack(spacing: 6) {
                 Text(category.title.uppercased())
@@ -48,7 +48,7 @@ struct ToolsSettingsSection: View {
 
     private var headerCard: some View {
         // Читаем refreshTick, чтобы счётчик обновлялся после тогглов.
-        let _ = refreshTick
+        _ = refreshTick
         return HStack(spacing: LamoTheme.Spacing.sm) {
             Image(systemName: "wrench.and.screwdriver.fill")
                 .font(.system(size: 14))
@@ -163,7 +163,6 @@ private struct ToolCardView: View {
                             }
                         }
                     }
-
 
                     // Example prompts
                     detailSection(title: String(localized: "Try asking"), icon: "text.bubble") {
@@ -323,7 +322,6 @@ struct ToolInfo: Identifiable {
             isEnabled: { AppDefaults.toolFetchURL.wrappedValue },
             setEnabled: { AppDefaults.toolFetchURL.wrappedValue = $0 }
         ),
-
 
         // ── Location & Weather ──
         ToolInfo(

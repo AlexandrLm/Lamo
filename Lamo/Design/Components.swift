@@ -48,7 +48,7 @@ struct Badge: View, Equatable {
 /// Tinted pill with optional icon — the shared spec/value/metadata chip.
 struct Chip: View, Equatable {
     let text: String
-    var icon: String? = nil
+    var icon: String?
     var tint: Color = LamoTheme.Colors.accent
     var textColor: Color = LamoTheme.Colors.textHigh
     var font: Font = .system(size: 9, design: .monospaced)
@@ -81,7 +81,7 @@ struct Chip: View, Equatable {
 /// Uppercase monospaced section title with optional accent icon.
 struct SectionHeader: View {
     let title: String
-    var icon: String? = nil
+    var icon: String?
     var tint: Color = LamoTheme.Colors.accent
 
     var body: some View {

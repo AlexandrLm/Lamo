@@ -56,7 +56,6 @@ final class ProviderManager: ObservableObject {
         cachedProviders = nil
     }
 
-
     var currentMaxTokens: Int? { lifecycle.currentMaxTokens }
 
     @Published var lastToolTokens: Int = 0
@@ -248,7 +247,6 @@ final class ProviderManager: ObservableObject {
     @Published var thinkingMode: Bool = AppDefaults.thinkingMode.wrappedValue {
         didSet { settings.thinkingMode = thinkingMode }
     }
-
 
     // MARK: - Model Discovery (forwarding)
 

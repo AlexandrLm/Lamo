@@ -14,12 +14,13 @@ struct UserDefault<T> {
 
     var wrappedValue: T {
         get {
-            // Typed read for Bool: `object(forKey:) as? Bool` misbehaves for
-            // values bridged as NSNumber, so use `bool(forKey:)` when the key
-            // exists and fall back to the default otherwise.
-            if T.self == Bool.self {
-                guard UserDefaults.standard.object(forKey: key) != nil else { return defaultValue }
-                return UserDefaults.standard.bool(forKey: key) as! T
+            // `object(forKey:) as? Bool` misbehaves for values bridged as
+            // NSNumber, so Bool is read through `bool(forKey:)` when the key
+            // is present; every other type uses the plain cast.
+            if T.self == Bool.self, UserDefaults.standard.object(forKey: key) != nil {
+                // Bridged NSNumber -> Bool needs an unchecked hop; guarded by
+                // the T.self check above, so the cast is provably safe.
+                return unsafeBitCast(UserDefaults.standard.bool(forKey: key), to: T.self)
             }
             return UserDefaults.standard.object(forKey: key) as? T ?? defaultValue
         }
@@ -94,7 +95,6 @@ enum AppDefaults {
         - Be concise: direct answer first; details only when asked.
         - Use markdown formatting. When you used web_search or fetch_url, cite sources as links.
         """)
-
 
     // Memory
     // Thinking (model-level reasoning, not a tool)

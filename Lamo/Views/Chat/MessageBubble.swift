@@ -111,7 +111,6 @@ struct MessageBubble: View {
         }
     }
 
-
     // MARK: - Action Button
 
     private func actionButton(
@@ -450,7 +449,6 @@ struct ThinkingView: View {
         isStreaming ? Color(.secondaryLabel) : Color(.tertiaryLabel)
     }
 }
-
 
 // MARK: - Async Thumbnail Loader
 

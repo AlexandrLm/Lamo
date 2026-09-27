@@ -15,7 +15,7 @@ struct SearchResults: View {
                 if !query.isEmpty {
                     queryHeader(query, count: results.count)
                 }
-                ForEach(Array(results.enumerated()), id: \.offset) { i, item in
+                ForEach(Array(results.enumerated()), id: \.offset) { _, item in
                     SearchResultCard(item: item)
                 }
             }

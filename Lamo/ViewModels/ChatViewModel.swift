@@ -327,7 +327,6 @@ final class ChatViewModel {
         messages[index].thinkingContent += thinking
     }
 
-
     // MARK: - Tool Call Tracking
 
     private func addToolCall(name: String, params: String) {

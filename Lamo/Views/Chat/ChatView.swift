@@ -261,7 +261,6 @@ struct ChatView: View {
         .transition(.opacity.combined(with: .scale))
     }
 
-
     // MARK: - Empty State
 
     private var emptyChatView: some View {
@@ -315,7 +314,6 @@ struct ChatView: View {
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
-
 
 }
 

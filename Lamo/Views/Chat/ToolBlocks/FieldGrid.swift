@@ -11,7 +11,7 @@ struct FieldGrid: View, Equatable {
     var handled: Set<String> = []
     /// Standalone mode — shows a header with the tool name (fallback for tools
     /// that don't have a dedicated card yet).
-    var title: String? = nil
+    var title: String?
     /// Embedded mode draws a hairline above the rows; standalone mode draws a header instead.
     var showDivider: Bool = true
 

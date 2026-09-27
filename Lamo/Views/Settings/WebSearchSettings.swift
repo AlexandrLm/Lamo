@@ -194,7 +194,7 @@ struct WebSearchSettings: View {
         }
     }
 
-    private func testSearch() {
+    func testSearch() {
         let query = testQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
         isTesting = true

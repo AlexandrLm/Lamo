@@ -4,8 +4,6 @@ import UIKit
 import EventKit
 import CoreLocation
 
-
-
 // MARK: - Get Location (CoreLocation)
 
 struct GetLocationTool: Tool {
@@ -187,7 +185,6 @@ struct WeatherTool: Tool {
         return result
     }
 
-
     /// Converts ISO date to human-readable format (e.g. "2026-07-20" → "Jul 20").
     private func formatDateHuman(_ iso: String) -> String {
         let fmtr = DateFormatter()
@@ -209,13 +206,13 @@ struct WeatherTool: Tool {
     private func weatherDesc(_ code: Int, _ isDay: Bool) -> String {
         switch code {
         case 0: return isDay ? "Clear sky" : "Clear night"
-        case 1,2,3: return isDay ? "Partly cloudy" : "Partly cloudy"
-        case 45,48: return "Foggy"
-        case 51,53,55: return "Drizzle"; case 56,57: return "Freezing drizzle"
-        case 61,63,65: return "Rain"; case 66,67: return "Freezing rain"
-        case 71,73,75: return "Snow"; case 77: return "Snow grains"
-        case 80,81,82: return "Rain showers"; case 85,86: return "Snow showers"
-        case 95: return "Thunderstorm"; case 96,99: return "Thunderstorm with hail"
+        case 1, 2, 3: return isDay ? "Partly cloudy" : "Partly cloudy"
+        case 45, 48: return "Foggy"
+        case 51, 53, 55: return "Drizzle"; case 56, 57: return "Freezing drizzle"
+        case 61, 63, 65: return "Rain"; case 66, 67: return "Freezing rain"
+        case 71, 73, 75: return "Snow"; case 77: return "Snow grains"
+        case 80, 81, 82: return "Rain showers"; case 85, 86: return "Snow showers"
+        case 95: return "Thunderstorm"; case 96, 99: return "Thunderstorm with hail"
         default: return "Unknown"
         }
     }

@@ -64,7 +64,10 @@ nonisolated struct PendingFile: Identifiable, Equatable, Hashable, Sendable {
         if type.conforms(to: .audio) { return "waveform" }
         if type.conforms(to: .movie) { return "film" }
         if type.conforms(to: .pdf) { return "doc.richtext" }
-        if type.conforms(to: .sourceCode) || type.conforms(to: .swiftSource) || type.conforms(to: .cSource) || type.conforms(to: .javaScript) || type.conforms(to: .pythonScript) { return "chevron.left.forwardslash.chevron.right" }
+        let codeTypes: [UTType] = [.sourceCode, .swiftSource, .cSource, .javaScript, .pythonScript]
+        if codeTypes.contains(where: { type.conforms(to: $0) }) {
+            return "chevron.left.forwardslash.chevron.right"
+        }
         if type.conforms(to: .plainText) || type.conforms(to: .json) || type.conforms(to: .xml) { return "doc.text" }
         if type.conforms(to: .spreadsheet) || pathExtension == "csv" { return "tablecells" }
         if type.conforms(to: .presentation) { return "rectangle.on.rectangle" }

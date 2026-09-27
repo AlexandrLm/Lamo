@@ -298,8 +298,7 @@ private struct MarkdownTableCell: View {
     let isHeader: Bool
     var body: some View {
         Group {
-            if let a = try? AttributedString(markdown: text) { SwiftUI.Text(a) }
-            else { SwiftUI.Text(text) }
+            if let a = try? AttributedString(markdown: text) { SwiftUI.Text(a) } else { SwiftUI.Text(text) }
         }
         .font(isHeader ? .footnote.weight(.semibold) : .footnote)
         .foregroundStyle(isHeader ? LamoTheme.Colors.textMedium

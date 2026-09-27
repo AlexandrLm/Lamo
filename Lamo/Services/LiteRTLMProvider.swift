@@ -58,8 +58,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         }
     }
 
-
-
     // MARK: - Private
 
     private func runInference(

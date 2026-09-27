@@ -176,7 +176,10 @@ final class EngineLifecycle {
             }
             let engine = LiteRTLM.Engine(engineConfig: config)
             do {
-                LamoLogger.engine.info("Initializing engine for: \(filename), backend=\(self.settings.litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1) (attempt \(attempt)/\(maxAttempts))")
+                let backend = self.settings.litertLMUseGPU ? "GPU" : "CPU"
+                LamoLogger.engine.info(
+                    "Initializing engine for: \(filename), backend=\(backend), maxTokens=\(maxTokens ?? -1) (attempt \(attempt)/\(maxAttempts))"
+                )
                 try await engine.initialize()
                 // Check cancellation before publishing a potentially stale engine.
                 try Task.checkCancellation()

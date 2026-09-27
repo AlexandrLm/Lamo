@@ -218,7 +218,6 @@ final class MemoryService: ObservableObject {
         return factsCache.map { $0.text }
     }
 
-
     // MARK: - Context Building
 
     /// Build memory context string for injection into system prompt.
@@ -374,7 +373,6 @@ final class MemoryService: ObservableObject {
         }
     }
 
-
     // MARK: - Private: Pruning
 
     /// Remove oldest, least-used facts to stay within budget.
@@ -401,7 +399,6 @@ final class MemoryService: ObservableObject {
 
         try? context.save()
     }
-
 
     private func loadCache() {
         guard let context = modelContext else { return }

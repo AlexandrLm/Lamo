@@ -14,7 +14,6 @@ enum PresetModel: String, CaseIterable, Identifiable {
         }
     }
 
-
     var filename: String {
         switch self {
         case .gemma4E4B: return "gemma-4-E4B-it.litertlm"

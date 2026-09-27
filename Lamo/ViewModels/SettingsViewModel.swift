@@ -177,7 +177,6 @@ final class SettingsViewModel {
         loadModelInfo()
     }
 
-
     /// Human-readable model name from path.
     func displayName(for path: String) -> String {
         ProviderManager.displayName(forModelPath: path)

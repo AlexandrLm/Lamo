@@ -21,7 +21,8 @@ enum LamoError: LocalizedError, Equatable {
         case .modelNotFound(let path): return String(localized: "Model not found: \(path)")
         case .engineInitFailed(let reason): return String(localized: "Engine initialization failed: \(reason)")
         case .modelCorrupted(let path): return String(localized: "Model file corrupted: \(path)")
-        case .insufficientMemory(let avail, let req): return String(localized: "Insufficient memory. Available: \(avail, format: .number.precision(.fractionLength(1)))GB, required: \(req, format: .number.precision(.fractionLength(1)))GB")
+        case .insufficientMemory(let avail, let req):
+            return String(localized: "Insufficient memory. Available: \(avail, format: .number.precision(.fractionLength(1)))GB, required: \(req, format: .number.precision(.fractionLength(1)))GB")
         case .insufficientDiskSpace: return String(localized: "Not enough storage. Free up at least 1 GB.")
         case .modelTooSmall(let size): return String(localized: "Model file too small (\(size, format: .number.precision(.fractionLength(2))) GB). Re-download recommended.")
         case .noModelAvailable: return String(localized: "No model available. Download a model in Settings.")

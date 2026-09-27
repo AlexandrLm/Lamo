@@ -7,7 +7,7 @@ struct ModelCardView: View {
     var isActiveModel: Bool = false
     var onSelect: (() -> Void)?
     @State private var showDeleteConfirmation = false
-    @State private var remoteSize: Int64? = nil
+    @State private var remoteSize: Int64?
 
     private var downloadState: DownloadManager.DownloadState? {
         downloadManager.activeDownloads[model.filename]

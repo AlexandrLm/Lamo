@@ -118,7 +118,15 @@ struct ConversationBuilder {
 
         // --- Tokenize tool schemas using real getSchema() output ---
         // Schema text cached per tool-set key; counts via TokenBudget cache.
-        let toolKey = "\(AppDefaults.toolGetLocation.wrappedValue)-\(AppDefaults.toolWeather.wrappedValue)-\(AppDefaults.toolCalendar.wrappedValue)-\(AppDefaults.memoryEnabled.wrappedValue)-\(networkAvailable)-\(AppDefaults.toolWebSearch.wrappedValue)-\(AppDefaults.toolFetchURL.wrappedValue)"
+        let toolKey = [
+            AppDefaults.toolGetLocation.wrappedValue,
+            AppDefaults.toolWeather.wrappedValue,
+            AppDefaults.toolCalendar.wrappedValue,
+            AppDefaults.memoryEnabled.wrappedValue,
+            networkAvailable,
+            AppDefaults.toolWebSearch.wrappedValue,
+            AppDefaults.toolFetchURL.wrappedValue,
+        ].map(String.init).joined(separator: "-")
         let toolSchemaText = Self.toolSchemaText(for: toolKey) {
             var text = ""
             for tool in allTools {

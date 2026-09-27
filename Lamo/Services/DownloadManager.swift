@@ -12,7 +12,7 @@ final class DownloadManager: ObservableObject {
 
     @Published var activeDownloads: [String: DownloadState] = [:]
     /// Set when a large download is attempted on cellular — UI shows confirmation.
-    @Published var pendingCellularDownload: PresetModel? = nil
+    @Published var pendingCellularDownload: PresetModel?
     private var tasks: [String: URLSessionDownloadTask] = [:]
 
     /// Pre-fetched SHA256 hashes, populated in parallel with model downloads.
@@ -40,9 +40,9 @@ final class DownloadManager: ObservableObject {
         var bytesWritten: Int64 = 0
         var totalBytes: Int64 = 0
         var isDownloading: Bool = false
-        var error: String? = nil
+        var error: String?
         var isComplete: Bool = false
-        var lastError: String? = nil
+        var lastError: String?
 
         var speedBytesPerSec: Double = 0
         var lastSpeedUpdateTime: Date = Date()
@@ -71,7 +71,6 @@ final class DownloadManager: ObservableObject {
                 return String(format: "%.0f KB/s", speedBytesPerSec / 1024)
             }
         }
-
 
         static func formatBytes(_ bytes: Int64) -> String {
             if bytes < 1024 { return "\(bytes) bytes" }
@@ -484,4 +483,3 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         }
     }
 }
-

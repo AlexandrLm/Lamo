@@ -269,10 +269,10 @@ func headerRow(icon: String, color: Color, title: String, subtitle: String?) -> 
 /// Native SF Symbol for a weather condition (replaces emoji glyphs).
 func weatherSymbol(_ c: String, isDay: Bool) -> String {
     let l = c.lowercased()
-    if l.contains("thunder")              { return "cloud.bolt.fill" }
-    if l.contains("snow")                 { return "cloud.snow.fill" }
+    if l.contains("thunder") { return "cloud.bolt.fill" }
+    if l.contains("snow") { return "cloud.snow.fill" }
     if l.contains("rain") || l.contains("shower") { return "cloud.rain.fill" }
-    if l.contains("drizzle")              { return "cloud.drizzle.fill" }
+    if l.contains("drizzle") { return "cloud.drizzle.fill" }
     if l.contains("fog") || l.contains("mist") { return "cloud.fog.fill" }
     if l.contains("cloud") {
         if l.contains("few") || l.contains("part") || l.contains("scattered") || l.contains("mostly sunny") {
@@ -286,11 +286,11 @@ func weatherSymbol(_ c: String, isDay: Bool) -> String {
 
 func weatherSymbolColor(_ c: String, isDay: Bool) -> Color {
     let l = c.lowercased()
-    if l.contains("thunder")              { return .purple }
-    if l.contains("snow")                 { return .cyan }
+    if l.contains("thunder") { return .purple }
+    if l.contains("snow") { return .cyan }
     if l.contains("rain") || l.contains("shower") || l.contains("drizzle") { return .blue }
     if l.contains("clear") || l.contains("sunny") { return isDay ? .orange : .indigo }
-    if l.contains("cloud")                { return .secondary }
+    if l.contains("cloud") { return .secondary }
     return .secondary
 }
 
