@@ -26,17 +26,25 @@ final class ChatViewModel {
     /// Memory service used for context building. Injectable so tests can use
     /// per-test instances instead of racing on the shared singleton's context.
     private let memoryService: MemoryService
-    private var streamingMessageID: UUID?
-    private var streamingTask: Task<Void, Never>?
+    @ObservationIgnored private var streamingMessageID: UUID?
+    @ObservationIgnored private var streamingTask: Task<Void, Never>?
     /// Throttled buffer for streaming text — avoids per-token SwiftData writes.
-    private var streamBuffer = StreamBuffer()
+    @ObservationIgnored private var streamBuffer = StreamBuffer()
     /// Cache of lightweight ChatMessages — rebuilt only when the message list changes.
     /// Without it, the full history is re-filtered/re-mapped on every access
     /// (tracker, provider, compression — several times per response).
-    private var chatMessagesCache: [ChatMessage]?
+    @ObservationIgnored private var chatMessagesCache: [ChatMessage]?
     /// Token counts per message ID for the chat list — avoids an O(n)
     /// first(where:) lookup per bubble on every render pass.
-    var messageTokenCounts: [UUID: Int] = [:]
+    /// Excluded from observation: updated in bulk, read as dictionary lookup.
+    @ObservationIgnored private(set) var messageTokenCounts: [UUID: Int] = [:]
+    /// Cached index of the streaming message — avoids firstIndex(where:) on every flush.
+    /// Always validated against streamingMessageID before use (see indexForStreamingMessage()).
+    @ObservationIgnored private var streamingIndex: Int?
+    /// Shared encoder for tool-call payloads.
+    private static let toolEncoder = JSONEncoder()
+    /// Reused haptics generator — creating one per response wastes an engine + taptic setup.
+    private let feedbackGenerator = UINotificationFeedbackGenerator()
 
     /// Override for testing. When non-nil, used instead of ProviderManager.shared.currentProvider.
     var llmProviderOverride: (any LLMProvider)?
@@ -105,6 +113,7 @@ final class ChatViewModel {
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id
+        streamingIndex = messages.firstIndex(where: { $0.id == assistantMessage.id })
         isStreaming = true
 
         let history = self.chatMessages
@@ -147,6 +156,7 @@ final class ChatViewModel {
         let assistantMessage = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
         addMessage(assistantMessage)
         streamingMessageID = assistantMessage.id
+        streamingIndex = messages.firstIndex(where: { $0.id == assistantMessage.id })
         isStreaming = true
 
         startStreaming(chatMessages: self.chatMessages)
@@ -215,6 +225,24 @@ final class ChatViewModel {
         chatMessagesCache = nil
     }
 
+    /// Cached index of the streaming message. The cache is validated against
+    /// streamingMessageID on every use and falls back to a lookup if stale
+    /// (append/delete shifts indices) — amortized O(1) instead of O(n) per flush.
+    private func indexForStreamingMessage() -> Int? {
+        guard let id = streamingMessageID else { return nil }
+        if let idx = streamingIndex,
+           messages.indices.contains(idx),
+           messages[idx].id == id {
+            return idx
+        }
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else {
+            streamingIndex = nil
+            return nil
+        }
+        streamingIndex = idx
+        return idx
+    }
+
     private func startStreaming(chatMessages: [ChatMessage], retryCount: Int = 0) {
         streamingTask?.cancel()
         streamingTask = nil
@@ -252,7 +280,7 @@ final class ChatViewModel {
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
                         // Delete the botched partial message
-                        if let msgIdx = messages.firstIndex(where: { $0.id == self.streamingMessageID }) {
+                        if let msgIdx = indexForStreamingMessage() {
                             modelContext.delete(messages[msgIdx])
                             messages.remove(at: msgIdx)
                         }
@@ -260,12 +288,14 @@ final class ChatViewModel {
                         streamingTask?.cancel()
                         streamBuffer.reset()
                         streamingMessageID = nil
+                        streamingIndex = nil
                         isStreaming = false
                         invalidateChatMessages()
                         // Create a fresh message for the retry
                         let retryMsg = Message(content: String(localized: "[Retrying…]"), role: .assistant, isStreaming: true, conversation: conversation)
                         addMessage(retryMsg)
                         streamingMessageID = retryMsg.id
+                        streamingIndex = messages.firstIndex(where: { $0.id == retryMsg.id })
                         startStreaming(chatMessages: chatMessages, retryCount: retryCount + 1)
                         return
                     } else {
@@ -290,8 +320,7 @@ final class ChatViewModel {
     /// Flush accumulated streaming text to the SwiftData model, throttled to avoid disk thrashing.
     private func flushStreamingBuffer(force: Bool = false) {
         guard let (text, thinking) = streamBuffer.drain(force: force) else { return }
-        guard let id = streamingMessageID,
-              let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = indexForStreamingMessage() else { return }
 
         messages[index].content += text
         messages[index].thinkingContent += thinking
@@ -301,8 +330,7 @@ final class ChatViewModel {
     // MARK: - Tool Call Tracking
 
     private func addToolCall(name: String, params: String) {
-        guard let id = streamingMessageID,
-              let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = indexForStreamingMessage() else { return }
         var calls = messages[index].toolCalls
         calls.append(ToolCallRecord(name: name, params: params))
         messages[index].toolCalls = calls
@@ -310,8 +338,7 @@ final class ChatViewModel {
     }
 
     private func addToolResult(name: String, result: String) {
-        guard let id = streamingMessageID,
-              let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = indexForStreamingMessage() else { return }
         var calls = messages[index].toolCalls
         if let i = calls.lastIndex(where: { $0.name == name && $0.result == nil }) {
             calls[i].result = trimToolResult(result)
@@ -349,10 +376,10 @@ final class ChatViewModel {
         // Flush any remaining buffered text to the SwiftData model
         flushStreamingBuffer(force: true)
 
-        guard let id = streamingMessageID,
-              let index = messages.firstIndex(where: { $0.id == id }) else {
+        guard let index = indexForStreamingMessage() else {
             isStreaming = false
             streamingMessageID = nil
+            streamingIndex = nil
             streamBuffer.reset()
             return
         }
@@ -375,6 +402,7 @@ final class ChatViewModel {
         }
         messages[index].isStreaming = false
         streamingMessageID = nil
+        streamingIndex = nil
         isStreaming = false
         streamBuffer.reset()
         conversation.updatedAt = .now
@@ -383,7 +411,7 @@ final class ChatViewModel {
         messages[index].fileContent = ""
         invalidateChatMessages()
         if success == true {
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            feedbackGenerator.notificationOccurred(.success)
             // Proactive summarization: if KV-cache exceeds configured threshold, compress.
             let threshold = ProviderManager.shared.compressionThreshold
             if let tracker = contextTracker,
@@ -428,13 +456,15 @@ final class ChatViewModel {
         // as its own row) without charging the budget twice and dropping
         // messages earlier than necessary.
         let memCtx = memoryService.buildMemoryContext(for: userQuery)
-        let memTokens = memCtx.isEmpty ? 0 : await pm.tokenizeCount(memCtx)
         // Count exactly what the builder sends: full system prompt + the same
         // <current_time> block (ConversationBuilder.currentTimeBlock).
         let timedSystem = fullSystem + ConversationBuilder.currentTimeBlock(messageCount: currentChatMessages.count)
-        let sysTokens = await pm.tokenizeCount(timedSystem)
-
-        let tokenCounts = await pm.tokenizeMessages(currentChatMessages)
+        // Concurrent tokenization — the three counts are independent.
+        async let sysTokensTask: Int = pm.tokenizeCount(timedSystem)
+        async let tokenCountsTask: [UUID: Int] = pm.tokenizeMessages(currentChatMessages)
+        async let memTokensRawTask: Int = pm.tokenizeCount(memCtx)
+        let (sysTokens, tokenCounts, memTokensRaw) = await (sysTokensTask, tokenCountsTask, memTokensRawTask)
+        let memTokens = memCtx.isEmpty ? 0 : memTokensRaw
         messageTokenCounts = tokenCounts
 
         contextTracker = ContextTracker.build(
@@ -498,11 +528,12 @@ final class ChatViewModel {
         // Don't show a stale compression card over new streaming content.
         guard !isStreaming, streamingMessageID == nil else { return }
 
-        conversation.summary = summary
+        let capped = String(summary.prefix(Conversation.maxSummaryChars))
+        conversation.summary = capped
         saveWithErrorHandling()
         memoryService.invalidateCaches()
-        ProviderManager.shared.lastCompression = (oldCount: toCompress.count, summary: summary)
-        LamoLogger.ui.info("Conversation compressed: \(toCompress.count) messages → \(summary.count) chars summary")
+        ProviderManager.shared.lastCompression = (oldCount: toCompress.count, summary: capped)
+        LamoLogger.ui.info("Conversation compressed: \(toCompress.count) messages → \(capped.count) chars summary")
     }
 
 }

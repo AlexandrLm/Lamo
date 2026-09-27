@@ -1,8 +1,12 @@
 import SwiftUI
 
-struct PendingFileThumb: View {
+struct PendingFileThumb: View, Equatable {
     let file: PendingFile
     let onRemove: () -> Void
+
+    static func == (lhs: PendingFileThumb, rhs: PendingFileThumb) -> Bool {
+        lhs.file == rhs.file
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {

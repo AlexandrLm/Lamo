@@ -2,12 +2,16 @@ import Foundation
 import SwiftData
 
 /// A single tool invocation within a message — call and optional result.
-struct ToolCallRecord: Codable, Identifiable {
-    var id: UUID
+struct ToolCallRecord: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
     var name: String
     var params: String
     var result: String?
     var timestamp: Date
+
+    /// Shared coder instances — avoids per-access JSONDecoder/JSONEncoder alloc.
+    static let toolDecoder = JSONDecoder()
+    static let toolEncoder = JSONEncoder()
 
     init(id: UUID = UUID(), name: String, params: String, result: String? = nil, timestamp: Date = .now) {
         self.id = id
@@ -35,6 +39,9 @@ final class Message {
     /// Sizes of attached files (formatted strings for display).
     var attachedFileSizes: [String] = []
     /// Extracted text content from attached files (sent to model separately, not shown in UI).
+    // TODO(schema): fileContent is large transient text — candidate for @Transient
+    // (excluded from SwiftData storage) with an in-memory cache. Do NOT mark
+    // @Transient without a migration: changing the schema invalidates the store.
     var fileContent: String = ""
 
     @Relationship(inverse: \Conversation.messages)
@@ -88,13 +95,13 @@ final class Message {
             if let cached = toolCallsCache { return cached }
             guard let json = toolCallsJSON,
                   let data = json.data(using: .utf8) else { return [] }
-            let decoded = (try? JSONDecoder().decode([ToolCallRecord].self, from: data)) ?? []
+            let decoded = (try? ToolCallRecord.toolDecoder.decode([ToolCallRecord].self, from: data)) ?? []
             toolCallsCache = decoded
             return decoded
         }
         set {
             toolCallsCache = newValue
-            guard let data = try? JSONEncoder().encode(newValue),
+            guard let data = try? ToolCallRecord.toolEncoder.encode(newValue),
                   let json = String(data: data, encoding: .utf8) else {
                 toolCallsJSON = nil
                 return

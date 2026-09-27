@@ -5,14 +5,22 @@ import Foundation
 /// Accumulates delta and thinking-delta tokens during inference,
 /// and releases them in batches at `flushInterval` to avoid
 /// per-token SwiftData writes.
-@MainActor
-final class StreamBuffer {
+///
+/// Plain Sendable struct (no @MainActor): the owning ChatViewModel is
+/// @MainActor and mutates it synchronously on the main actor, so no
+/// isolation is needed here. Keeps the type usable from any context.
+struct StreamBuffer: Sendable {
     private var text = ""
     private var thinking = ""
-    private var lastFlushTime = Date.distantPast
+    /// Monotonic clock — cheaper than Date() and immune to wall-clock jumps.
+    private var lastFlushUptime: UInt64 = 0
 
     /// Minimum interval between flushes.
     let flushInterval: TimeInterval
+
+    /// Hard cap — forces a drain even if the throttle interval hasn't elapsed,
+    /// bounding memory when tokens arrive faster than flushes.
+    static let maxBufferedChars = 8000
 
     /// Whether there is unconsumed content in the buffer.
     var hasContent: Bool { !text.isEmpty || !thinking.isEmpty }
@@ -22,29 +30,31 @@ final class StreamBuffer {
     }
 
     /// Append streaming deltas to the buffer.
-    func append(text delta: String = "", thinking: String = "") {
+    mutating func append(text delta: String = "", thinking: String = "") {
         if !delta.isEmpty { text += delta }
         if !thinking.isEmpty { self.thinking += thinking }
     }
 
     /// Drain accumulated text if the throttle interval has elapsed (or `force` is true).
     /// Returns the text and thinking to write, or nil if throttled.
-    func drain(force: Bool = false) -> (text: String, thinking: String)? {
-        let now = Date()
-        guard force || now.timeIntervalSince(lastFlushTime) >= flushInterval else { return nil }
+    mutating func drain(force: Bool = false) -> (text: String, thinking: String)? {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let intervalNanos = UInt64(max(flushInterval, 0) * 1_000_000_000)
+        let overLimit = (text.count + thinking.count) >= Self.maxBufferedChars
+        guard force || overLimit || now &- lastFlushUptime >= intervalNanos else { return nil }
         guard hasContent else { return nil }
 
         let result = (text, thinking)
         text = ""
         thinking = ""
-        lastFlushTime = now
+        lastFlushUptime = now
         return result
     }
 
     /// Discard all buffered content without flushing.
-    func reset() {
+    mutating func reset() {
         text = ""
         thinking = ""
-        lastFlushTime = .distantPast
+        lastFlushUptime = 0
     }
 }

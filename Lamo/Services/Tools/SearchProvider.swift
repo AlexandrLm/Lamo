@@ -43,7 +43,22 @@ actor SearchProvider {
 
     // MARK: - Cache
 
-    private var cache: [String: (results: [[String: String]], timestamp: Date, isNews: Bool)] = [:]
+    private final class SearchCacheEntry: NSObject {
+        let results: [[String: String]]
+        let timestamp: Date
+        let isNews: Bool
+        init(results: [[String: String]], timestamp: Date, isNews: Bool) {
+            self.results = results; self.timestamp = timestamp; self.isNews = isNews
+        }
+    }
+    private let searchCache: NSCache<NSString, SearchCacheEntry> = {
+        let c = NSCache<NSString, SearchCacheEntry>()
+        c.countLimit = 50
+        c.totalCostLimit = 5 * 1024 * 1024
+        return c
+    }()
+    /// In-flight dedup: concurrent identical queries share one Task.
+    private var inFlight: [String: Task<[[String: String]], Error>] = [:]
     private let newsCacheTTL: TimeInterval = 300     // 5 min for news
     private let factCacheTTL: TimeInterval = 3600     // 1 hr for facts
 
@@ -52,6 +67,11 @@ actor SearchProvider {
         "today", "now", "latest", "breaking", "just now", "this week",
         "сегодня", "сейчас", "новости", "последние",
     ]
+    /// Precompiled: multi-word keywords via contains, single words via \b regex.
+    private static let newsPhraseKeywords: [String] = newsKeywords.filter { $0.contains(" ") }
+    private static let newsWordRegexes: [NSRegularExpression] = newsKeywords
+        .filter { !$0.contains(" ") }
+        .compactMap { try? NSRegularExpression(pattern: "\\b\(NSRegularExpression.escapedPattern(for: $0))\\b", options: .caseInsensitive) }
 
     // MARK: - Health Tracking
 
@@ -130,59 +150,70 @@ actor SearchProvider {
         let ttl = isNews ? newsCacheTTL : factCacheTTL
         let cacheKey = timeRange.map { "\(normalizedQuery)|\($0)" } ?? normalizedQuery
 
-        // Check cache
-        if let cached = cache[cacheKey],
+        // Check cache (single NSCache, TTL-checked)
+        if let cached = searchCache.object(forKey: cacheKey as NSString),
            Date().timeIntervalSince(cached.timestamp) < ttl {
             return Array(cached.results.prefix(maxResults))
         }
-
+        // In-flight dedup: join the running query instead of firing a second one.
+        if let existing = inFlight[cacheKey] {
+            return try await existing.value
+        }
         refreshPoolIfStale()
+        let task = Task<[[String: String]], Error> {
+            defer { inFlight.removeValue(forKey: cacheKey) }
+            try Task.checkCancellation()
+            var results: [[String: String]] = []
 
-        var results: [[String: String]] = []
+            // ── Primary: parallel SearXNG merge ──
+            if !liveInstances.isEmpty {
+                results = await searchSearxngParallel(query: query, maxResults: maxResults, timeRange: timeRange)
+            }
 
-        // ── Primary: parallel SearXNG merge ──
-        if !liveInstances.isEmpty {
-            results = await searchSearxngParallel(query: query, maxResults: maxResults, timeRange: timeRange)
+            // ── Brave fallback ──
+            if results.isEmpty, let apiKey = braveAPIKey, !apiKey.isEmpty {
+                do {
+                    results = try await searchBrave(query: query, maxResults: maxResults, apiKey: apiKey, timeRange: timeRange)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {}
+            }
+
+            // ── DDG HTML fallback ──
+            if results.isEmpty {
+                do {
+                    results = try await searchDuckDuckGoHTML(query: query, maxResults: maxResults, timeRange: timeRange)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {}
+            }
+
+            guard !results.isEmpty else {
+                throw SearchError.allProvidersFailed
+            }
+
+            searchCache.setObject(
+                SearchCacheEntry(results: results, timestamp: Date(), isNews: isNews),
+                forKey: cacheKey as NSString,
+                cost: results.count
+            )
+            return Array(results.prefix(maxResults))
         }
-
-        // ── Brave fallback ──
-        if results.isEmpty, let apiKey = braveAPIKey, !apiKey.isEmpty {
-            do {
-                results = try await searchBrave(query: query, maxResults: maxResults, apiKey: apiKey, timeRange: timeRange)
-            } catch {}
-        }
-
-        // ── DDG HTML fallback ──
-        if results.isEmpty {
-            do {
-                results = try await searchDuckDuckGoHTML(query: query, maxResults: maxResults, timeRange: timeRange)
-            } catch {}
-        }
-
-        guard !results.isEmpty else {
-            throw SearchError.allProvidersFailed
-        }
-
-        // Bound cache growth — evict the oldest entries first.
-        if cache.count >= 50 {
-            let oldest = cache.sorted { $0.value.timestamp < $1.value.timestamp }.prefix(10).map(\.key)
-            for key in oldest { cache.removeValue(forKey: key) }
-        }
-        cache[cacheKey] = (results: results, timestamp: Date(), isNews: isNews)
-        return Array(results.prefix(maxResults))
+        inFlight[cacheKey] = task
+        return try await task.value
     }
 
     // MARK: - Query Classification
 
     private static func isNewsQuery(_ query: String) -> Bool {
-        // Whole-word match: substring `contains("now")` false-positives on "snow"/"know".
-        for keyword in newsKeywords {
-            if keyword.contains(" ") {
-                if query.contains(keyword) { return true }
-            } else {
-                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b"
-                if query.range(of: pattern, options: .regularExpression) != nil { return true }
-            }
+        // Whole-word match via precompiled regex: substring `contains("now")`
+        // false-positives on "snow"/"know". Phrases via plain contains.
+        for phrase in newsPhraseKeywords {
+            if query.contains(phrase) { return true }
+        }
+        let range = NSRange(query.startIndex..., in: query)
+        for regex in newsWordRegexes {
+            if regex.firstMatch(in: query, range: range) != nil { return true }
         }
         return false
     }
@@ -342,12 +373,15 @@ actor SearchProvider {
             throw SearchError.invalidResponse
         }
 
-        return parseDuckDuckGoResults(html: html, maxResults: maxResults)
+        // Pure HTML parsing runs detached, outside actor isolation.
+        return await Task.detached(priority: .utility) {
+            Self.parseDuckDuckGoResultsStatic(html: html, maxResults: maxResults)
+        }.value
     }
 
-    // MARK: - DDG HTML Parsing
+    // MARK: - DDG HTML Parsing (pure string work — static so it can run detached)
 
-    private func parseDuckDuckGoResults(html: String, maxResults: Int) -> [[String: String]] {
+    private nonisolated static func parseDuckDuckGoResultsStatic(html: String, maxResults: Int) -> [[String: String]] {
         var results: [[String: String]] = []
         var seenURLs: Set<String> = []
 
@@ -361,25 +395,25 @@ actor SearchProvider {
             #"<[^>]*class="result__snippet"[^>]*>(.*?)</a>"#,
         ]
 
-        let linkMatches = linkPatterns.lazy.map { self.findMatches(pattern: $0, in: html) }.first { !$0.isEmpty } ?? []
-        let snippetMatches = snippetPatterns.lazy.map { self.findMatches(pattern: $0, in: html) }.first { !$0.isEmpty } ?? []
+        let linkMatches = linkPatterns.lazy.map { Self.findMatches(pattern: $0, in: html) }.first { !$0.isEmpty } ?? []
+        let snippetMatches = snippetPatterns.lazy.map { Self.findMatches(pattern: $0, in: html) }.first { !$0.isEmpty } ?? []
         guard !linkMatches.isEmpty else { return [] }
 
         for (index, match) in linkMatches.enumerated() {
             guard results.count < maxResults else { break }
 
-            guard let redirectURL = extractDuckDuckGoURL(from: match.0),
+            guard let redirectURL = Self.extractDuckDuckGoURL(from: match.0),
                   !seenURLs.contains(redirectURL) else { continue }
 
             seenURLs.insert(redirectURL)
 
             var result: [String: String] = [
-                "title": SearchResultCompactor.compactTitle(stripHTML(match.1)),
+                "title": SearchResultCompactor.compactTitle(Self.stripHTML(match.1)),
                 "url": redirectURL,
             ]
 
             if index < snippetMatches.count {
-                let snippet = stripHTML(snippetMatches[index].1).trimmingCharacters(in: .whitespacesAndNewlines)
+                let snippet = Self.stripHTML(snippetMatches[index].1).trimmingCharacters(in: .whitespacesAndNewlines)
                 if snippet.count >= 30 {
                     result["snippet"] = SearchResultCompactor.compactSnippet(snippet)
                 }
@@ -391,7 +425,7 @@ actor SearchProvider {
         return results
     }
 
-    private func extractDuckDuckGoURL(from redirectURL: String) -> String? {
+    private nonisolated static func extractDuckDuckGoURL(from redirectURL: String) -> String? {
         if let uddgRange = redirectURL.range(of: "uddg=") {
             let afterUddg = String(redirectURL[uddgRange.upperBound...])
             if let ampRange = afterUddg.range(of: "&") {
@@ -446,7 +480,7 @@ actor SearchProvider {
 
     // MARK: - Helpers
 
-    private func findMatches(pattern: String, in text: String) -> [(String, String)] {
+    private nonisolated static func findMatches(pattern: String, in text: String) -> [(String, String)] {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
             return []
         }
@@ -460,7 +494,7 @@ actor SearchProvider {
         }
     }
 
-    private func stripHTML(_ html: String) -> String {
+    private nonisolated static func stripHTML(_ html: String) -> String {
         html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

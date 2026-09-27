@@ -54,9 +54,9 @@ final class RepetitionDetector: Sendable {
         }
     }
 
-    /// Total chars generated so far.
+    /// Total chars generated so far (O(1) — cached length, no recount).
     var totalChars: Int {
-        lock.withLock { $0.buffer.count }
+        lock.withLock { $0.bufferLength }
     }
 
     /// Reset for a new generation.
@@ -81,9 +81,10 @@ final class RepetitionDetector: Sendable {
     /// Same substring repeated 3+ times consecutively.
     /// e.g. "abc abc abc abc" or "!!!  !!!  !!!  !!!"
     private nonisolated func detectConsecutiveRepeats(_ text: String) -> Bool {
+        let textCount = text.count
         // Check for repeating patterns of various lengths
         for patternLen in stride(from: 5, through: 80, by: 5) {
-            guard text.count >= patternLen * 3 else { continue }
+            guard textCount >= patternLen * 3 else { continue }
             let end = text.endIndex
             let p1Start = text.index(end, offsetBy: -patternLen)
             let pattern = String(text[p1Start..<end])
@@ -111,25 +112,30 @@ final class RepetitionDetector: Sendable {
     }
 
     /// Same short phrase appearing too many times in the window.
-    /// e.g. "click the button" appearing 8+ times in 2000 chars
+    /// e.g. "click the button" appearing 8+ times in 2000 chars.
+    /// Only 3-grams are checked; n-grams are hashed Ints instead of joined
+    /// strings to avoid O(n) allocations per window.
     private nonisolated func detectNgramFlood(_ text: String) -> Bool {
         let words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-        guard words.count >= 20 else { return false }
+        let wordCount = words.count
+        guard wordCount >= 20 else { return false }
 
-        // Check 3-grams and 4-grams
-        for n in [3, 4, 5] {
-            guard words.count >= n else { continue }
-            var counts: [String: Int] = [:]
-            for i in 0...(words.count - n) {
-                let ngram = words[i..<i+n].joined(separator: " ")
-                counts[ngram, default: 0] += 1
-            }
-            // Threshold: more occurrences than reasonable
-            let threshold = max(5, words.count / (n * 4))
-            for (ngram, count) in counts where count >= threshold {
-                logger.warning("N-gram flood: '\(ngram.prefix(40))...' appears \(count) times in \(words.count) words")
-                return true
-            }
+        let n = 3
+        guard wordCount >= n else { return false }
+        var counts: [Int: Int] = [:]
+        counts.reserveCapacity(wordCount - n + 1)
+        for i in 0...(wordCount - n) {
+            var hasher = Hasher()
+            hasher.combine(words[i])
+            hasher.combine(words[i + 1])
+            hasher.combine(words[i + 2])
+            counts[hasher.finalize(), default: 0] += 1
+        }
+        // Threshold: more occurrences than reasonable
+        let threshold = max(5, wordCount / (n * 4))
+        for (_, count) in counts where count >= threshold {
+            logger.warning("N-gram flood: a 3-gram appears \(count) times in \(wordCount) words")
+            return true
         }
         return false
     }

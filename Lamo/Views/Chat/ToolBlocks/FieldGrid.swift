@@ -5,7 +5,7 @@ import SwiftUI
 /// Renders every un-handled field of a tool result as a compact typed row.
 /// Nested dictionaries and arrays expand inline, so no field a tool returns is
 /// ever hidden — for any tool, current or future.
-struct FieldGrid: View {
+struct FieldGrid: View, Equatable {
     let dict: [String: Any]
     /// Keys already visualized by the surrounding card.
     var handled: Set<String> = []
@@ -15,10 +15,29 @@ struct FieldGrid: View {
     /// Embedded mode draws a hairline above the rows; standalone mode draws a header instead.
     var showDivider: Bool = true
 
-    var body: some View {
-        let entries = dict
+    // [String: Any] isn't Equatable — compare shape (keys/handling/flags) plus a
+    // stringified snapshot for scalar payloads. Nested tool dicts are small.
+    static func == (lhs: FieldGrid, rhs: FieldGrid) -> Bool {
+        lhs.handled == rhs.handled
+            && lhs.title == rhs.title
+            && lhs.showDivider == rhs.showDivider
+            && lhs.dict.keys.sorted() == rhs.dict.keys.sorted()
+            && String(describing: lhs.dict) == String(describing: rhs.dict)
+    }
+    /// Отсортировано один раз в init — раньше filter+sorted выполнялись на каждый body.
+    private let entries: [(key: String, value: Any)]
+
+    init(dict: [String: Any], handled: Set<String> = [], title: String? = nil, showDivider: Bool = true) {
+        self.dict = dict
+        self.handled = handled
+        self.title = title
+        self.showDivider = showDivider
+        self.entries = dict
             .filter { !handled.contains($0.key) }
             .sorted { $0.key < $1.key }
+    }
+
+    var body: some View {
         if !entries.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
                 if let title {
@@ -56,6 +75,16 @@ struct FieldRow: View {
 
     private var keyLabel: String { key.replacingOccurrences(of: "_", with: " ") }
 
+    /// Стабильный id для элементов массива: содержимое + индекс.
+    fileprivate static func stableArrayID(for item: Any, fallback: Int) -> String {
+        if let d = item as? [String: Any] {
+            if let u = d["url"] as? String, !u.isEmpty { return u }
+            if let t = d["title"] as? String, !t.isEmpty { return t }
+            if let n = d["name"] as? String, !n.isEmpty { return n }
+        }
+        return "\(String(describing: type(of: item)))-\(fieldValue(item).prefix(32))-\(fallback)"
+    }
+
     var body: some View {
         content
             .padding(.leading, CGFloat(depth) * 12)
@@ -75,7 +104,7 @@ struct FieldRow: View {
                 scalarRow(arr)
             } else {
                 containerRow(badge: "[\(arr.count)]") {
-                    ForEach(Array(arr.enumerated()), id: \.offset) { i, item in
+                    ForEach(Array(arr.enumerated()).map { (Self.stableArrayID(for: $0.element, fallback: $0.offset), $0.element, $0.offset) }, id: \.0) { _, item, i in
                         indexedRow(i, item)
                     }
                 }
@@ -181,8 +210,12 @@ struct FieldRow: View {
 // MARK: - Error Card
 
 /// Unified error presentation: red icon + message + hint, plus any other fields.
-struct ErrorCard: View {
+struct ErrorCard: View, Equatable {
     let d: [String: Any]
+
+    static func == (lhs: ErrorCard, rhs: ErrorCard) -> Bool {
+        NSDictionary(dictionary: lhs.d).isEqual(to: rhs.d)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

@@ -12,16 +12,22 @@ enum KeychainHelper {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecAttrAccount as String: key
         ]
-        let deleteStatus = SecItemDelete(query as CFDictionary)
-        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
-            logger.error("Keychain delete failed for key '\(key)': OSStatus \(deleteStatus)")
+        let attrs: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        // Update in place first — avoids delete+add races and preserves ACLs.
+        var status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            status = SecItemAdd(addQuery as CFDictionary, nil)
         }
-        let addStatus = SecItemAdd(query as CFDictionary, nil)
-        if addStatus != errSecSuccess {
-            logger.error("Keychain save failed for key '\(key)': OSStatus \(addStatus)")
+        if status != errSecSuccess {
+            logger.error("Keychain save failed: OSStatus \(status)")
         }
     }
 
@@ -47,7 +53,7 @@ enum KeychainHelper {
         ]
         let status = SecItemDelete(query as CFDictionary)
         if status != errSecSuccess && status != errSecItemNotFound {
-            logger.error("Keychain delete failed for key '\(key)': OSStatus \(status)")
+            logger.error("Keychain delete failed: OSStatus \(status)")
         }
     }
 }

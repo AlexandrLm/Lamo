@@ -12,17 +12,13 @@ import Foundation
 /// slightly early rather than overflowing the KV cache.
 enum TokenEstimation {
     /// Rough token estimate for an arbitrary tool-result value.
+    /// Uses `estimatedSize` (structural walk, no JSONSerialization) for
+    /// non-string values; strings go through the single-source formula.
     nonisolated static func estimateTokens(_ value: Any) -> Int {
-        let string: String
         if let str = value as? String {
-            string = str
-        } else if JSONSerialization.isValidJSONObject(value),
-                  let data = try? JSONSerialization.data(withJSONObject: value) {
-            string = String(data: data, encoding: .utf8) ?? ""
-        } else {
-            string = String(describing: value)
+            return estimateTokens(of: str)
         }
-        return max(1, estimateTokens(of: string))
+        return max(1, estimatedSize(value) / bytesPerToken)
     }
 
     /// Rough token estimate for a string.
@@ -47,11 +43,12 @@ enum TokenEstimation {
     /// Bytes per token heuristic.
     nonisolated static let bytesPerToken = 4
 
+    /// UTF-8-bytes based estimate — alias of the single-source formula.
+    /// Kept for callers that think in bytes; delegates to `estimateTokens(of:)`
+    /// so every layer agrees on the estimate.
     nonisolated static func tokens(for text: String) -> Int {
-        max(1, text.utf8.count / bytesPerToken)
+        estimateTokens(of: text)
     }
-
-    nonisolated static func tokens(forTokens count: Int) -> Int { count }
 
     /// Char budget corresponding to a token budget.
     nonisolated static func charBudget(forTokens maxTokens: Int) -> Int {

@@ -38,14 +38,13 @@ struct ContextBarView: View {
 struct ContextDetailView: View {
     let tracker: ContextTracker?
     @State private var metrics = SystemMetrics.snapshot()
-    @State private var metricsTimer: Timer?
     /// Tape segment highlighted together with its breakdown row.
     @State private var selectedSegment: MapSegment?
 
     var body: some View {
         if let tracker {
             ScrollView {
-                VStack(spacing: 28) {
+                LazyVStack(spacing: 28) {
                     heroSection(tracker)
                     ThinDivider()
                     mapSection(tracker)
@@ -63,13 +62,15 @@ struct ContextDetailView: View {
             .background(LamoTheme.Colors.background)
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-            .onAppear {
-                metrics = SystemMetrics.snapshot()
-                metricsTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-                    metrics = SystemMetrics.snapshot()
+            .task {
+                // Таймер через structured concurrency + снапшот в фоне —
+                // раньше Timer дёргал task_info/host_statistics на main каждые 5с.
+                while !Task.isCancelled {
+                    let snap = await Task.detached(priority: .utility) { SystemMetrics.snapshot() }.value
+                    await MainActor.run { metrics = snap }
+                    try? await Task.sleep(for: .seconds(5))
                 }
             }
-            .onDisappear { metricsTimer?.invalidate() }
         } else {
             ContentUnavailableView("No conversation", systemImage: "bubble.left.and.bubble.right")
         }
@@ -385,56 +386,25 @@ struct ContextDetailView: View {
         muted: Bool = false,
         segment: MapSegment? = nil
     ) -> some View {
-        let pct = total > 0 ? Int(Double(tokens) / Double(total) * 100) : 0
-        let highlighted = segment.map { selectedSegment == $0 } ?? false
-        let row = HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(muted ? LamoTheme.Colors.textFaint : LamoTheme.Colors.accent.opacity(0.6))
-                .frame(width: 20)
-
-            Text(label)
-                .font(.system(size: 13, design: .monospaced).weight(bold ? .semibold : .regular))
-                .foregroundStyle(muted ? LamoTheme.Colors.textFaint : (bold ? LamoTheme.Colors.textHigh : LamoTheme.Colors.textMedium))
-
-            if !muted {
-                Text("\(pct)%")
-                    .font(.system(size: 10, design: .monospaced).weight(.medium))
-                    .foregroundStyle(LamoTheme.Colors.textGhost)
-            }
-
-            Spacer()
-
-            Text("\(isEstimate ? "~" : "")\(ContextTracker.formatTokens(tokens))")
-                .font(.system(size: 13, design: .monospaced).weight(bold ? .bold : .semibold))
-                .foregroundStyle(
-                    bold
-                        ? LamoTheme.Colors.accent
-                        : muted
-                        ? LamoTheme.Colors.textFaint
-                        : LamoTheme.Colors.textMedium
-                )
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(highlighted ? LamoTheme.Colors.fillSubtle : .clear)
+        BreakdownRowContent(
+            icon: icon, label: label, tokens: tokens, total: total,
+            isEstimate: isEstimate, bold: bold, muted: muted,
+            highlighted: segment.map { selectedSegment == $0 } ?? false,
+            onTap: segment.map { seg in { toggleSegment(seg) } }
         )
-        if let segment {
-            return AnyView(
-                Button { toggleSegment(segment) } label: { row }
-                    .buttonStyle(.plain)
-            )
-        }
-        return AnyView(row)
     }
 
     // MARK: - Messages
 
     private func messagesSection(_ t: ContextTracker) -> some View {
-        let inContext = t.messageUsages.filter { $0.isInContext }
-        let outside = t.messageUsages.filter { !$0.isInContext }
+        // Один проход вместо двух filter — мемоизируем разбиение на один body.
+        var inContext: [ContextTracker.MessageUsage] = []
+        var outside: [ContextTracker.MessageUsage] = []
+        inContext.reserveCapacity(t.messageUsages.count)
+        outside.reserveCapacity(t.messageUsages.count / 4 + 1)
+        for m in t.messageUsages {
+            if m.isInContext { inContext.append(m) } else { outside.append(m) }
+        }
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 SectionHeader(title: "Messages", icon: "bubble.left.and.bubble.right")
@@ -473,7 +443,7 @@ struct ContextDetailView: View {
         usages: [ContextTracker.MessageUsage],
         budget: Int
     ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Circle().fill(color).frame(width: 6, height: 6)
                 Text(title.uppercased())
@@ -602,6 +572,67 @@ struct ContextDetailView: View {
         if t.fillRatio >= 0.9 { return .orange }
         if t.fillRatio >= 0.7 { return LamoTheme.Colors.accent }
         return LamoTheme.Colors.textMedium
+    }
+}
+
+// MARK: - Breakdown Row (Equatable, без AnyView)
+
+private struct BreakdownRowContent: View, Equatable {
+    let icon: String
+    let label: String
+    let tokens: Int
+    let total: Int
+    var isEstimate = false
+    var bold = false
+    var muted = false
+    var highlighted = false
+    var onTap: (() -> Void)?
+
+    static func == (lhs: BreakdownRowContent, rhs: BreakdownRowContent) -> Bool {
+        lhs.icon == rhs.icon && lhs.label == rhs.label && lhs.tokens == rhs.tokens
+            && lhs.total == rhs.total && lhs.isEstimate == rhs.isEstimate
+            && lhs.bold == rhs.bold && lhs.muted == rhs.muted
+            && lhs.highlighted == rhs.highlighted
+    }
+
+    var body: some View {
+        let pct = total > 0 ? Int(Double(tokens) / Double(total) * 100) : 0
+        let row = HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(muted ? LamoTheme.Colors.textFaint : LamoTheme.Colors.accent.opacity(0.6))
+                .frame(width: 20)
+            Text(label)
+                .font(.system(size: 13, design: .monospaced).weight(bold ? .semibold : .regular))
+                .foregroundStyle(muted ? LamoTheme.Colors.textFaint : (bold ? LamoTheme.Colors.textHigh : LamoTheme.Colors.textMedium))
+            if !muted {
+                Text("\(pct)%")
+                    .font(.system(size: 10, design: .monospaced).weight(.medium))
+                    .foregroundStyle(LamoTheme.Colors.textGhost)
+            }
+            Spacer()
+            Text("\(isEstimate ? "~" : "")\(ContextTracker.formatTokens(tokens))")
+                .font(.system(size: 13, design: .monospaced).weight(bold ? .bold : .semibold))
+                .foregroundStyle(
+                    bold
+                        ? LamoTheme.Colors.accent
+                        : muted
+                        ? LamoTheme.Colors.textFaint
+                        : LamoTheme.Colors.textMedium
+                )
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(highlighted ? LamoTheme.Colors.fillSubtle : .clear)
+        )
+        if let onTap {
+            Button(action: onTap) { row }
+                .buttonStyle(.plain)
+        } else {
+            row
+        }
     }
 }
 

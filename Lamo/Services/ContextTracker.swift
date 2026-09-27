@@ -27,6 +27,9 @@ struct ContextTracker {
     let messageUsages: [MessageUsage]
     /// Pre-computed token count — avoids O(n) filter+reduce on every read.
     let usedTokens: Int
+    /// Cached included-message count (set by `build`; nil for legacy
+    /// initializers — falls back to computing from `messageUsages`).
+    let cachedIncludedCount: Int? = nil
 
     /// Tokens reserved for the model's reply.
     var reservedForReply: Int { Self.reservedForReply }
@@ -50,8 +53,10 @@ struct ContextTracker {
     }
 
     /// Number of messages that fit in the KV-cache (excluding the streaming message).
+    /// O(1) when built via `build` (cached); falls back to a filtered count
+    /// for trackers constructed directly (e.g. tests).
     var includedCount: Int {
-        messageUsages.filter { $0.isInContext && !$0.isStreaming }.count
+        cachedIncludedCount ?? messageUsages.filter { $0.isInContext && !$0.isStreaming }.count
     }
 
     /// Total messages (excluding the streaming message from the "dropped" count).
@@ -80,7 +85,7 @@ struct ContextTracker {
         // Walk most-recent-first, exclude last message (sent separately via sendMessageStream)
         let historyMessages = Array(messages.dropLast().reversed())
         for msg in historyMessages {
-            let tokens = tokenCounts[msg.id] ?? (msg.content.count / 4)
+            let tokens = tokenCounts[msg.id] ?? TokenEstimation.estimateTokens(of: msg.content)
             if usedTokens + tokens > budget { break }
             includedIDs.insert(msg.id)
             usedTokens += tokens
@@ -110,40 +115,73 @@ struct ContextTracker {
         maxNumTokens: Int
     ) -> ContextTracker {
         let effective = max(maxNumTokens, 512)
-        let result = calculateIncluded(
-            messages: messages,
-            tokenCounts: tokenCounts,
-            systemPromptTokens: systemPromptTokens,
-            memoryTokens: memoryTokens,
-            maxNumTokens: maxNumTokens
-        )
+        let budget = max(0, effective - systemPromptTokens - memoryTokens - reservedForReply)
 
-        let includedIDs = Set(result.included.map { $0.id })
+        // Single reverse walk: resolve tokens, decide inclusion (most-recent
+        // wins), accumulate in-context usage, and stage usages reversed.
+        // Replaces the old 4 passes (budget walk + included filter + usage
+        // loop + filter/reduce for the total).
+        var usagesReversed: [MessageUsage] = []
+        usagesReversed.reserveCapacity(messages.count)
+        var rawUsed = 0
+        var cachedIncluded = 0
+        var walkedTokens = 0
+        // Once a message stops fitting, every older message is dropped too
+        // (same break-out semantics as `calculateBudget`).
+        var overBudget = false
 
-        // Build final list in chronological order
-        var usages: [MessageUsage] = []
-        var runningOffset = 0
-        for (index, msg) in messages.enumerated() {
-            // tokenizeMessages always covers every id; chars/4 is a defensive
-            // fallback only — the same approximation used in every other layer.
-            let tokens = tokenCounts[msg.id] ?? max(1, msg.content.count / 4)
-            let isLast = (index == messages.count - 1)
-            usages.append(MessageUsage(
+        for revIndex in messages.indices.reversed() {
+            let msg = messages[revIndex]
+            let isLast = (revIndex == messages.count - 1)
+            // tokenizeMessages always covers every id; the estimator is a
+            // defensive fallback only — the same approximation used in every layer.
+            let tokens = tokenCounts[msg.id] ?? TokenEstimation.estimateTokens(of: msg.content)
+            let isInContext: Bool
+            if isLast {
+                isInContext = true
+            } else if overBudget || walkedTokens + tokens > budget {
+                overBudget = true
+                isInContext = false
+            } else {
+                walkedTokens += tokens
+                isInContext = true
+            }
+            if isInContext, !isLast {
+                rawUsed += tokens
+                cachedIncluded += 1
+            }
+            usagesReversed.append(MessageUsage(
                 id: msg.id,
                 role: msg.role == .user ? "user" : "assistant",
                 charCount: msg.content.count,
                 tokenCount: tokens,
-                isInContext: isLast || includedIDs.contains(msg.id),
-                tokenOffset: runningOffset,
+                isInContext: isInContext,
+                tokenOffset: 0, // fixed up forward below
                 isStreaming: isLast,
                 preview: String(msg.content.prefix(80))
             ))
-            if !isLast { runningOffset += tokens }
         }
 
-        let rawUsed = systemPromptTokens + memoryTokens + toolTokens + usages
-            .filter { $0.isInContext && !$0.isStreaming }
-            .reduce(0) { $0 + $1.tokenCount }
+        // Restore chronological order and fill running offsets (forward fix-up,
+        // no re-tokenization or filtering).
+        var usages: [MessageUsage] = []
+        usages.reserveCapacity(usagesReversed.count)
+        var runningOffset = 0
+        for usage in usagesReversed.reversed() {
+            usages.append(MessageUsage(
+                id: usage.id,
+                role: usage.role,
+                charCount: usage.charCount,
+                tokenCount: usage.tokenCount,
+                isInContext: usage.isInContext,
+                tokenOffset: runningOffset,
+                isStreaming: usage.isStreaming,
+                preview: usage.preview
+            ))
+            if !usage.isStreaming { runningOffset += usage.tokenCount }
+        }
+
+        rawUsed += systemPromptTokens + memoryTokens + toolTokens
         // 10% safety buffer: chat template tokens, tool call formatting (injected by LiteRT-LM)
         let usedTokens = rawUsed + rawUsed / 10
 
@@ -155,7 +193,8 @@ struct ContextTracker {
             toolCountTotal: toolCountTotal,
             totalLimit: effective,
             messageUsages: usages,
-            usedTokens: usedTokens
+            usedTokens: usedTokens,
+            cachedIncludedCount: cachedIncluded
         )
     }
 

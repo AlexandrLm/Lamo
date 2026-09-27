@@ -207,7 +207,7 @@ final class DownloadManager: ObservableObject {
             task = session.downloadTask(with: url)
         }
 
-        DownloadSessionDelegate.shared.pendingModels[model.filename] = model
+        DownloadSessionDelegate.shared.setPendingModel(model, for: model.filename)
 
         tasks[model.filename] = task
         task.resume()
@@ -264,21 +264,41 @@ final class DownloadManager: ObservableObject {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Single verify helper — dedups the pre-fetch / slow-path branches.
+    private func verifySHA256(expectedHash: String, file: URL, filename: String) throws -> Bool {
+        guard expectedHash.count == 64 else { return true }
+        let computedHash = try computeFileSHA256(at: file)
+        if computedHash.lowercased() != expectedHash.lowercased() {
+            LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
+            try? FileManager.default.removeItem(at: file)
+            return false
+        }
+        LamoLogger.download.info("SHA256 verified for \(filename)")
+        return true
+    }
+
+    private func finishFailure(filename: String, message: String) {
+        self.activeDownloads[filename]?.error = message
+        self.activeDownloads[filename]?.lastError = message
+        self.activeDownloads[filename]?.isDownloading = false
+        self.tasks.removeValue(forKey: filename)
+        DownloadSessionDelegate.shared.clearFire(for: filename)
+    }
+
     func handleCompletion(filename: String, tempURL: URL?, error: Error?) {
         Task { @MainActor in
-            guard self.activeDownloads[filename]?.isComplete != true else { return }
+            guard self.activeDownloads[filename]?.isComplete != true else {
+                self.tasks.removeValue(forKey: filename)
+                return
+            }
 
             if let error = error {
-                self.activeDownloads[filename]?.lastError = error.localizedDescription
-                self.activeDownloads[filename]?.error = error.localizedDescription
-                self.activeDownloads[filename]?.isDownloading = false
-
+                self.finishFailure(filename: filename, message: error.localizedDescription)
                 return
             }
 
             guard let tempURL = tempURL else {
-                self.activeDownloads[filename]?.error = String(localized: "Download failed: no data")
-                self.activeDownloads[filename]?.isDownloading = false
+                self.finishFailure(filename: filename, message: String(localized: "Download failed: no data"))
                 return
             }
 
@@ -291,21 +311,16 @@ final class DownloadManager: ObservableObject {
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destination)
 
-                if let model = DownloadSessionDelegate.shared.pendingModels[filename],
+                if let model = DownloadSessionDelegate.shared.pendingModel(for: filename),
                    let modelURL = model.downloadURL {
                     // Use pre-fetched SHA256 if available (fetched in parallel with download)
-                    if let expectedHash = self.pendingSHA256[filename], expectedHash.count == 64 {
-                        let computedHash = try computeFileSHA256(at: destination)
-                        if computedHash != expectedHash {
-                            LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
-                            try FileManager.default.removeItem(at: destination)
-                            self.activeDownloads[filename]?.error = String(localized: "File integrity check failed. Please re-download.")
-                            self.activeDownloads[filename]?.isDownloading = false
+                    if let expectedHash = self.pendingSHA256[filename] {
+                        guard (try? self.verifySHA256(expectedHash: expectedHash, file: destination, filename: filename)) == true else {
+                            self.finishFailure(filename: filename, message: String(localized: "File integrity check failed. Please re-download."))
                             self.pendingSHA256.removeValue(forKey: filename)
-                            self.tasks.removeValue(forKey: filename)
+                            DownloadSessionDelegate.shared.removePendingModel(for: filename)
                             return
                         }
-                        LamoLogger.download.info("SHA256 verified for \(filename)")
                     } else {
                         // Fallback: fetch SHA256 now (slow path, no parallel pre-fetch available)
                         let sha256URL = URL(string: modelURL.absoluteString + ".sha256")
@@ -317,17 +332,12 @@ final class DownloadManager: ObservableObject {
                                     let expectedHash = String(data: sha256Data, encoding: .utf8)?
                                         .trimmingCharacters(in: .whitespacesAndNewlines)
                                         .split(separator: " ").first.map(String.init)
-                                    if let expectedHash = expectedHash, expectedHash.count == 64 {
-                                        let computedHash = try computeFileSHA256(at: destination)
-                                        if computedHash != expectedHash {
-                                            LamoLogger.download.error("SHA256 mismatch for \(filename): expected \(expectedHash), got \(computedHash)")
-                                            try FileManager.default.removeItem(at: destination)
-                                            self.activeDownloads[filename]?.error = String(localized: "File integrity check failed. Please re-download.")
-                                            self.activeDownloads[filename]?.isDownloading = false
-                                            self.tasks.removeValue(forKey: filename)
+                                    if let expectedHash = expectedHash {
+                                        guard (try? self.verifySHA256(expectedHash: expectedHash, file: destination, filename: filename)) == true else {
+                                            self.finishFailure(filename: filename, message: String(localized: "File integrity check failed. Please re-download."))
+                                            DownloadSessionDelegate.shared.removePendingModel(for: filename)
                                             return
                                         }
-                                        LamoLogger.download.info("SHA256 verified for \(filename)")
                                     }
                                 }
                             } catch {
@@ -344,11 +354,12 @@ final class DownloadManager: ObservableObject {
                 self.tasks.removeValue(forKey: filename)
                 self.pendingSHA256.removeValue(forKey: filename)
                 self.removePersistedResumeData(for: filename)
+                DownloadSessionDelegate.shared.removePendingModel(for: filename)
+                DownloadSessionDelegate.shared.clearFire(for: filename)
 
                 ProviderManager.shared.reloadEngine()
             } catch {
-                self.activeDownloads[filename]?.error = error.localizedDescription
-                self.activeDownloads[filename]?.isDownloading = false
+                self.finishFailure(filename: filename, message: error.localizedDescription)
             }
         }
     }
@@ -365,6 +376,35 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         set { lock.lock(); defer { lock.unlock() }; _pendingModels = newValue }
     }
 
+    /// Lock-protected direct access — avoids copying the whole dict per event.
+    func setPendingModel(_ model: PresetModel, for filename: String) {
+        lock.lock(); defer { lock.unlock() }; _pendingModels[filename] = model
+    }
+    func removePendingModel(for filename: String) {
+        lock.lock(); defer { lock.unlock() }; _pendingModels.removeValue(forKey: filename)
+    }
+    func pendingModel(for filename: String) -> PresetModel? {
+        lock.lock(); defer { lock.unlock() }; return _pendingModels[filename]
+    }
+
+    /// Last UI publish per file — checked before hopping to Main.
+    private var lastFire: [String: Date] = [:]
+    private static let throttleInterval: TimeInterval = 0.3
+
+    /// Returns true if the caller may proceed (and records the fire time).
+    func shouldFire(for filename: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let now = Date()
+        if let last = lastFire[filename], now.timeIntervalSince(last) < Self.throttleInterval {
+            return false
+        }
+        lastFire[filename] = now
+        return true
+    }
+    func clearFire(for filename: String) {
+        lock.lock(); defer { lock.unlock() }; lastFire.removeValue(forKey: filename)
+    }
+
     nonisolated func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
@@ -372,9 +412,12 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     ) {
         guard let filename = downloadTask.originalRequest?.url?.lastPathComponent else { return }
         let tempDir = FileManager.default.temporaryDirectory
-        let backupURL = tempDir.appendingPathComponent("lamo_dl_\(filename)")
+        let backupURL = tempDir.appendingPathComponent("lamodl_\(UUID().uuidString)_\(filename)")
         try? FileManager.default.removeItem(at: backupURL)
-        try? FileManager.default.copyItem(at: location, to: backupURL)
+        // The system deletes `location` after return — move is cheaper than copy.
+        if (try? FileManager.default.moveItem(at: location, to: backupURL)) == nil {
+            try? FileManager.default.copyItem(at: location, to: backupURL)
+        }
         Task { @MainActor in
             DownloadManager.shared.handleCompletion(filename: filename, tempURL: backupURL, error: nil)
         }
@@ -388,13 +431,11 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
         totalBytesExpectedToWrite: Int64
     ) {
         guard let filename = downloadTask.originalRequest?.url?.lastPathComponent else { return }
+        // Throttle before hopping to Main — delegate fires ~per packet.
+        guard DownloadSessionDelegate.shared.shouldFire(for: filename) else { return }
         Task { @MainActor in
             let now = Date()
             var state = DownloadManager.shared.activeDownloads[filename] ?? DownloadManager.DownloadState()
-
-            // Throttle UI updates — only publish every 0.3s to avoid jitter
-            let timeSinceLastUI = now.timeIntervalSince(state.lastSpeedUpdateTime)
-            guard timeSinceLastUI >= 0.3 else { return }
 
             state.bytesWritten = totalBytesWritten
 
@@ -410,6 +451,7 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
 
             // Smoothed speed calculation
             let deltaBytes = totalBytesWritten - state.lastSpeedUpdateBytes
+            let timeSinceLastUI = now.timeIntervalSince(state.lastSpeedUpdateTime)
             if deltaBytes > 0 && timeSinceLastUI > 0 {
                 let instantSpeed = Double(deltaBytes) / timeSinceLastUI
                 state.speedBytesPerSec = state.speedBytesPerSec > 0

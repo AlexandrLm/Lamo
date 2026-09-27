@@ -24,6 +24,12 @@ actor LocationService {
     private let cacheTTL: TimeInterval = 120
     private var cachedResult: (result: LocationResult, timestamp: Date)?
 
+    /// Retained across calls: a locally-created CLLocationManager is released
+    /// at the end of `gps()`, which can cancel the auth prompt / live updates.
+    private var locationManager: CLLocationManager?
+    /// Reverse-geocode cache (rounded lat/lon → name, timestamp).
+    private var geocodeCache: [String: (name: String, timestamp: Date)] = [:]
+
     // MARK: - Public API
 
     /// Best-effort location: GPS first, IP fallback. Results cached for 2 min.
@@ -35,6 +41,7 @@ actor LocationService {
             cachedResult = (gps, Date())
             return gps
         }
+        try Task.checkCancellation()
         let ip = try await ip()
         cachedResult = (ip, Date())
         return ip
@@ -42,7 +49,14 @@ actor LocationService {
 
     /// GPS-only location via CLLocationUpdate.liveUpdates(). Returns nil if permission denied or timeout.
     func gps(timeout: TimeInterval = 8) async throws -> LocationResult {
-        let manager = CLLocationManager()
+        let manager: CLLocationManager
+        if let existing = locationManager {
+            manager = existing
+        } else {
+            let created = CLLocationManager()
+            locationManager = created
+            manager = created
+        }
         let status = manager.authorizationStatus
         switch status {
         case .denied, .restricted:
@@ -67,7 +81,10 @@ actor LocationService {
             group.addTask {
                 let updates = CLLocationUpdate.liveUpdates()
                 for try await update in updates {
-                    guard let loc = update.location, loc.horizontalAccuracy >= 0 else { continue }
+                    try Task.checkCancellation()
+                    guard let loc = update.location,
+                          loc.horizontalAccuracy >= 0,
+                          loc.horizontalAccuracy < 500 else { continue }
                     return loc
                 }
                 throw LocationServiceError.unavailable
@@ -95,12 +112,19 @@ actor LocationService {
     }
 
     /// IP-based fallback. Primary: ipapi.co; fallback: ipwho.is (no key, generous limits).
-    /// Used when GPS is unavailable.
+    /// Used when GPS is unavailable. Races both providers, first success wins.
     func ip() async throws -> LocationResult {
-        if let primary = try? await ipViaIpapi() {
-            return primary
+        try Task.checkCancellation()
+        return try await withThrowingTaskGroup(of: LocationResult.self) { group in
+            group.addTask { try await self.ipViaIpapi() }
+            group.addTask { try await self.ipViaIpwhois() }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else {
+                throw LocationServiceError.unavailable
+            }
+            group.cancelAll()
+            return first
         }
-        return try await ipViaIpwhois()
     }
 
     private func ipViaIpapi() async throws -> LocationResult {
@@ -164,6 +188,10 @@ actor LocationService {
 
     // MARK: - Private
     private func reverseGeocode(_ location: CLLocation) async throws -> String {
+        let key = String(format: "%.3f,%.3f", location.coordinate.latitude, location.coordinate.longitude)
+        if let cached = geocodeCache[key], Date().timeIntervalSince(cached.timestamp) < cacheTTL {
+            return cached.name
+        }
         guard let request = MKReverseGeocodingRequest(location: location) else {
             return "\(location.coordinate.latitude), \(location.coordinate.longitude)"
         }
@@ -172,9 +200,11 @@ actor LocationService {
             return "\(location.coordinate.latitude), \(location.coordinate.longitude)"
         }
         let parts = [addr.cityName, addr.regionName].compactMap { $0 }
-        return parts.isEmpty
+        let name = parts.isEmpty
             ? "\(location.coordinate.latitude), \(location.coordinate.longitude)"
             : parts.joined(separator: ", ")
+        geocodeCache[key] = (name, Date())
+        return name
     }
 }
 

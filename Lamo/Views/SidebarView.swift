@@ -13,17 +13,20 @@ struct SidebarView: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var searchText = ""
+    /// Дебаунс поиска 150мс — фильтр+группировка не пересчитываются на каждую букву.
+    @State private var debouncedSearchText = ""
+    @State private var searchTask: Task<Void, Never>?
     @State private var showSettings = false
     @State private var conversationToRename: Conversation?
     @State private var renameText = ""
     @State private var conversationToDelete: Conversation?
 
     private var filteredConversations: [Conversation] {
-        if searchText.isEmpty {
+        if debouncedSearchText.isEmpty {
             return conversations
         }
         return conversations.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText)
+            $0.title.localizedCaseInsensitiveContains(debouncedSearchText)
         }
     }
 

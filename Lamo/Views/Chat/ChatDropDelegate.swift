@@ -20,10 +20,12 @@ struct ChatDropDelegate: DropDelegate {
                     return
                 }
                 guard let uiImage = image as? UIImage else { return }
-                DispatchQueue.main.async {
-                    pendingImages.append(
-                        PendingImage(image: uiImage.resizedForModel(maxDimension: ChatDropDelegate.maxImageDimension))
-                    )
+                // Ресайз в фоне — UIGraphicsImageRenderer на main подвешивал дроп.
+                Task.detached(priority: .userInitiated) {
+                    let resized = uiImage.resizedForModel(maxDimension: ChatDropDelegate.maxImageDimension)
+                    await MainActor.run {
+                        pendingImages.append(PendingImage(image: resized))
+                    }
                 }
             }
         }

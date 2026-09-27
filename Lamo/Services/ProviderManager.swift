@@ -29,8 +29,31 @@ final class ProviderManager: ObservableObject {
     @Published var isEngineReady: Bool = false
     @Published var engineError: LamoError?
 
+    // MARK: - Caches (hot paths hit these per render / per turn)
+
+    /// Brave keychain read, cached after first load (was a Keychain query per call).
+    private var braveKeyLoaded = false
+    private var cachedBraveKey: String?
+    /// Display-name cache (5s TTL) — was a filesystem scan per access.
+    private var cachedDisplayName: (at: Date, value: String)?
+    /// Provider-list cache (5s TTL) — was a framework availability query per access.
+    private var cachedProviders: (at: Date, value: [ProviderType])?
+    private let providerCacheTTL: TimeInterval = 5
+
     var braveAPIKey: String? {
-        KeychainHelper.load(key: "brave_search_api_key")
+        if braveKeyLoaded { return cachedBraveKey }
+        let key = KeychainHelper.load(key: "brave_search_api_key")
+        cachedBraveKey = key
+        braveKeyLoaded = true
+        return key
+    }
+
+    /// Drop cached keychain/display/provider state (e.g. after key rotation).
+    func invalidateProviderCaches() {
+        braveKeyLoaded = false
+        cachedBraveKey = nil
+        cachedDisplayName = nil
+        cachedProviders = nil
     }
 
 
@@ -52,18 +75,24 @@ final class ProviderManager: ObservableObject {
     var selectedProviderType: ProviderType {
         get { settings.providerType }
         set {
+            guard settings.providerType != newValue else { return }
             settings.providerType = newValue
             invalidateEngine()
         }
     }
 
     var availableProviders: [ProviderType] {
+        if let cache = cachedProviders,
+           Date().timeIntervalSince(cache.at) < providerCacheTTL {
+            return cache.value
+        }
         var providers = ProviderType.allCases
 #if canImport(FoundationModels)
-        if !FoundationModelsAvailability.isSupported {
+        if !FoundationModelsAvailability.cachedIsSupported {
             providers.removeAll { $0 == .foundationModels }
         }
 #endif
+        cachedProviders = (Date(), providers)
         return providers
     }
 
@@ -113,21 +142,27 @@ final class ProviderManager: ObservableObject {
     var litertLMModelPath: String? {
         get { settings.litertLMModelPath }
         set {
-            if let newValue = newValue {
-                if newValue.contains("/") {
-                    if !newValue.hasSuffix(".litertlm") {
-                        LamoLogger.engine.warning("Model path '\(newValue)' doesn't end in .litertlm")
-                    } else if !FileManager.default.fileExists(atPath: newValue) {
-                        LamoLogger.engine.warning("Model file not found at '\(newValue)'")
-                    }
-                } else {
-                    let fullPath = ModelDiscovery.modelsDirectory.appendingPathComponent(newValue).path
-                    if !FileManager.default.fileExists(atPath: fullPath) {
-                        LamoLogger.engine.warning("Model '\(newValue)' not found in models directory")
+            guard settings.litertLMModelPath != newValue else { return }
+            if let newValue {
+                // Filesystem validation off the MainActor (was synchronous I/O
+                // in a @MainActor setter on every keystroke/selection).
+                Task.detached(priority: .utility) {
+                    if newValue.contains("/") {
+                        if !newValue.hasSuffix(".litertlm") {
+                            LamoLogger.engine.warning("Model path '\(newValue)' doesn't end in .litertlm")
+                        } else if !FileManager.default.fileExists(atPath: newValue) {
+                            LamoLogger.engine.warning("Model file not found at '\(newValue)'")
+                        }
+                    } else {
+                        let fullPath = ModelDiscovery.modelsDirectory.appendingPathComponent(newValue).path
+                        if !FileManager.default.fileExists(atPath: fullPath) {
+                            LamoLogger.engine.warning("Model '\(newValue)' not found in models directory")
+                        }
                     }
                 }
             }
             settings.litertLMModelPath = newValue
+            cachedDisplayName = nil
             if !lifecycle.suppressInvalidation { invalidateEngine() }
         }
     }
@@ -135,6 +170,7 @@ final class ProviderManager: ObservableObject {
     var litertLMUseGPU: Bool {
         get { settings.litertLMUseGPU }
         set {
+            guard settings.litertLMUseGPU != newValue else { return }
             settings.litertLMUseGPU = newValue
             invalidateEngine()
         }
@@ -143,6 +179,7 @@ final class ProviderManager: ObservableObject {
     var cpuThreadCount: Int {
         get { settings.cpuThreadCount }
         set {
+            guard settings.cpuThreadCount != newValue else { return }
             settings.cpuThreadCount = newValue
             invalidateEngine()
         }
@@ -166,6 +203,7 @@ final class ProviderManager: ObservableObject {
     var maxNumTokens: Int {
         get { settings.maxNumTokens }
         set {
+            guard settings.maxNumTokens != newValue else { return }
             settings.maxNumTokens = newValue
             invalidateEngine()
         }
@@ -174,11 +212,15 @@ final class ProviderManager: ObservableObject {
     var kvCacheAuto: Bool {
         get { settings.kvCacheAuto }
         set {
-            settings.kvCacheAuto = newValue
+            guard settings.kvCacheAuto != newValue else { return }
+            // Batched defaults write (was two separate writes + invalidation
+            // hazards when maxNumTokens flipped alongside the flag).
             if newValue {
-                settings.maxNumTokens = 0
+                settings.setKVCache(auto: true, maxTokens: 0)
             } else if settings.maxNumTokens == 0 {
-                settings.maxNumTokens = 4096
+                settings.setKVCache(auto: false, maxTokens: 4096)
+            } else {
+                settings.kvCacheAuto = newValue
             }
             invalidateEngine()
         }
@@ -187,6 +229,7 @@ final class ProviderManager: ObservableObject {
     var speculativeDecoding: Bool {
         get { settings.speculativeDecoding }
         set {
+            guard settings.speculativeDecoding != newValue else { return }
             settings.speculativeDecoding = newValue
             invalidateEngine()
         }
@@ -213,8 +256,19 @@ final class ProviderManager: ObservableObject {
         if selectedProviderType == .foundationModels {
             return String(localized: "Apple Intelligence")
         }
-        guard let path = litertLMModelPath ?? ModelDiscovery.findFirstModel() else { return "" }
-        return ModelDiscovery.displayName(forModelPath: path)
+        let pathKey = litertLMModelPath ?? ""
+        if let cache = cachedDisplayName,
+           Date().timeIntervalSince(cache.at) < providerCacheTTL {
+            return cache.value
+        }
+        let resolved = litertLMModelPath ?? ModelDiscovery.findFirstModel()
+        let value = resolved.map(ModelDiscovery.displayName(forModelPath:)) ?? ""
+        // Cache only when keyed on an explicit path selection; the
+        // findFirstModel fallback can change as downloads complete.
+        if !pathKey.isEmpty || !value.isEmpty {
+            cachedDisplayName = (Date(), value)
+        }
+        return value
     }
 
     static var modelsDirectory: URL { ModelDiscovery.modelsDirectory }

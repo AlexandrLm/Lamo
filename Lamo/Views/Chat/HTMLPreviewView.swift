@@ -7,10 +7,17 @@ import UIKit
 // MARK: - HTML Card (main entry point)
 
 /// Polished HTML preview card with toolbar, source toggle, expand, and copy.
-struct HTMLCard: View {
+struct HTMLCard: View, Equatable {
     let html: String
     var title: String? = nil
     var maxHeight: CGFloat = 420
+    /// Во время стриминга WKWebView не монтируем — каждый токен перезагружал бы страницу.
+    var isStreaming: Bool = false
+
+    static func == (lhs: HTMLCard, rhs: HTMLCard) -> Bool {
+        lhs.html == rhs.html && lhs.title == rhs.title
+            && lhs.maxHeight == rhs.maxHeight && lhs.isStreaming == rhs.isStreaming
+    }
 
     @State private var showSource = false
 #if os(iOS)
@@ -24,6 +31,16 @@ struct HTMLCard: View {
             toolbar
             if showSource {
                 sourceView
+            } else if isStreaming {
+                // Стриминг: лёгкий плейсхолдер вместо WKWebView (не платим за reload на токен).
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.mini).tint(accent)
+                    Text("Rendering preview…")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
             } else {
                 HTMLPreviewView(html: html, maxHeight: maxHeight)
             }
@@ -135,6 +152,9 @@ struct HTMLPreviewView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var contentHeight: CGFloat = 160
+    /// Кэш обёрнутого HTML — wrapHTML собирает большую строку, не делаем это на каждый body
+    /// (в частности на каждый height-тик из WKWebView).
+    @State private var wrappedHTML: String = ""
 
     init(html: String, maxHeight: CGFloat = 320, cornerRadius: CGFloat = 12) {
         self.html = html
@@ -143,7 +163,25 @@ struct HTMLPreviewView: View {
     }
 
     var body: some View {
-        HTMLWebView(html: Self.wrapHTML(html, dark: colorScheme == .dark), contentHeight: $contentHeight)
+        HTMLWebView(html: wrappedHTML, contentHeight: $contentHeight)
+            .frame(height: min(max(contentHeight, 44), maxHeight))
+            .task(id: html) {
+                let dark = colorScheme == .dark
+                // Сборка строки в фоне — html может быть десятки КБ.
+                let built = await Task.detached(priority: .userInitiated) {
+                    Self.wrapHTML(html, dark: dark)
+                }.value
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    wrappedHTML = built
+                    contentHeight = 160
+                }
+            }
+            .onChange(of: colorScheme) { _, new in
+                // Тема влияет на стили — пересобираем только при её смене.
+                let built = Self.wrapHTML(html, dark: new == .dark)
+                wrappedHTML = built
+            }
     }
 
     private static func wrapHTML(_ raw: String, dark: Bool) -> String {
@@ -242,15 +280,19 @@ private struct HTMLWebView: UIViewRepresentable {
         view.allowsLinkPreview = false
         view.allowsBackForwardNavigationGestures = false
         context.coordinator.lastHTML = html
-        view.loadHTMLString(html, baseURL: nil)
+        if !html.isEmpty {
+            view.loadHTMLString(html, baseURL: nil)
+        }
         return view
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
         view.backgroundColor = .secondarySystemBackground
         // Reload when the theme-dependent HTML changes (e.g. dark ↔ light switch).
-        if context.coordinator.lastHTML != html {
+        // Пустую строку не грузим — это промежуточное состояние до task(id:).
+        if context.coordinator.lastHTML != html, !html.isEmpty {
             context.coordinator.lastHTML = html
+            context.coordinator.lastHeight = 0
             view.loadHTMLString(html, baseURL: nil)
         }
     }
@@ -258,7 +300,21 @@ private struct HTMLWebView: UIViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let parent: HTMLWebView
         var lastHTML: String?
+        /// Дроссель height-апдейтов: ResizeObserver стреляет на каждый пиксель.
+        var lastHeight: CGFloat = 0
+        var lastReport = Date.distantPast
         init(parent: HTMLWebView) { self.parent = parent }
+
+        private func report(_ h: CGFloat) {
+            guard h > 0 else { return }
+            let now = Date()
+            // <2pt или чаще 100мс — скипаем, иначе каждый тик ре-рендерил SwiftUI.
+            guard abs(h - lastHeight) >= 2,
+                  now.timeIntervalSince(lastReport) >= 0.1 else { return }
+            lastHeight = h
+            lastReport = now
+            DispatchQueue.main.async { self.parent.contentHeight = h + 8 }
+        }
 
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -288,16 +344,16 @@ private struct HTMLWebView: UIViewRepresentable {
             })();
             """
             webView.evaluateJavaScript(js) { result, _ in
-                if let h = result as? CGFloat, h > 0 {
-                    DispatchQueue.main.async { self.parent.contentHeight = h + 8 }
+                if let h = result as? CGFloat {
+                    self.report(h)
                 }
             }
         }
 
         func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "height", let body = message.body as? [String: Any],
-               let h = body["height"] as? CGFloat, h > 0 {
-                DispatchQueue.main.async { self.parent.contentHeight = h + 8 }
+               let h = body["height"] as? CGFloat {
+                report(h)
             }
         }
 
@@ -323,6 +379,9 @@ private struct HTMLWebView: View {
 // MARK: - HTML Detection
 
 enum HTMLDetector {
+    private static let tagRegex = try? NSRegularExpression(pattern: #"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?>"#)
+    private static let codeBlockRegex = try? NSRegularExpression(pattern: #"```html?\s*\n([\s\S]*?)```"#, options: .caseInsensitive)
+
     /// Returns true only if the text is predominantly HTML — starts with a tag or doctype,
     /// and at least 60% of the content is inside HTML tags.
     static func isHTML(_ text: String) -> Bool {
@@ -330,8 +389,7 @@ enum HTMLDetector {
         guard trimmed.count > 20 else { return false }
         // Must start with < (tag or doctype)
         guard trimmed.hasPrefix("<") || trimmed.hasPrefix("<!") else { return false }
-        let tagPattern = #"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?>"#
-        guard let regex = try? NSRegularExpression(pattern: tagPattern) else { return false }
+        guard let regex = Self.tagRegex else { return false }
         let fullRange = NSRange(trimmed.startIndex..., in: trimmed)
         let matches = regex.matches(in: trimmed, range: fullRange)
         guard matches.count >= 2 else { return false }
@@ -349,8 +407,7 @@ enum HTMLDetector {
     }
 
     static func extractFromCodeBlock(_ text: String) -> String? {
-        let pattern = #"```html?\s*\n([\s\S]*?)```"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+        guard let regex = Self.codeBlockRegex,
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let r = Range(match.range(at: 1), in: text) else { return nil }
         return String(text[r])

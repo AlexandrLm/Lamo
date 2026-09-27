@@ -23,12 +23,23 @@ actor WebFetcher {
     private struct State {
         var activeTasks = 0
         var waiters: [CheckedContinuation<Void, Never>] = []
-        var contentCache: [String: (content: String, timestamp: Date)] = [:]
+        var inFlight: [String: Task<PageMetadata, Error>] = [:]
     }
+
+    private final class CacheEntry: NSObject {
+        let content: String
+        let timestamp: Date
+        init(content: String, timestamp: Date) { self.content = content; self.timestamp = timestamp }
+    }
+    private static let contentCache: NSCache<NSString, CacheEntry> = {
+        let c = NSCache<NSString, CacheEntry>()
+        c.countLimit = 100
+        c.totalCostLimit = 10 * 1024 * 1024
+        return c
+    }()
 
     private static let maxConcurrent = 3
     private static let contentCacheTTL: TimeInterval = 1800 // 30 min
-    private static let maxCacheEntries = 100
     private static let maxDownloadBytes = 2_000_000 // 2 MB — refuse huge files before parsing
 
     /// Fetch a URL and return plain text content.
@@ -38,46 +49,70 @@ actor WebFetcher {
     }
 
     /// Fetch a URL and return structured metadata + content.
+    /// Single cache (NSCache, TTL-checked); concurrent callers for the same URL
+    /// share one in-flight Task instead of double-fetching.
     static func fetchStructured(url: URL) async throws -> PageMetadata {
         let cacheKey = url.absoluteString
-        if let cached = stateLock.withLock({ $0.contentCache[cacheKey] }),
+        if let cached = contentCache.object(forKey: cacheKey as NSString),
            Date().timeIntervalSince(cached.timestamp) < contentCacheTTL {
             return PageMetadata(title: nil, description: nil, contentType: nil, content: cached.content)
         }
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            Task { await WebFetcher.shared.enqueue(continuation) }
+        // In-flight dedup: join the existing task if present.
+        if let existing = stateLock.withLock({ $0.inFlight[cacheKey] }) {
+            return try await existing.value
         }
-
-        defer {
-            Task { await WebFetcher.shared.releaseSlot() }
+        let task = Task<PageMetadata, Error> {
+            defer { stateLock.withLock { $0.inFlight.removeValue(forKey: cacheKey) } }
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                Task { await WebFetcher.shared.enqueue(continuation) }
+            }
+            defer { Task { await WebFetcher.shared.releaseSlot() } }
+            let result = try await fetchWithRetry(url: url)
+            contentCache.setObject(
+                CacheEntry(content: result.content, timestamp: Date()),
+                forKey: cacheKey as NSString,
+                cost: result.content.utf8.count
+            )
+            return result
         }
+        stateLock.withLock { $0.inFlight[cacheKey] = task }
+        return try await task.value
+    }
 
+    /// Retry only transient failures (5xx/429/network), with jitter. Never retries CancellationError.
+    private static func fetchWithRetry(url: URL) async throws -> PageMetadata {
         var lastError: Error?
         for attempt in 0..<2 {
-            if attempt > 0 { try await Task.sleep(for: .seconds(1)) }
+            if attempt > 0 {
+                let jitter = Double.random(in: 0.5...1.5)
+                try await Task.sleep(for: .seconds(1 * jitter))
+            }
             do {
-                let result = try await fetchOnceStructured(url: url)
-                stateLock.withLock {
-                    $0.contentCache[cacheKey] = (content: result.content, timestamp: Date())
-                    // Bound growth: evict oldest first.
-                    if $0.contentCache.count > maxCacheEntries {
-                        let oldest = $0.contentCache.sorted { $0.value.timestamp < $1.value.timestamp }
-                            .prefix($0.contentCache.count - maxCacheEntries)
-                            .map(\.key)
-                        for key in oldest { $0.contentCache.removeValue(forKey: key) }
-                    }
-                }
-                return result
+                return try await fetchOnceStructured(url: url)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch let fetchError as FetchError {
-                // Non-retryable: bad status 4xx, oversized, bad encoding.
                 lastError = fetchError
                 if !fetchError.isTransient { break }
+            } catch let urlError as URLError {
+                lastError = urlError
+                if !isTransientURLError(urlError) { break }
             } catch {
                 lastError = error
+                break
             }
         }
         throw lastError ?? FetchError.invalidEncoding
+    }
+
+    private static func isTransientURLError(_ e: URLError) -> Bool {
+        switch e.code {
+        case .timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost,
+             .dnsLookupFailed, .notConnectedToInternet, .secureConnectionFailed:
+            return true
+        default:
+            return false
+        }
     }
 
     private func enqueue(_ continuation: CheckedContinuation<Void, Never>) {
@@ -154,8 +189,14 @@ actor WebFetcher {
             throw FetchError.invalidEncoding
         }
 
-        let metadata = extractMetadata(from: html)
-        let content = extractCleanText(from: html)
+        // Heavy string parsing runs detached (outside actor isolation, background QoS).
+        let parsed: (RawMetadata, String) = await Task.detached(priority: .utility) {
+            let metadata = WebFetcher.extractMetadata(from: html)
+            let content = WebFetcher.extractCleanText(from: html)
+            return (metadata, content)
+        }.value
+        let metadata = parsed.0
+        let content = parsed.1
 
         return PageMetadata(
             title: metadata.title,

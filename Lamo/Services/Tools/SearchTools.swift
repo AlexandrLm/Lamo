@@ -140,14 +140,8 @@ struct FetchUrlTool: Tool {
             return err
         }
 
-        if let cached = URLCacheStore.shared.content(for: url) {
-            // The cache keeps the full text; the model gets a budget-sized head slice.
-            let cachedResult: [String: Any] = ["content": await budgetedContent(cached), "url": url, "source": "cache"]
-            let limited = await AgenticLoopBudget.shared.limitResult(cachedResult)
-            await ToolCallReporter.shared.reportResult(name: Self.name, result: limited)
-            return limited
-        }
-
+        // Single cache: WebFetcher's internal NSCache (TTL + in-flight dedup).
+        // URLCacheStore is intentionally not used here to avoid double caching.
         do {
             let result = try await WebFetcher.fetchStructured(url: fetchURL)
             var output: [String: Any] = [:]
@@ -156,8 +150,6 @@ struct FetchUrlTool: Tool {
             if let contentType = result.contentType { output["type"] = contentType }
             output["content"] = await budgetedContent(result.content)
             output["url"] = url
-
-            if !result.content.isEmpty { URLCacheStore.shared.setContent(result.content, for: url) }
 
             let limited = await AgenticLoopBudget.shared.limitResult(output)
             await ToolCallReporter.shared.reportResult(name: Self.name, result: limited)

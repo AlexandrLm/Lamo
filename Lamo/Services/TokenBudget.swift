@@ -6,9 +6,42 @@ import os
 @MainActor
 final class TokenBudget {
     /// Tokenization cache — avoids re-tokenizing unchanged messages.
-    /// Key: message content (String), Value: token count.
+    /// Key: (hashValue, count) pair instead of the full string, so the cache
+    /// doesn't retain every message body. Bounded at 500 entries (FIFO evict).
     /// State is held inside OSAllocatedUnfairLock for async-safe access.
-    private let tokenCacheLock = OSAllocatedUnfairLock(initialState: [String: Int]())
+    private struct CacheKey: Hashable {
+        let hash: Int
+        let count: Int
+    }
+    private struct CacheState {
+        var values: [CacheKey: Int] = [:]
+        var order: [CacheKey] = []
+    }
+    private static let maxCacheEntries = 500
+    private let tokenCacheLock = OSAllocatedUnfairLock(initialState: CacheState())
+
+    private static func cacheKey(for text: String) -> CacheKey {
+        CacheKey(hash: text.hashValue, count: text.count)
+    }
+
+    private func cachedCount(for text: String) -> Int? {
+        let key = Self.cacheKey(for: text)
+        return tokenCacheLock.withLock { $0.values[key] }
+    }
+
+    private func storeCount(_ count: Int, for text: String) {
+        let key = Self.cacheKey(for: text)
+        tokenCacheLock.withLock { state in
+            if state.values[key] == nil {
+                state.order.append(key)
+                if state.order.count > Self.maxCacheEntries {
+                    let evicted = state.order.removeFirst()
+                    state.values.removeValue(forKey: evicted)
+                }
+            }
+            state.values[key] = count
+        }
+    }
 
     /// Calculate a safe maximum token count based on available memory,
     /// model size on disk, and user settings.
@@ -75,13 +108,12 @@ final class TokenBudget {
     /// Tokenize a string using the engine's real tokenizer.
     /// Uses tokenization cache to avoid re-tokenizing identical strings.
     func tokenizeCount(_ text: String, engine: LiteRTLM.Engine?) async -> Int {
-        let cached = tokenCacheLock.withLock { $0[text] }
-        if let cached { return cached }
+        if let cached = cachedCount(for: text) { return cached }
 
-        guard let engine = engine else { return text.count / 4 }
-        let count = (try? await engine.tokenCount(text)) ?? (text.count / 4)
+        guard let engine = engine else { return TokenEstimation.estimateTokens(of: text) }
+        let count = (try? await engine.tokenCount(text)) ?? TokenEstimation.estimateTokens(of: text)
 
-        tokenCacheLock.withLock { $0[text] = count }
+        storeCount(count, for: text)
 
         return count
     }
@@ -95,24 +127,44 @@ final class TokenBudget {
         func fileText(for msg: ChatMessage) -> String {
             msg.fileContent.isEmpty ? "" : "Content of attached files:\n\n\(msg.fileContent)"
         }
-        func fallback(_ s: String) -> Int { max(1, s.count / 4) }
+        func fallback(_ s: String) -> Int { TokenEstimation.estimateTokens(of: s) }
 
-        guard let engine else {
+        guard engine != nil else {
             var counts: [UUID: Int] = [:]
             for msg in messages { counts[msg.id] = fallback(msg.content) + (msg.fileContent.isEmpty ? 0 : fallback(fileText(for: msg))) }
             return counts
         }
 
-        var counts: [UUID: Int] = [:]
-        for msg in messages {
-            counts[msg.id] = await tokenizeCount(msg.content, engine: engine)
-                + (msg.fileContent.isEmpty ? 0 : await tokenizeCount(fileText(for: msg), engine: engine))
+        // Parallel tokenization across messages — engine calls dominate latency.
+        // File texts are precomputed so task closures only capture Sendable strings.
+        let jobs = messages.map { msg in
+            (id: msg.id, content: msg.content,
+             file: msg.fileContent.isEmpty ? nil as String? : "Content of attached files:\n\n\(msg.fileContent)")
         }
-        return counts
+        return await withTaskGroup(of: (UUID, Int).self, returning: [UUID: Int].self) { group in
+            for job in jobs {
+                group.addTask { [engine] in
+                    let content = await self.tokenizeCount(job.content, engine: engine)
+                    let files = await self.filePartCount(job.file, engine: engine)
+                    return (job.id, content + files)
+                }
+            }
+            var counts: [UUID: Int] = [:]
+            counts.reserveCapacity(messages.count)
+            for await (id, count) in group { counts[id] = count }
+            return counts
+        }
+    }
+
+    /// File-part token count helper so `withTaskGroup` closures capture only
+    /// Sendable values (no local-function captures).
+    private func filePartCount(_ file: String?, engine: LiteRTLM.Engine?) async -> Int {
+        guard let file else { return 0 }
+        return await tokenizeCount(file, engine: engine)
     }
 
     /// Clear tokenization cache (e.g., when engine changes).
     func clearTokenCache() {
-        tokenCacheLock.withLock { $0.removeAll() }
+        tokenCacheLock.withLock { $0 = CacheState() }
     }
 }

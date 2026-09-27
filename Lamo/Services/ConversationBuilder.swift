@@ -99,7 +99,7 @@ struct ConversationBuilder {
         for msg in includedMessages {
             let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
             if msg.role == .user && !msg.fileContent.isEmpty {
-                let fileContext = "Content of attached files:\n\n\(msg.fileContent)"
+                let fileContext = "Content of attached files:\n\n\(msg.fileContent.prefix(Self.maxFileChars))"
                 allMessages.append(LiteRTLM.Message(fileContext, role: .user))
                 if !msg.content.isEmpty {
                     allMessages.append(LiteRTLM.Message(msg.content, role: .user))
@@ -124,13 +124,23 @@ struct ConversationBuilder {
         }
 
         // --- Tokenize tool schemas using real getSchema() output ---
-        var toolSchemaText = ""
-        for tool in allTools {
-            let schema = tool.getSchema()
-            if let data = try? JSONSerialization.data(withJSONObject: schema, options: []),
-               let json = String(data: data, encoding: .utf8) {
-                toolSchemaText += json + "\n"
+        // Schema text cached per tool-set key; counts via TokenBudget cache.
+        let toolKey = "\(AppDefaults.toolGetLocation.wrappedValue)-\(AppDefaults.toolWeather.wrappedValue)-\(AppDefaults.toolCalendar.wrappedValue)-\(AppDefaults.memoryEnabled.wrappedValue)-\(networkAvailable)-\(AppDefaults.toolWebSearch.wrappedValue)-\(AppDefaults.toolFetchURL.wrappedValue)"
+        let toolSchemaText: String
+        if let cached = Self.toolSchemaTextCache[toolKey] {
+            toolSchemaText = cached
+        } else {
+            var text = ""
+            for tool in allTools {
+                let schema = tool.getSchema()
+                if let data = try? JSONSerialization.data(withJSONObject: schema, options: []),
+                   let json = String(data: data, encoding: .utf8) {
+                    text += json + "\n"
+                }
             }
+            toolSchemaText = text
+            Self.toolSchemaTextCache[toolKey] = text
+            if Self.toolSchemaTextCache.count > 16 { Self.toolSchemaTextCache.removeAll() }
         }
         let toolDefTokens = await pm.tokenizeCount(toolSchemaText)
         pm.lastToolTokens = toolDefTokens
@@ -138,9 +148,10 @@ struct ConversationBuilder {
         pm.lastToolCountTotal = ToolDefinitions.allNames.count
 
         // --- Accurate conversation tokens (real tokenizer, conservative fallback) ---
-        // Single chars/4 approximation everywhere (tracker uses the same).
+        // Fallback uses the shared estimator (ASCII ≈ 4 chars/token, CJK ≈ 1)
+        // instead of count/4, matching the tracker and the budget.
         let conversationTokens = includedMessages.reduce(0) { acc, msg in
-            acc + (messageTokenCounts[msg.id] ?? max(1, msg.content.count / 4))
+            acc + (messageTokenCounts[msg.id] ?? AgenticLoopBudget.estimateTokens(of: msg.content))
         }
         await AgenticLoopBudget.shared.configure(
             totalBudget: effectiveMaxTokens,
@@ -184,15 +195,12 @@ struct ConversationBuilder {
     /// counts exactly the string that is sent to the model.
     /// First message: full info (date, weekday, tz, unix). Subsequent: time only.
     static func currentTimeBlock(messageCount: Int, now: Date = Date()) -> String {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
+        Self.formatterLock.lock()
+        defer { Self.formatterLock.unlock() }
         if messageCount <= 1 {
-            df.dateFormat = "yyyy-MM-dd"
-            let todayStr = df.string(from: now)
-            df.dateFormat = "HH:mm:ss"
-            let timeStr = df.string(from: now)
-            df.dateFormat = "EEEE"
-            let weekdayStr = df.string(from: now)
+            let todayStr = Self.dateFormatter.string(from: now)
+            let timeStr = Self.timeFormatter.string(from: now)
+            let weekdayStr = Self.weekdayFormatter.string(from: now)
             let tz = TimeZone.current
             let utcOffset = tz.secondsFromGMT(for: now) / 3600
             return """
@@ -207,10 +215,9 @@ struct ConversationBuilder {
             </current_time>
             """
         } else {
-            df.dateFormat = "HH:mm:ss"
             return """
 
-            <current_time>\(df.string(from: now))</current_time>
+            <current_time>\(Self.timeFormatter.string(from: now))</current_time>
             """
         }
     }
@@ -241,12 +248,19 @@ struct ConversationBuilder {
     func summarizeOldContext(dropped: [ChatMessage]) async -> String? {
         guard !dropped.isEmpty else { return nil }
 
+        // Cap dropped history: only the newest 20 messages, 500 chars each,
+        // 8000 chars total — unbounded concatenation blew the prefill on long
+        // histories (the summary request itself overflowed).
+        let capped = Array(dropped.suffix(20))
         // Concatenate dropped messages into a single text block
-        let conversationText = dropped.map { msg in
+        var conversationText = capped.map { msg in
             let roleLabel = msg.role == .user ? "User" : "Assistant"
             let content = msg.content.prefix(500) // Truncate each to 500 chars
             return "[\(roleLabel)]: \(content)"
         }.joined(separator: "\n\n")
+        if conversationText.count > Self.maxSummaryChars {
+            conversationText = String(conversationText.prefix(Self.maxSummaryChars))
+        }
 
         guard !conversationText.isEmpty else { return nil }
 

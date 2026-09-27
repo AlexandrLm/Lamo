@@ -13,7 +13,16 @@ struct UserDefault<T> {
     }
 
     var wrappedValue: T {
-        get { UserDefaults.standard.object(forKey: key) as? T ?? defaultValue }
+        get {
+            // Typed read for Bool: `object(forKey:) as? Bool` misbehaves for
+            // values bridged as NSNumber, so use `bool(forKey:)` when the key
+            // exists and fall back to the default otherwise.
+            if T.self == Bool.self {
+                guard UserDefaults.standard.object(forKey: key) != nil else { return defaultValue }
+                return UserDefaults.standard.bool(forKey: key) as! T
+            }
+            return UserDefaults.standard.object(forKey: key) as? T ?? defaultValue
+        }
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }
@@ -120,6 +129,7 @@ enum AppDefaults {
         thinkingMode.wrappedValue = false
         memoryEnabled.wrappedValue = true
         webAutoFetch.wrappedValue = true
+        compressionThreshold.wrappedValue = compressionThreshold.defaultValue
         toolWebSearch.wrappedValue = true
         toolFetchURL.wrappedValue = true
         toolGetLocation.wrappedValue = true

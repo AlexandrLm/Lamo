@@ -143,8 +143,14 @@ struct ThinDivider: View {
 }
 
 /// Backwards-compatible alias.
-struct CompactDivider: View {
-    var body: some View {
-        ThinDivider()
-    }
+typealias CompactDivider = ThinDivider
+
+/// Shared byte formatter — ByteCountFormatter init is expensive, never alloc per row.
+extension LamoTheme {
+    static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useGB, .useMB]
+        f.countStyle = .file
+        return f
+    }()
 }

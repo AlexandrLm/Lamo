@@ -10,9 +10,28 @@ enum FileContentExtractor {
 
     /// Max characters to extract per file (to stay within token budget).
     static let maxCharsPerFile = 15_000
+    /// Refuse to load files larger than this into memory.
+    static let maxFileBytes = 5 * 1024 * 1024
+
+    private static let textExtensions: Set<String> = [
+        "txt", "md", "markdown", "rst", "log",
+        "swift", "m", "h", "c", "cpp", "cc", "hpp",
+        "py", "rb", "js", "ts", "jsx", "tsx",
+        "java", "kt", "kts", "go", "rs", "zig",
+        "sh", "bash", "zsh", "fish", "bat", "ps1",
+        "sql", "graphql", "gql",
+        "yaml", "yml", "toml", "ini", "cfg", "conf", "env",
+        "html", "htm", "css", "scss", "less", "svg",
+        "xml", "xhtml", "xsl",
+        "r", "lua", "pl", "php", "ex", "exs", "erl", "hs",
+        "makefile", "cmake", "gradle", "sbt",
+        "gitignore", "dockerfile", "dockerignore",
+        "v", "vhd", "vhdl", "sv",
+    ]
 
     /// Extract text content from a file URL.
     static func extract(from url: URL) async throws -> String {
+        try checkFileSize(url)
         let type = UTType(filenameExtension: url.pathExtension) ?? .data
         let name = url.lastPathComponent
 
@@ -58,22 +77,25 @@ enum FileContentExtractor {
         let maxPages = min(doc.pageCount, 20)
 
         for i in 0..<maxPages {
-            guard let page = doc.page(at: i) else { continue }
-            let pageRect = page.bounds(for: .mediaBox)
-            let scale: CGFloat = 2.0
-            let width = pageRect.width * scale
-            let height = pageRect.height * scale
-            guard width > 0, height > 0, width < 8000, height < 8000 else { continue }
+            let image: UIImage? = autoreleasepool {
+                guard let page = doc.page(at: i) else { return nil as UIImage? }
+                let pageRect = page.bounds(for: .mediaBox)
+                let scale: CGFloat = 2.0
+                let width = pageRect.width * scale
+                let height = pageRect.height * scale
+                guard width > 0, height > 0, width < 8000, height < 8000 else { return nil as UIImage? }
 
-            let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
-            let image = renderer.image { ctx in
-                UIColor.white.set()
-                ctx.fill(CGRect(origin: .zero, size: CGSize(width: width, height: height)))
-                ctx.cgContext.translateBy(x: 0, y: height)
-                ctx.cgContext.scaleBy(x: scale, y: -scale)
-                page.draw(with: .mediaBox, to: ctx.cgContext)
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+                let rendered = renderer.image { ctx in
+                    UIColor.white.set()
+                    ctx.fill(CGRect(origin: .zero, size: CGSize(width: width, height: height)))
+                    ctx.cgContext.translateBy(x: 0, y: height)
+                    ctx.cgContext.scaleBy(x: scale, y: -scale)
+                    page.draw(with: .mediaBox, to: ctx.cgContext)
+                }
+                return rendered as UIImage?
             }
-            images.append(image)
+            if let image { images.append(image) }
         }
         return images
     }
@@ -93,8 +115,16 @@ enum FileContentExtractor {
 
     // MARK: - Plain Text
 
+    private static func checkFileSize(_ url: URL) throws {
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           size > maxFileBytes {
+            throw FileExtractorError.fileTooLarge(url.lastPathComponent)
+        }
+    }
+
     private static func readTextFile(from url: URL) throws -> String {
-        let data = try Data(contentsOf: url)
+        try checkFileSize(url)
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         guard let text = String(data: data, encoding: .utf8)
                 ?? String(data: data, encoding: .isoLatin1)
                 ?? String(data: data, encoding: .windowsCP1251)
@@ -110,23 +140,35 @@ enum FileContentExtractor {
         guard let doc = PDFDocument(url: url) else {
             throw FileExtractorError.unsupportedFormat(url.lastPathComponent)
         }
-        var pages: [String] = []
+        // Single pass: accumulate directly, one autoreleasepool per page so
+        // large PDFs don't balloon peak memory. Stops early once the char
+        // budget is reached.
+        var result = ""
+        result.reserveCapacity(min(maxCharsPerFile, 16384))
         for i in 0..<doc.pageCount {
-            if let page = doc.page(at: i),
-               let text = page.string, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                pages.append(String(localized: "--- Page \(i + 1) ---") + "\n\(text)")
+            let chunk: String? = autoreleasepool {
+                guard let page = doc.page(at: i),
+                      let text = page.string,
+                      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil as String? }
+                return String(localized: "--- Page \(i + 1) ---") + "\n\(text)"
+            }
+            if let chunk {
+                if !result.isEmpty { result += "\n\n" }
+                result += chunk
+                if result.count >= maxCharsPerFile { break }
             }
         }
-        guard !pages.isEmpty else {
+        guard !result.isEmpty else {
             return "[\(String(localized: "PDF has no text layer — content sent as images"))]"
         }
-        return pages.joined(separator: "\n\n")
+        return result
     }
 
     // MARK: - DOCX
 
     private static func extractDOCX(from url: URL) throws -> String {
-        let data = try Data(contentsOf: url)
+        try checkFileSize(url)
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         guard var archive = try? ZipArchive(data: data) else {
             throw FileExtractorError.unsupportedFormat("DOCX")
         }
@@ -142,7 +184,8 @@ enum FileContentExtractor {
         if url.pathExtension == "csv" {
             return try readTextFile(from: url)
         }
-        let data = try Data(contentsOf: url)
+        try checkFileSize(url)
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         guard var archive = try? ZipArchive(data: data) else {
             throw FileExtractorError.unsupportedFormat("XLSX")
         }
@@ -159,7 +202,8 @@ enum FileContentExtractor {
     // MARK: - PPTX
 
     private static func extractPPTX(from url: URL) throws -> String {
-        let data = try Data(contentsOf: url)
+        try checkFileSize(url)
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         guard var archive = try? ZipArchive(data: data) else {
             throw FileExtractorError.unsupportedFormat("PPTX")
         }
@@ -194,9 +238,27 @@ enum FileContentExtractor {
         return texts.joined(separator: " ")
     }
 
+    private static let sharedStringPattern: NSRegularExpression = {
+        (try? NSRegularExpression(pattern: "<si>.*?<t[^>]*>(.*?)</t>.*?</si>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
+    }()
+
     private static func parseSharedStrings(_ data: Data) -> [String] {
-        let xml = extractTextFromOOXML(data)
-        return xml.components(separatedBy: " ").filter { !$0.isEmpty }
+        guard let xml = String(data: data, encoding: .utf8) else { return [] }
+        let range = NSRange(xml.startIndex..., in: xml)
+        return sharedStringPattern.matches(in: xml, range: range).compactMap { match -> String? in
+            guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: xml) else { return nil }
+            return unescapeXML(String(xml[r]))
+        }
+    }
+
+    private static func unescapeXML(_ text: String) -> String {
+        var out = text
+        out = out.replacingOccurrences(of: "&amp;", with: "&")
+        out = out.replacingOccurrences(of: "&lt;", with: "<")
+        out = out.replacingOccurrences(of: "&gt;", with: ">")
+        out = out.replacingOccurrences(of: "&quot;", with: "\"")
+        out = out.replacingOccurrences(of: "&apos;", with: "'")
+        return out
     }
 
     // MARK: - XLSX Helpers
@@ -205,7 +267,7 @@ enum FileContentExtractor {
         (try? NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
     }()
     private static let xlsxCellPattern: NSRegularExpression = {
-        (try? NSRegularExpression(pattern: "<c[^>]*>(?:<v>)?([^<]*)", options: [])) ?? NSRegularExpression()
+        (try? NSRegularExpression(pattern: "<c[^>]*?(?:t=\"([^\"]*)\")?[^>]*>(?:<v>)?([^<]*)", options: [])) ?? NSRegularExpression()
     }()
 
     private static func parseXLSXSheet(_ data: Data, sharedStrings: [String]) -> String {
@@ -217,8 +279,15 @@ enum FileContentExtractor {
             let rowXml = String(xml[rowRange])
             let rowRange2 = NSRange(rowXml.startIndex..., in: rowXml)
             let cells = xlsxCellPattern.matches(in: rowXml, range: rowRange2).compactMap { match -> String? in
-                guard let r = Range(match.range(at: 1), in: rowXml) else { return nil }
-                let val = String(rowXml[r]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard match.numberOfRanges > 2,
+                      let r = Range(match.range(at: 2), in: rowXml) else { return nil }
+                var val = String(rowXml[r]).trimmingCharacters(in: .whitespacesAndNewlines)
+                // Shared-string cells (t="s") store an index into sharedStrings.xml.
+                if let tRange = Range(match.range(at: 1), in: rowXml),
+                   String(rowXml[tRange]) == "s",
+                   let idx = Int(val), idx >= 0, idx < sharedStrings.count {
+                    val = sharedStrings[idx]
+                }
                 return val.isEmpty ? nil : val
             }
             if !cells.isEmpty {
@@ -231,22 +300,7 @@ enum FileContentExtractor {
     // MARK: - Text Extension Check
 
     private static func isTextExtension(_ ext: String) -> Bool {
-        let textExtensions: Set<String> = [
-            "txt", "md", "markdown", "rst", "log",
-            "swift", "m", "h", "c", "cpp", "cc", "hpp",
-            "py", "rb", "js", "ts", "jsx", "tsx",
-            "java", "kt", "kts", "go", "rs", "zig",
-            "sh", "bash", "zsh", "fish", "bat", "ps1",
-            "sql", "graphql", "gql",
-            "yaml", "yml", "toml", "ini", "cfg", "conf", "env",
-            "html", "htm", "css", "scss", "less", "svg",
-            "xml", "xhtml", "xsl",
-            "r", "R", "lua", "pl", "php", "ex", "exs", "erl", "hs",
-            "makefile", "cmake", "gradle", "sbt",
-            "gitignore", "dockerfile", "dockerignore",
-            "v", "vhd", "vhdl", "sv",
-        ]
-        return textExtensions.contains(ext.lowercased())
+        textExtensions.contains(ext.lowercased())
     }
 }
 
@@ -254,11 +308,14 @@ enum FileContentExtractor {
 
 enum FileExtractorError: LocalizedError {
     case unsupportedFormat(String)
+    case fileTooLarge(String)
 
     var errorDescription: String? {
         switch self {
         case .unsupportedFormat(let name):
             return String(localized: "Could not read file: \(name). Unsupported format.")
+        case .fileTooLarge(let name):
+            return String(localized: "File too large: \(name). Limit is 5 MB.")
         }
     }
 }
@@ -318,11 +375,11 @@ private struct ZipArchive {
     }
 
     private func readLocalFileData(at offset: Int, compMethod: UInt16, compSize: Int, uncompSize: Int) -> Data? {
-        guard offset + 30 <= data.count else { return nil }
+        guard offset >= 0, offset + 30 <= data.count else { return nil }
         let nameLen = Int(data.readUInt16(offset + 26))
         let extraLen = Int(data.readUInt16(offset + 28))
         let dataStart = offset + 30 + nameLen + extraLen
-        guard dataStart + compSize <= data.count else { return nil }
+        guard dataStart >= 0, compSize >= 0, dataStart + compSize <= data.count else { return nil }
 
         let fileData = data[dataStart..<dataStart+compSize]
 
@@ -338,6 +395,7 @@ private struct ZipArchive {
         guard data.count >= 22 else { return nil }
         let searchStart = max(0, data.count - 65557)
         for i in stride(from: data.count - 22, through: searchStart, by: -1) {
+            guard i + 3 < data.count else { continue }
             if data[i] == 0x50 && data[i+1] == 0x4B && data[i+2] == 0x05 && data[i+3] == 0x06 {
                 let totalEntries = data.readUInt16(i + 10)
                 let cdSize = data.readUInt32(i + 12)
@@ -351,10 +409,12 @@ private struct ZipArchive {
 
 private extension Data {
     func readUInt16(_ offset: Int) -> UInt16 {
-        UInt16(self[offset]) | (UInt16(self[offset+1]) << 8)
+        guard offset >= 0, offset + 1 < count else { return 0 }
+        return UInt16(self[offset]) | (UInt16(self[offset+1]) << 8)
     }
 
     func readUInt32(_ offset: Int) -> UInt32 {
-        UInt32(self[offset]) | (UInt32(self[offset+1]) << 8) | (UInt32(self[offset+2]) << 16) | (UInt32(self[offset+3]) << 24)
+        guard offset >= 0, offset + 3 < count else { return 0 }
+        return UInt32(self[offset]) | (UInt32(self[offset+1]) << 8) | (UInt32(self[offset+2]) << 16) | (UInt32(self[offset+3]) << 24)
     }
 }

@@ -23,7 +23,7 @@ enum TokenTruncator {
     private static let minArrayItems = 3
 
     static func truncateResult(_ value: Any, maxTokens: Int) async -> Any {
-        let charBudget = max(400, maxTokens * 4)
+        let charBudget = TokenEstimation.charBudget(forTokens: maxTokens)
         // Phase 1: cap oversized individual strings.
         let capped = capStrings(value, maxChars: charBudget, tokenLabel: maxTokens)
         // Phase 2: fit the aggregate within the budget.
@@ -54,15 +54,17 @@ enum TokenTruncator {
     // MARK: - Phase 2: aggregate fit
 
     private static func fitToBudget(_ value: Any, charBudget: Int) -> Any {
+        // Fast path: already fits — return as-is without copying.
+        if TokenEstimation.estimatedSize(value) <= charBudget { return value }
         var result = value
         var rounds = 0
-        while serializedSize(result) > charBudget, rounds < maxRounds {
+        while TokenEstimation.estimatedSize(result) > charBudget, rounds < maxRounds {
             rounds += 1
             guard let reduced = reduceOnce(result) else { break }
             result = reduced
         }
-        // Last resort: hard-truncate the serialized form.
-        if serializedSize(result) > charBudget, let serialized = serialize(result) {
+        // Last resort: hard-truncate the serialized form (single JSON pass).
+        if TokenEstimation.estimatedSize(result) > charBudget, let serialized = serialize(result) {
             return String(serialized.prefix(charBudget)) + "\n\n[Truncated to fit token budget]"
         }
         return result
@@ -151,9 +153,5 @@ enum TokenTruncator {
               let data = try? JSONSerialization.data(withJSONObject: value),
               let str = String(data: data, encoding: .utf8) else { return nil }
         return str
-    }
-
-    private static func serializedSize(_ value: Any) -> Int {
-        serialize(value)?.count ?? String(describing: value).count
     }
 }

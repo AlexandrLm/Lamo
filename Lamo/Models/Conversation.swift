@@ -3,6 +3,11 @@ import SwiftData
 
 @Model
 final class Conversation {
+    #Index<Conversation>([\.updatedAt])
+
+    /// Hard cap for summary length — summaries grow via LLM compression.
+    static let maxSummaryChars = 2000
+
     var id: UUID
     var title: String
     var updatedAt: Date
@@ -24,7 +29,7 @@ final class Conversation {
         self.id = id
         self.title = title
         self.updatedAt = updatedAt
-        self.summary = summary
+        self.summary = String(summary.prefix(Self.maxSummaryChars))
         self.isPinned = isPinned
         self.messages = messages
     }

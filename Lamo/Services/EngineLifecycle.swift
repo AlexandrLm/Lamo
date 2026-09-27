@@ -15,12 +15,53 @@ final class EngineLifecycle {
     private var memoryPressureSource: DispatchSourceMemoryPressure?
     private var savedURLCacheMemory: Int = 0
     private var savedURLCacheDisk: Int = 0
+    /// Coalesces memory-pressure bursts — while active, further events are
+    /// ignored instead of spawning a 30s reset task per event.
+    private var pressureActive = false
     var engineForSummarization: LiteRTLM.Engine? { cachedEngine }
     private(set) var currentMaxTokens: Int?
     var suppressInvalidation = false
     var currentProvider: any LLMProvider {
         if let cached = cachedProvider { return cached }
         return makeProvider()
+    }
+
+    /// Available memory in MB — two platform implementations.
+    /// (Was a single #if with an unconditional os_proc_available_memory()
+    /// re-read after cleanup, which is wrong on macOS.)
+    private func availableMemoryMB() -> Double {
+#if os(iOS)
+        Double(os_proc_available_memory()) / 1_048_576
+#else
+        Double(ProcessInfo.processInfo.physicalMemory) / 2.0 / 1_048_576
+#endif
+    }
+
+    /// Blocking filesystem preflight (stat + magic-byte read + directory
+    /// scan). Runs in Task.detached so the MainActor never blocks on I/O.
+    private nonisolated func preflightChecks(resolvedPath: String) async -> LamoError? {
+        await Task.detached(priority: .utility) {
+            if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+               let freeBytes = attrs[.systemFreeSize] as? UInt64,
+               Double(freeBytes) / 1_073_741_824 < 1.0 {
+                return LamoError.insufficientDiskSpace
+            }
+            if let fileAttrs = try? FileManager.default.attributesOfItem(atPath: resolvedPath),
+               let fileSize = fileAttrs[.size] as? Int64 {
+                let gb = Double(fileSize) / 1_073_741_824
+                if gb < 0.5 {
+                    return LamoError.modelTooSmall(gb)
+                }
+            }
+            if let fh = FileHandle(forReadingAtPath: resolvedPath) {
+                defer { fh.closeFile() }
+                let magic = fh.readData(ofLength: 4)
+                if magic.count == 4, [UInt8](magic) == [0x00, 0x00, 0x00, 0x00] {
+                    return LamoError.modelCorrupted(resolvedPath)
+                }
+            }
+            return nil as LamoError?
+        }.value
     }
 
     /// Creates the appropriate provider based on the current `providerType` setting.
@@ -55,8 +96,7 @@ final class EngineLifecycle {
                 cachedProvider = FoundationModelsProvider()
                 onEngineReadyChanged(true)
             } else {
-                let reason = FoundationModelsAvailability.unavailabilityReason ?? String(localized: "Unknown")
-                onEngineErrorChanged(.foundationModelsUnavailable(reason))
+                onEngineErrorChanged(.foundationModelsUnavailable(FoundationModelsAvailability.unavailabilityReasonOrUnknown))
             }
             return
         }
@@ -80,42 +120,23 @@ final class EngineLifecycle {
             onEngineErrorChanged(.noModelAvailable)
             return
         }
-        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-           let freeBytes = attrs[.systemFreeSize] as? UInt64,
-           Double(freeBytes) / 1_073_741_824 < 1.0 {
-            onEngineErrorChanged(.insufficientDiskSpace)
+        // Filesystem preflight off the MainActor (stat + magic read block).
+        if let preflightError = await preflightChecks(resolvedPath: resolvedPath) {
+            onEngineErrorChanged(preflightError)
+            restoreURLCache()
             return
-        }
-        if let fileAttrs = try? FileManager.default.attributesOfItem(atPath: resolvedPath),
-           let fileSize = fileAttrs[.size] as? Int64 {
-            let gb = Double(fileSize) / 1_073_741_824
-            if gb < 0.5 {
-                onEngineErrorChanged(.modelTooSmall(gb))
-                return
-            }
-        }
-        if let fh = FileHandle(forReadingAtPath: resolvedPath) {
-            defer { fh.closeFile() }
-            let magic = fh.readData(ofLength: 4)
-            if magic.count == 4, [UInt8](magic) == [0x00, 0x00, 0x00, 0x00] {
-                onEngineErrorChanged(.modelCorrupted(resolvedPath))
-                return
-            }
         }
         let filename = (resolvedPath as NSString).lastPathComponent
         if let preset = PresetModel.allCases.first(where: { $0.filename == filename }) {
-            #if os(iOS)
-            var availMB = Double(os_proc_available_memory()) / 1_048_576
-            #else
-            var availMB = Double(ProcessInfo.processInfo.physicalMemory) / 2.0 / 1_048_576
-            #endif
+            var availMB = availableMemoryMB()
             let requiredMB: Double = preset == .gemma4E4B ? 2000 : 1200
             if availMB < requiredMB {
                 LamoLogger.engine.warning("Low memory (\(String(format: "%.0f", availMB))MB), attempting cleanup...")
                 performPreloadCleanup()
-                availMB = Double(os_proc_available_memory()) / 1_048_576
+                availMB = availableMemoryMB()
                 if availMB < requiredMB {
                     onEngineErrorChanged(.insufficientMemory(available: availMB / 1024, required: requiredMB / 1024))
+                    restoreURLCache()
                     return
                 }
                 LamoLogger.engine.info("Cleanup freed memory: \(String(format: "%.0f", availMB))MB now available")
@@ -130,12 +151,20 @@ final class EngineLifecycle {
             modelPath: resolvedPath, useGPU: settings.litertLMUseGPU,
             kvCacheAuto: settings.kvCacheAuto, maxNumTokens: settings.maxNumTokens)
         currentMaxTokens = maxTokens
+        // URLCache stays zeroed until the engine is up; defer guarantees the
+        // restore runs on success AND on every failure path below.
+        defer { restoreURLCache() }
         let maxAttempts = 3
         var lastError = LamoError.noModelAvailable
         for attempt in 1...maxAttempts {
+            // Cooperative cancellation between attempts (invalidation races init).
+            if Task.isCancelled { return }
             if attempt > 1 {
+                // Exponential backoff: 1s, 2s (was a fixed 1s, no cancellation).
+                let backoffNs: UInt64 = 1_000_000_000 * UInt64(1 << (attempt - 2))
                 LamoLogger.engine.info("Engine init retry attempt \(attempt)/\(maxAttempts)...")
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(nanoseconds: backoffNs)
+                if Task.isCancelled { return }
             }
             guard let config = try? LiteRTLM.EngineConfig(
                 modelPath: resolvedPath, backend: backend, visionBackend: .cpu(),
@@ -149,13 +178,16 @@ final class EngineLifecycle {
             do {
                 LamoLogger.engine.info("Initializing engine for: \(filename), backend=\(self.settings.litertLMUseGPU ? "GPU" : "CPU"), maxTokens=\(maxTokens ?? -1) (attempt \(attempt)/\(maxAttempts))")
                 try await engine.initialize()
+                // Check cancellation before publishing a potentially stale engine.
+                try Task.checkCancellation()
                 LamoLogger.engine.info("Engine initialized successfully")
                 cachedEngine = engine
                 cachedProvider = LiteRTLMProvider(
                     modelPath: settings.litertLMModelPath,
                     useGPU: settings.litertLMUseGPU, maxNumTokens: maxTokens, engine: engine)
                 onEngineReadyChanged(true)
-                restoreURLCache()
+                return
+            } catch is CancellationError {
                 return
             } catch {
                 lastError = .engineInitFailed(error.localizedDescription)
@@ -192,10 +224,15 @@ final class EngineLifecycle {
         source.setEventHandler { [weak self] in
             guard let self else { return }
             Task { @MainActor in
+                // Debounce: coalesce bursts while a pressure window is active
+                // (was one 30s reset task per event, stacking indefinitely).
+                guard !self.pressureActive else { return }
+                self.pressureActive = true
                 self.onMemoryPressureChanged(true)
                 self.tokenBudget.clearTokenCache()
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(30))
+                    self.pressureActive = false
                     self.onMemoryPressureChanged(false)
                 }
             }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A preset system prompt with recommended sampling settings.
-struct PromptPreset: Identifiable, Codable {
+struct PromptPreset: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let name: String
     let prompt: String
@@ -100,8 +100,13 @@ struct PromptPreset: Identifiable, Codable {
         ),
     ]
 
+    /// O(1) lookup by id — built once from allPresets.
+    static let byID: [String: PromptPreset] = Dictionary(
+        uniqueKeysWithValues: allPresets.map { ($0.id, $0) }
+    )
+
     /// Find a preset by ID.
     static func preset(id: String) -> PromptPreset? {
-        allPresets.first { $0.id == id }
+        byID[id]
     }
 }

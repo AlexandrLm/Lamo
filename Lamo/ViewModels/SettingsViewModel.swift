@@ -108,6 +108,15 @@ final class SettingsViewModel {
 
     var modelInfo: ModelInfo?
 
+    /// Coalescing task for info loads — rapid model switches cancel the previous load.
+    /// NOTE(debounce): callers fire loadModelInfo() on every selection tap; the guard
+    /// below cancels the in-flight Task.detached before starting a new one.
+    private var modelInfoTask: Task<Void, Never>?
+
+    /// Shared cache — Capabilities(modelPath:) + stat hit disk + native init.
+    private static var modelInfoCache: [String: ModelInfo] = [:]
+    private static let modelInfoCacheLock = NSLock()
+
     // MARK: - Init
 
     init() {
@@ -121,11 +130,33 @@ final class SettingsViewModel {
     }
 
     func loadModelInfo() {
+        modelInfoTask?.cancel()
         guard let path = selectedModel else {
             modelInfo = nil
             return
         }
-        modelInfo = ModelInfo.from(path: path)
+        Self.modelInfoCacheLock.lock()
+        let cached = Self.modelInfoCache[path]
+        Self.modelInfoCacheLock.unlock()
+        if let cached {
+            modelInfo = cached
+            return
+        }
+        // Heavy IO (stat + Capabilities init) off the main actor.
+        // Outer Task inherits @MainActor (may touch self); inner detached
+        // does only Sendable work (path String -> ModelInfo value).
+        let pathCopy = path
+        modelInfoTask = Task { [weak self] in
+            let info = await Task.detached { ModelInfo.from(path: pathCopy) }.value
+            guard let self, !Task.isCancelled else { return }
+            guard let info else { return }
+            Self.modelInfoCacheLock.lock()
+            Self.modelInfoCache[pathCopy] = info
+            Self.modelInfoCacheLock.unlock()
+            // Ignore stale results after a rapid re-selection.
+            guard self.selectedModel == pathCopy else { return }
+            self.modelInfo = info
+        }
     }
 
     func resetSamplerDefaults() {
@@ -156,7 +187,7 @@ final class SettingsViewModel {
 
 // MARK: - Model Info
 
-struct ModelInfo {
+struct ModelInfo: Hashable, Sendable {
     let name: String
     let fileSize: Int64
     let hasSpeculativeDecoding: Bool

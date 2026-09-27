@@ -34,21 +34,8 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
     // MARK: - LLMProvider
 
     func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
-        AsyncStream { continuation in
-            let task = Task {
-                await ToolCallReporter.shared.register(continuation: continuation)
-                await ToolCallReporter.shared.setConversationID(messages.first?.conversationID)
-                do {
-                    try await runInference(messages: messages, continuation: continuation)
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    continuation.yield(.error(error))
-                }
-                await ToolCallReporter.shared.reset()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
+        return ProviderStream.makeStream(messages: messages) { [self] msgs, continuation in
+            try await self.runInference(messages: msgs, continuation: continuation)
         }
     }
 
@@ -66,22 +53,11 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             return
         }
 
-        // --- Availability check ---
-        let availability = SystemLanguageModel.default.availability
-        switch availability {
-        case .available: break
-        case .unavailable(.deviceNotEligible):
-            continuation.yield(.error(LamoError.foundationModelsUnavailable(
-                String(localized: "This device does not support Apple Intelligence"))))
-            continuation.finish(); return
-        case .unavailable(.modelNotReady):
-            continuation.yield(.error(LamoError.foundationModelsUnavailable(
-                String(localized: "Apple Intelligence model is downloading or not yet ready"))))
-            continuation.finish(); return
-        case .unavailable:
-            continuation.yield(.error(LamoError.foundationModelsUnavailable(
-                String(localized: "Apple Intelligence is unavailable"))))
-            continuation.finish(); return
+        // --- Availability check (single source of truth — was a duplicated switch) ---
+        if let reason = FoundationModelsAvailability.unavailabilityReason {
+            continuation.yield(.error(LamoError.foundationModelsUnavailable(reason)))
+            continuation.finish()
+            return
         }
 
         // --- Build system prompt with memory ---
@@ -157,15 +133,22 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         var accumulated = ""
         do {
             for try await snapshot in stream {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    continuation.finish()
+                    return
+                }
 
                 // iOS 27 streams snapshots of the FULL content so far — emit only the delta.
+                // hasPrefix-only check (was content.count >= accumulated.count first,
+                // which walks both strings) + single offsetBy pass for the split.
                 let content = snapshot.content
-                guard content.count >= accumulated.count, content.hasPrefix(accumulated) else {
+                guard content.hasPrefix(accumulated) else {
                     accumulated = content
                     continue
                 }
-                let delta = String(content.dropFirst(accumulated.count))
+                guard content != accumulated else { continue }
+                let splitIndex = content.index(content.startIndex, offsetBy: accumulated.count)
+                let delta = String(content[splitIndex...])
                 accumulated = content
                 if delta.isEmpty { continue }
 
@@ -176,6 +159,7 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
 
                 if repDetector.feed(delta) {
                     continuation.yield(.loopDetected)
+                    continuation.finish()
                     return
                 }
             }
@@ -190,6 +174,7 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             default:
                 throw error
             }
+            continuation.finish()
             return
         }
 
@@ -218,8 +203,10 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
     /// Build conversation context prefix from message history.
     /// Provides the last few turns so the model has conversational memory.
     private func buildContextPrefix(messages: [ChatMessage]) -> String {
+        // Hoisted last-user id — was recomputed inside the filter closure (O(n²)).
+        let lastUserID = messages.last(where: { $0.role == .user })?.id
         // Take last 10 messages (5 turns) to stay within 4096 token context
-        let recent = messages.suffix(10).filter { $0.role != .user || $0.id != messages.last(where: { $0.role == .user })?.id }
+        let recent = messages.suffix(10).filter { $0.role != .user || $0.id != lastUserID }
         let filtered = recent.filter { !$0.content.isEmpty || !$0.fileContent.isEmpty }
 
         guard !filtered.isEmpty else { return "" }

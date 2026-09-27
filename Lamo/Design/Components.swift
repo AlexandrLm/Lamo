@@ -24,10 +24,13 @@ extension View {
 // MARK: - Badge
 
 /// Tiny uppercase status capsule (e.g. "ACTIVE", "ON-DEVICE").
-struct Badge: View {
+struct Badge: View, Equatable {
     let text: String
     var tint: Color = LamoTheme.Colors.accent
     var foreground: Color = .black
+
+    // Color isn't Equatable — identity is the text (tint/foreground are static styling).
+    static func == (lhs: Badge, rhs: Badge) -> Bool { lhs.text == rhs.text }
 
     var body: some View {
         Text(text)
@@ -43,12 +46,17 @@ struct Badge: View {
 // MARK: - Chip
 
 /// Tinted pill with optional icon — the shared spec/value/metadata chip.
-struct Chip: View {
+struct Chip: View, Equatable {
     let text: String
     var icon: String? = nil
     var tint: Color = LamoTheme.Colors.accent
     var textColor: Color = LamoTheme.Colors.textHigh
     var font: Font = .system(size: 9, design: .monospaced)
+
+    // Color/Font aren't Equatable — identity is text+icon (styling is static per call site).
+    static func == (lhs: Chip, rhs: Chip) -> Bool {
+        lhs.text == rhs.text && lhs.icon == rhs.icon
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -169,23 +177,32 @@ struct ThumbRemoveButton: View {
 // MARK: - Meter Bar
 
 /// Progress track — unifies battery/storage/download bars.
-struct MeterBar: View {
+/// No GeometryReader: fill is a full-width capsule scaled by the clamped ratio,
+/// so N rows cost one layout pass with a fixed height instead of N measurements.
+struct MeterBar: View, Equatable {
     /// 0...1 fill ratio.
     let value: Double
     var tint: Color = LamoTheme.Colors.accent
     var height: CGFloat = 6
     var track: Color = LamoTheme.Colors.fillMedium
 
+    private var clamped: Double { min(max(value, 0), 1) }
+
+    // Color isn't Equatable — identity is value+height.
+    static func == (lhs: MeterBar, rhs: MeterBar) -> Bool {
+        lhs.value == rhs.value && lhs.height == rhs.height
+    }
+
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(track)
-                    .frame(height: height)
-                Capsule()
-                    .fill(tint)
-                    .frame(width: geo.size.width * min(max(value, 0), 1), height: height)
-            }
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(track)
+                .frame(height: height)
+            Capsule()
+                .fill(tint)
+                .frame(height: height)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .scaleEffect(x: clamped, anchor: .leading)
         }
         .frame(height: height)
     }
@@ -218,11 +235,29 @@ struct RowActionButton: View {
 // MARK: - Code Preview Block
 
 /// Expandable monospaced content block — unifies "PAGE CONTENT"/output previews.
-struct CodePreviewBlock: View {
+/// Stores a truncated preview up front; the full text is only rendered after
+/// the user taps "Show more" (lazy fullText), so long tool outputs don't
+/// inflate the layout pass while collapsed or previewed.
+struct CodePreviewBlock: View, Equatable {
     let title: String
     let text: String
     var tint: Color = LamoTheme.Colors.accent
     @State private var isExpanded = false
+    @State private var showFull = false
+
+    /// Chars shown before "Show more" appears.
+    static let previewLimit = 800
+
+    private var preview: String {
+        text.count > Self.previewLimit ? String(text.prefix(Self.previewLimit)) + "…" : text
+    }
+
+    private var isTruncated: Bool { text.count > Self.previewLimit }
+
+    // Color isn't Equatable — identity is title+text.
+    static func == (lhs: CodePreviewBlock, rhs: CodePreviewBlock) -> Bool {
+        lhs.title == rhs.title && lhs.text == rhs.text
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -245,18 +280,28 @@ struct CodePreviewBlock: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                Text(text)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(LamoTheme.Colors.textLow)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(LamoTheme.Colors.fillSubtle, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(LamoTheme.Colors.fillStrong.opacity(0.6), lineWidth: 0.5)
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(showFull ? text : preview)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(LamoTheme.Colors.textLow)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if isTruncated {
+                        Button(showFull ? String(localized: "Show less") : String(localized: "Show more")) {
+                            withAnimation(.easeInOut(duration: 0.2)) { showFull.toggle() }
+                        }
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(tint.opacity(0.7))
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(10)
+                .background(LamoTheme.Colors.fillSubtle, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(LamoTheme.Colors.fillStrong.opacity(0.6), lineWidth: 0.5)
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

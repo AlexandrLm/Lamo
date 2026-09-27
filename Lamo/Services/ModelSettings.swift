@@ -4,6 +4,10 @@ import Foundation
 /// No side effects — invalidation and validation are handled by ProviderManager.
 @MainActor
 final class ModelSettings {
+    /// In-memory cache for hot UserDefaults reads (temperature is read per
+    /// inference turn, systemPrompt per message build). Invalidated on set.
+    private var cachedTemperature: Double?
+    private var cachedSystemPrompt: String?
     var providerType: ProviderType {
         get { ProviderType(rawValue: AppDefaults.providerType.wrappedValue) ?? .litertLM }
         set { AppDefaults.providerType.wrappedValue = newValue.rawValue }
@@ -35,8 +39,16 @@ final class ModelSettings {
     }
 
     var temperature: Double {
-        get { AppDefaults.temperature.wrappedValue }
-        set { AppDefaults.temperature.wrappedValue = newValue }
+        get {
+            if let cached = cachedTemperature { return cached }
+            let value = AppDefaults.temperature.wrappedValue
+            cachedTemperature = value
+            return value
+        }
+        set {
+            cachedTemperature = newValue
+            AppDefaults.temperature.wrappedValue = newValue
+        }
     }
 
     var maxNumTokens: Int {
@@ -60,8 +72,35 @@ final class ModelSettings {
     }
 
     var systemPrompt: String {
-        get { AppDefaults.systemPrompt.wrappedValue }
-        set { AppDefaults.systemPrompt.wrappedValue = newValue }
+        get {
+            if let cached = cachedSystemPrompt { return cached }
+            let value = AppDefaults.systemPrompt.wrappedValue
+            cachedSystemPrompt = value
+            return value
+        }
+        set {
+            cachedSystemPrompt = newValue
+            AppDefaults.systemPrompt.wrappedValue = newValue
+        }
+    }
+
+    /// Batch KV-cache update — writes both defaults together so callers
+    /// (ProviderManager.kvCacheAuto) don't trigger two separate invalidations.
+    /// Returns true if either value actually changed.
+    @discardableResult
+    func setKVCache(auto: Bool, maxTokens: Int) -> Bool {
+        let autoChanged = AppDefaults.kvCacheAuto.wrappedValue != auto
+        let tokensChanged = AppDefaults.maxNumTokens.wrappedValue != maxTokens
+        guard autoChanged || tokensChanged else { return false }
+        AppDefaults.kvCacheAuto.wrappedValue = auto
+        AppDefaults.maxNumTokens.wrappedValue = maxTokens
+        return true
+    }
+
+    /// Drop in-memory caches (e.g. after AppDefaults.resetAll()).
+    func invalidateCache() {
+        cachedTemperature = nil
+        cachedSystemPrompt = nil
     }
 
     var thinkingMode: Bool {

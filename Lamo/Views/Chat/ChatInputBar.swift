@@ -22,26 +22,30 @@ struct ChatInputBar: View {
     let onStop: () -> Void
 
     @FocusState private var isTextFieldFocused: Bool
-    @Environment(\.colorScheme) private var colorScheme
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var sendCount = 0
     @State private var showAttachPanel = false
-    @ObservedObject private var provider = ProviderManager.shared
+    @State private var pickerTask: Task<Void, Never>?
+    /// Снапшот плейсхолдера — обновляется только по релевантным изменениям провайдера,
+    /// а не на каждый objectWillChange (иначе TextField ре-рендерился постоянно).
+    @State private var placeholderText: String = "Reply to Lamo"
 
-    /// Icon color on top of the accent fill — black on bright dark-mode teal,
-    /// white on the deeper light-mode teal.
-    private var onAccent: Color { colorScheme == .dark ? .black : .white }
+    /// Текст/вложения есть — без engineReady (его добавит тулбар со своим наблюдением).
+    private var hasContent: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !pendingImages.isEmpty
+            || !pendingFiles.isEmpty
+    }
 
-    /// Placeholder explains the current state instead of always saying "Reply".
-    private var placeholder: String {
-        if isStreaming { return "Generating…" }
-        if provider.selectedProviderType == .litertLM && provider.litertLMModelPath == nil {
+    private static func makePlaceholder() -> String {
+        let pm = ProviderManager.shared
+        if pm.selectedProviderType == .litertLM && pm.litertLMModelPath == nil {
             return "Download a model to start"
         }
-        if !provider.isEngineReady { return "Loading model…" }
+        if !pm.isEngineReady { return "Loading model…" }
         return "Reply to Lamo"
     }
 
@@ -51,25 +55,33 @@ struct ChatInputBar: View {
             if !pendingImages.isEmpty { pendingImagesRow }
             if !pendingFiles.isEmpty { pendingFilesRow }
 
-            TextField(placeholder, text: $text, axis: .vertical)
-                .lineLimit(1...8)
-                .font(.body)
-                .textFieldStyle(.plain)
-                .focused($isTextFieldFocused)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
+            InputFieldView(text: $text, placeholder: placeholderText, isFocused: $isTextFieldFocused)
 
             ThinDivider()
                 .padding(.horizontal, 12)
 
-            // Toolbar
-            HStack(spacing: 10) {
-                plusButton
-                thinkingButton
-                Spacer()
-                sendButton
-            }
+            InputToolbarView(
+                isStreaming: isStreaming,
+                hasContent: hasContent,
+                attachCount: pendingImages.count + pendingFiles.count,
+                showAttachPanel: $showAttachPanel,
+                sendCount: $sendCount,
+                onSend: {
+                    isTextFieldFocused = false
+                    showAttachPanel = false
+                    onSend()
+                },
+                onStop: onStop,
+                onCamera: {
+                    if CameraView.isAvailable {
+                        showCamera = true
+                    } else {
+                        showPhotoPicker = true
+                    }
+                },
+                onPhotos: { showPhotoPicker = true },
+                onFiles: { showFileImporter = true }
+            )
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
@@ -84,7 +96,14 @@ struct ChatInputBar: View {
         .padding(.horizontal, 5)
         .onDrop(of: [.image, .fileURL], delegate: ChatDropDelegate(pendingImages: $pendingImages, pendingFiles: $pendingFiles))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreaming)
-        .animation(.easeOut(duration: 0.15), value: canSend)
+        .animation(.easeOut(duration: 0.15), value: hasContent)
+        .onAppear { placeholderText = isStreaming ? "Generating…" : Self.makePlaceholder() }
+        .onChange(of: isStreaming) { _, streaming in
+            placeholderText = streaming ? "Generating…" : Self.makePlaceholder()
+        }
+        .onReceive(ProviderManager.shared.$isEngineReady) { _ in
+            if !isStreaming { placeholderText = Self.makePlaceholder() }
+        }
         .onChange(of: isTextFieldFocused) { _, focused in
             // Фокус в поле ввода вежливо закрывает панель вложений.
             if focused && showAttachPanel {
@@ -94,7 +113,13 @@ struct ChatInputBar: View {
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraView(onCapture: { pendingImages.append(PendingImage(image: $0)) })
+            CameraView(onCapture: { captured in
+                // Ресайз в фоне — полный кадр камеры (12МП) вешал main на ~200мс.
+                Task.detached(priority: .userInitiated) {
+                    let resized = captured.resizedForModel(maxDimension: ChatDropDelegate.maxImageDimension)
+                    await MainActor.run { pendingImages.append(PendingImage(image: resized)) }
+                }
+            })
                 .ignoresSafeArea()
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItems,
@@ -110,57 +135,32 @@ struct ChatInputBar: View {
         }
         .onChange(of: photoPickerItems) {
             guard !photoPickerItems.isEmpty else { return }
-            Task {
-                for item in photoPickerItems {
+            pickerTask?.cancel()
+            let items = photoPickerItems
+            pickerTask = Task {
+                for item in items {
+                    guard !Task.isCancelled else { break }
                     do {
                         if let data = try await item.loadTransferable(type: Data.self),
                            let image = UIImage(data: data) {
-                            pendingImages.append(PendingImage(image: image))
+                            // Декод + ресайз в фоне, append на main.
+                            let resized = await Task.detached(priority: .userInitiated) {
+                                image.resizedForModel(maxDimension: ChatDropDelegate.maxImageDimension)
+                            }.value
+                            guard !Task.isCancelled else { break }
+                            await MainActor.run { pendingImages.append(PendingImage(image: resized)) }
                         }
                     } catch {
                         LamoLogger.ui.error("Photo picker load failed: \(error)")
                     }
                 }
-                photoPickerItems = []
+                await MainActor.run { photoPickerItems = [] }
             }
         }
+        .onDisappear { pickerTask?.cancel() }
     }
 
-    // MARK: - Plus button + Attach panel
-
-    /// Компактная панель вложений: один ряд пилюль, минимум хрома.
-    /// Плюс морфится в крестик системной анимацией замены символа —
-    /// pivot всегда точный, в отличие от ручного rotationEffect.
-    private var plusButton: some View {
-        Button {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                showAttachPanel.toggle()
-            }
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: showAttachPanel ? "xmark" : "plus")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(LamoTheme.Colors.textHigh)
-                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .contentTransition(.symbolEffect(.replace))
-
-                let attachCount = pendingImages.count + pendingFiles.count
-                if attachCount > 0 {
-                    Text("\(attachCount)")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(onAccent)
-                        .frame(width: 16, height: 16)
-                        .background(LamoTheme.Colors.accent, in: Circle())
-                        .offset(x: 6, y: -6)
-                }
-            }
-        }
-        .buttonStyle(PressableScaleStyle(scale: 0.9))
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: showAttachPanel)
-        .accessibilityLabel(showAttachPanel ? "Close attachments" : "Attachments")
-        .animation(.spring(response: 0.32, dampingFraction: 0.8), value: showAttachPanel)
-    }
+    // MARK: - Attach panel
 
     private var attachPanel: some View {
         HStack(spacing: 8) {
@@ -211,96 +211,6 @@ struct ChatInputBar: View {
         .accessibilityLabel(title)
     }
 
-    // MARK: - Thinking button
-
-    /// Whether the current provider supports a thinking/reasoning mode.
-    private var thinkingSupported: Bool {
-        provider.selectedProviderType == .litertLM
-    }
-
-    private var thinkingButton: some View {
-        Button {
-            provider.thinkingMode.toggle()
-        } label: {
-            Image(systemName: provider.thinkingMode ? "brain.head.profile.fill" : "brain.head.profile")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(provider.thinkingMode
-                    ? LamoTheme.Colors.accent
-                    : thinkingSupported ? LamoTheme.Colors.textFaint : LamoTheme.Colors.textGhost)
-                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
-                .background(
-                    Circle()
-                        .fill(provider.thinkingMode
-                            ? LamoTheme.Colors.accent.opacity(0.2)
-                            : LamoTheme.Colors.fillSubtle)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(provider.thinkingMode
-                            ? LamoTheme.Colors.accent.opacity(0.6)
-                            : LamoTheme.Colors.fillStrong,
-                            lineWidth: 1.5)
-                )
-        }
-        .buttonStyle(.plain)
-        .contentShape(Circle())
-        .disabled(!thinkingSupported)
-        .opacity(thinkingSupported ? 1.0 : 0.4)
-        .accessibilityLabel("Thinking mode")
-    }
-    // MARK: - Send/Stop button
-
-    @ViewBuilder
-    private var sendButton: some View {
-        if isStreaming {
-            Button(action: onStop) {
-                Image(systemName: "stop.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(onAccent)
-                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
-                    .background(LamoTheme.Colors.accent, in: Circle())
-                    .shadow(color: LamoTheme.Colors.accent.opacity(colorScheme == .dark ? 0.4 : 0.25), radius: 6, y: 1)
-            }
-            .buttonStyle(.plain)
-            .transition(.scale.combined(with: .opacity))
-            .accessibilityLabel("Stop generation")
-        } else if canSend {
-            Button(action: {
-                sendCount += 1
-                isTextFieldFocused = false
-                showAttachPanel = false
-                onSend()
-            }) {
-                Image(systemName: "arrow.up")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(onAccent)
-                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
-                    .background(LamoTheme.Colors.accent, in: Circle())
-                    .shadow(color: LamoTheme.Colors.accent.opacity(colorScheme == .dark ? 0.4 : 0.25), radius: 6, y: 1)
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendCount)
-            .transition(.scale.combined(with: .opacity))
-            .accessibilityLabel("Send message")
-        } else {
-            Image(systemName: "arrow.up")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(LamoTheme.Colors.textFaint)
-                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
-                .background(LamoTheme.Colors.fillStrong, in: Circle())
-        }
-    }
-
-    // MARK: - Computed
-
-    private var canSend: Bool {
-        provider.isEngineReady
-            && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !pendingImages.isEmpty
-                || !pendingFiles.isEmpty)
-    }
-
-
     // MARK: - Pending Images Preview
 
     private var pendingImagesRow: some View {
@@ -339,6 +249,160 @@ struct ChatInputBar: View {
             .padding(.horizontal, 14)
             .padding(.top, pendingImages.isEmpty ? 10 : 4)
             .padding(.bottom, 4)
+        }
+    }
+}
+
+// MARK: - Input Field (без наблюдения за провайдером)
+
+/// Только TextField — не подписан на ProviderManager, поэтому ре-рендерится
+/// лишь при изменении текста/плейсхолдера/фокуса, а не на каждый чих движка.
+private struct InputFieldView: View {
+    @Binding var text: String
+    let placeholder: String
+    var isFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        TextField(placeholder, text: $text, axis: .vertical)
+            .lineLimit(1...8)
+            .font(.body)
+            .textFieldStyle(.plain)
+            .focused(isFocused)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+    }
+}
+
+// MARK: - Toolbar (единственный наблюдатель провайдера в баре)
+
+/// Плюс / thinking / send — весь ProviderManager-обсервинг живёт здесь,
+/// TextField выше его изменения не затрагивают.
+private struct InputToolbarView: View {
+    let isStreaming: Bool
+    let hasContent: Bool
+    let attachCount: Int
+    @Binding var showAttachPanel: Bool
+    @Binding var sendCount: Int
+    let onSend: () -> Void
+    let onStop: () -> Void
+    let onCamera: () -> Void
+    let onPhotos: () -> Void
+    let onFiles: () -> Void
+
+    @ObservedObject private var provider = ProviderManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var onAccent: Color { colorScheme == .dark ? .black : .white }
+    private var thinkingSupported: Bool { provider.selectedProviderType == .litertLM }
+    private var canSend: Bool { provider.isEngineReady && hasContent }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            plusButton
+            thinkingButton
+            Spacer()
+            sendButton
+        }
+        .animation(.easeOut(duration: 0.15), value: canSend)
+    }
+
+    private var plusButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                showAttachPanel.toggle()
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: showAttachPanel ? "xmark" : "plus")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(LamoTheme.Colors.textHigh)
+                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .contentTransition(.symbolEffect(.replace))
+                if attachCount > 0 {
+                    Text("\(attachCount)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(onAccent)
+                        .frame(width: 16, height: 16)
+                        .background(LamoTheme.Colors.accent, in: Circle())
+                        .offset(x: 6, y: -6)
+                }
+            }
+        }
+        .buttonStyle(PressableScaleStyle(scale: 0.9))
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: showAttachPanel)
+        .accessibilityLabel(showAttachPanel ? "Close attachments" : "Attachments")
+        .animation(.spring(response: 0.32, dampingFraction: 0.8), value: showAttachPanel)
+    }
+
+    private var thinkingButton: some View {
+        Button {
+            provider.thinkingMode.toggle()
+        } label: {
+            Image(systemName: provider.thinkingMode ? "brain.head.profile.fill" : "brain.head.profile")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(provider.thinkingMode
+                    ? LamoTheme.Colors.accent
+                    : thinkingSupported ? LamoTheme.Colors.textFaint : LamoTheme.Colors.textGhost)
+                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
+                .background(
+                    Circle()
+                        .fill(provider.thinkingMode
+                            ? LamoTheme.Colors.accent.opacity(0.2)
+                            : LamoTheme.Colors.fillSubtle)
+                )
+                .overlay(
+                    Circle()
+                        .stroke(provider.thinkingMode
+                            ? LamoTheme.Colors.accent.opacity(0.6)
+                            : LamoTheme.Colors.fillStrong,
+                            lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .disabled(!thinkingSupported)
+        .opacity(thinkingSupported ? 1.0 : 0.4)
+        .accessibilityLabel("Thinking mode")
+    }
+
+    @ViewBuilder
+    private var sendButton: some View {
+        if isStreaming {
+            Button(action: onStop) {
+                Image(systemName: "stop.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(onAccent)
+                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
+                    .background(LamoTheme.Colors.accent, in: Circle())
+                    .shadow(color: LamoTheme.Colors.accent.opacity(colorScheme == .dark ? 0.4 : 0.25), radius: 6, y: 1)
+            }
+            .buttonStyle(.plain)
+            .transition(.scale.combined(with: .opacity))
+            .accessibilityLabel("Stop generation")
+        } else if canSend {
+            Button(action: {
+                sendCount += 1
+                onSend()
+            }) {
+                Image(systemName: "arrow.up")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(onAccent)
+                    .frame(width: Constants.buttonSize, height: Constants.buttonSize)
+                    .background(LamoTheme.Colors.accent, in: Circle())
+                    .shadow(color: LamoTheme.Colors.accent.opacity(colorScheme == .dark ? 0.4 : 0.25), radius: 6, y: 1)
+            }
+            .buttonStyle(.plain)
+            .sensoryFeedback(.impact(flexibility: .rigid), trigger: sendCount)
+            .transition(.scale.combined(with: .opacity))
+            .accessibilityLabel("Send message")
+        } else {
+            Image(systemName: "arrow.up")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(LamoTheme.Colors.textFaint)
+                .frame(width: Constants.buttonSize, height: Constants.buttonSize)
+                .background(LamoTheme.Colors.fillStrong, in: Circle())
         }
     }
 }

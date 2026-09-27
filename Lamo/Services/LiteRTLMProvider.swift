@@ -52,22 +52,9 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     }
 
     func streamResponse(messages: [ChatMessage]) -> AsyncStream<StreamingToken> {
-        AsyncStream { continuation in
-            let provider = self
-            let task = Task {
-                await ToolCallReporter.shared.register(continuation: continuation)
-                await ToolCallReporter.shared.setConversationID(messages.first?.conversationID)
-                do {
-                    try await provider.runInference(messages: messages, continuation: continuation)
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    continuation.yield(.error(error))
-                }
-                await ToolCallReporter.shared.reset()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
+        let provider = self
+        return ProviderStream.makeStream(messages: messages) { msgs, continuation in
+            try await provider.runInference(messages: msgs, continuation: continuation)
         }
     }
 
@@ -79,32 +66,12 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         messages: [ChatMessage],
         continuation: AsyncStream<StreamingToken>.Continuation
     ) async throws {
-        let resolvedEngine: LiteRTLM.Engine
-        if let cached = engine {
-            resolvedEngine = cached
-        } else {
-            let resolvedPath: String
-            if let path = ProviderManager.resolveModelPath(custom: modelPath) {
-                resolvedPath = path
-            } else if modelPath != nil {
-                throw LiteRTLMError.modelNotFound(modelPath!)
-            } else if !FileManager.default.fileExists(atPath: ProviderManager.modelsDirectory.path) {
-                throw LiteRTLMError.modelsDirectoryMissing
-            } else {
-                throw LiteRTLMError.noModelFound
-            }
-            let backend: LiteRTLM.Backend = useGPU ? .gpu : .cpu(threadCount: cpuThreadCount)
-            let engineConfig = try LiteRTLM.EngineConfig(
-                modelPath: resolvedPath,
-                backend: backend,
-                visionBackend: .cpu(),
-                audioBackend: nil,
-                maxNumTokens: self.maxNumTokens,
-                cacheDir: NSTemporaryDirectory()
-            )
-            let newEngine = LiteRTLM.Engine(engineConfig: engineConfig)
-            try await newEngine.initialize()
-            resolvedEngine = newEngine
+        // The engine is owned by ProviderManager/EngineLifecycle. Lazily
+        // creating + initializing one here blocked the streaming path on
+        // model-load I/O and duplicated EngineLifecycle config — fail fast
+        // instead so the UI can show the real engine state.
+        guard let resolvedEngine = engine else {
+            throw LamoError.engineNotReady
         }
 
         // Extract last user message for semantic memory retrieval (RAG).
@@ -133,7 +100,10 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
             networkAvailable: networkAvailable
         )
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            continuation.finish()
+            return
+        }
         try await streamLastMessage(
             conversation: conversation,
             messages: messages,
@@ -172,6 +142,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         ) {
             guard !Task.isCancelled else {
                 try? conversation.cancel()
+                continuation.finish()
                 return
             }
             if let thought = chunk.channels["thought"], !thought.isEmpty {
@@ -183,12 +154,16 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
                 if repDetector.feed(text) {
                     try? conversation.cancel()
                     continuation.yield(.loopDetected)
+                    continuation.finish()
                     break
                 }
             }
         }
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            continuation.finish()
+            return
+        }
 
         // Capture benchmark data
         if let benchmarkInfo = try? conversation.getBenchmarkInfo() {
@@ -207,22 +182,27 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     }
 
     /// Build a LiteRTLM.Message from a ChatMessage.
+    /// Attached-file text is capped at 8000 chars — uncapped PDFs previously
+    /// blew the context window before the user prompt was even counted.
+    private static let maxFileChars = 8000
+
     private func buildLiteMessage(from msg: ChatMessage, role: LiteRTLM.Role) -> LiteRTLM.Message {
         if !msg.imagePaths.isEmpty {
             var contents: [LiteRTLM.Content] = msg.imagePaths.map { .imageFile($0) }
             if !msg.fileContent.isEmpty {
-                contents.append(.text("Content of attached files:\n\n\(msg.fileContent)"))
+                contents.append(.text("Content of attached files:\n\n\(msg.fileContent.prefix(Self.maxFileChars))"))
             }
             if !msg.content.isEmpty {
                 contents.append(.text(msg.content))
             }
             return LiteRTLM.Message(contents: contents)
         } else if !msg.fileContent.isEmpty {
+            let cappedFiles = String(msg.fileContent.prefix(Self.maxFileChars))
             let fullText: String
             if msg.content.isEmpty {
-                fullText = "Analyze the content of the attached files:\n\n\(msg.fileContent)"
+                fullText = "Analyze the content of the attached files:\n\n\(cappedFiles)"
             } else {
-                fullText = "Content of attached files:\n\n\(msg.fileContent)\n\n---\n\n\(msg.content)"
+                fullText = "Content of attached files:\n\n\(cappedFiles)\n\n---\n\n\(msg.content)"
             }
             return LiteRTLM.Message(fullText)
         } else {

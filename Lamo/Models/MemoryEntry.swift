@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class MemoryEntry {
+    #Index<MemoryEntry>([\.conversationID, \.timestamp])
+
     var id: UUID
     var text: String
     var conversationID: UUID
