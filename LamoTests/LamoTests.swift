@@ -2329,7 +2329,7 @@ struct AttachmentProcessorTests {
     }
 
     @Test func saveImagesToTmpEmpty() {
-        let paths = AttachmentProcessor.saveImagesToTmp([])
+        let paths = AttachmentProcessor.saveImages([])
         #expect(paths.isEmpty)
     }
 
@@ -2340,7 +2340,7 @@ struct AttachmentProcessorTests {
             UIColor.blue.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
         }
-        let paths = AttachmentProcessor.saveImagesToTmp([image])
+        let paths = AttachmentProcessor.saveImages([image])
         #expect(paths.count == 1)
         #expect(paths[0].hasSuffix(".jpg"))
         #expect(FileManager.default.fileExists(atPath: paths[0]))

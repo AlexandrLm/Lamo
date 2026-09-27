@@ -5,29 +5,13 @@ import UniformTypeIdentifiers
 import os
 
 /// Extracts readable text from various file formats for LLM consumption.
-enum FileContentExtractor {
+nonisolated enum FileContentExtractor {
     private static let logger = Logger(subsystem: LamoLogger.subsystem, category: "FileExtractor")
 
     /// Max characters to extract per file (to stay within token budget).
     static let maxCharsPerFile = 15_000
     /// Refuse to load files larger than this into memory.
     static let maxFileBytes = 5 * 1024 * 1024
-
-    private static let textExtensions: Set<String> = [
-        "txt", "md", "markdown", "rst", "log",
-        "swift", "m", "h", "c", "cpp", "cc", "hpp",
-        "py", "rb", "js", "ts", "jsx", "tsx",
-        "java", "kt", "kts", "go", "rs", "zig",
-        "sh", "bash", "zsh", "fish", "bat", "ps1",
-        "sql", "graphql", "gql",
-        "yaml", "yml", "toml", "ini", "cfg", "conf", "env",
-        "html", "htm", "css", "scss", "less", "svg",
-        "xml", "xhtml", "xsl",
-        "r", "lua", "pl", "php", "ex", "exs", "erl", "hs",
-        "makefile", "cmake", "gradle", "sbt",
-        "gitignore", "dockerfile", "dockerignore",
-        "v", "vhd", "vhdl", "sv",
-    ]
 
     /// Extract text content from a file URL.
     static func extract(from url: URL) async throws -> String {
@@ -48,13 +32,10 @@ enum FileContentExtractor {
             raw = try extractSpreadsheet(from: url)
         } else if url.pathExtension == "pptx" {
             raw = try extractPPTX(from: url)
-        } else if type.conforms(to: .json) {
-            raw = try readTextFile(from: url)
-        } else if type.conforms(to: .plainText) || isTextExtension(url.pathExtension) {
-            raw = try readTextFile(from: url)
-        } else if type.conforms(to: .xml) || type.conforms(to: .html) {
-            raw = try readTextFile(from: url)
         } else {
+            // Every remaining type is read as text: known text extensions are
+            // checked explicitly, unknown ones get one decoding attempt and a
+            // clear error if that fails.
             raw = try readTextFile(from: url)
         }
 
@@ -238,27 +219,73 @@ enum FileContentExtractor {
         return texts.joined(separator: " ")
     }
 
-    private static let sharedStringPattern: NSRegularExpression = {
-        (try? NSRegularExpression(pattern: "<si>.*?<t[^>]*>(.*?)</t>.*?</si>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
+    private static let sharedStringItemPattern: NSRegularExpression = {
+        (try? NSRegularExpression(pattern: "<si[^>]*>(.*?)</si>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
     }()
 
+    private static let sharedStringTextPattern: NSRegularExpression = {
+        (try? NSRegularExpression(pattern: "<t[^>]*>(.*?)</t>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
+    }()
+
+    /// One `<si>` element is ONE logical string and may contain several `<t>`
+    /// runs (formatting splits). Capturing only the first run silently truncates
+    /// such values, so concatenate every run inside the element.
     private static func parseSharedStrings(_ data: Data) -> [String] {
         guard let xml = String(data: data, encoding: .utf8) else { return [] }
         let range = NSRange(xml.startIndex..., in: xml)
-        return sharedStringPattern.matches(in: xml, range: range).compactMap { match -> String? in
+        return sharedStringItemPattern.matches(in: xml, range: range).compactMap { match -> String? in
             guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: xml) else { return nil }
-            return unescapeXML(String(xml[r]))
+            let item = String(xml[r])
+            let itemRange = NSRange(item.startIndex..., in: item)
+            let runs = sharedStringTextPattern.matches(in: item, range: itemRange).compactMap { run -> String? in
+                guard run.numberOfRanges > 1, let rr = Range(run.range(at: 1), in: item) else { return nil }
+                return String(item[rr])
+            }
+            let joined = unescapeXML(runs.joined())
+            return joined.isEmpty ? nil : joined
         }
     }
 
+    private static let xmlEntityPattern: NSRegularExpression = {
+        (try? NSRegularExpression(
+            pattern: "&(#x[0-9A-Fa-f]+|#[0-9]+|amp|lt|gt|quot|apos);",
+            options: []
+        )) ?? NSRegularExpression()
+    }()
+
+    /// Decode XML escapes exactly once. Chained `replacingOccurrences` calls
+    /// would turn `&amp;lt;` into `<` instead of the literal `&lt;`.
     private static func unescapeXML(_ text: String) -> String {
-        var out = text
-        out = out.replacingOccurrences(of: "&amp;", with: "&")
-        out = out.replacingOccurrences(of: "&lt;", with: "<")
-        out = out.replacingOccurrences(of: "&gt;", with: ">")
-        out = out.replacingOccurrences(of: "&quot;", with: "\"")
-        out = out.replacingOccurrences(of: "&apos;", with: "'")
-        return out
+        let matches = xmlEntityPattern.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        guard !matches.isEmpty else { return text }
+
+        var result = text
+        for match in matches.reversed() {
+            guard let full = Range(match.range(at: 0), in: result),
+                  let entityRange = Range(match.range(at: 1), in: result) else { continue }
+            let entity = String(result[entityRange])
+            let replacement: String
+            switch entity {
+            case "amp": replacement = "&"
+            case "lt": replacement = "<"
+            case "gt": replacement = ">"
+            case "quot": replacement = "\""
+            case "apos": replacement = "'"
+            default:
+                let value: UInt32?
+                if entity.hasPrefix("#x") {
+                    value = UInt32(entity.dropFirst(2), radix: 16)
+                } else if entity.hasPrefix("#") {
+                    value = UInt32(entity.dropFirst(), radix: 10)
+                } else {
+                    value = nil
+                }
+                guard let value, let scalar = UnicodeScalar(value) else { continue }
+                replacement = String(Character(scalar))
+            }
+            result.replaceSubrange(full, with: replacement)
+        }
+        return result
     }
 
     // MARK: - XLSX Helpers
@@ -267,7 +294,13 @@ enum FileContentExtractor {
         (try? NSRegularExpression(pattern: "<row[^>]*>(.*?)</row>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
     }()
     private static let xlsxCellPattern: NSRegularExpression = {
-        (try? NSRegularExpression(pattern: "<c[^>]*?(?:t=\"([^\"]*)\")?[^>]*>(?:<v>)?([^<]*)", options: [])) ?? NSRegularExpression()
+        (try? NSRegularExpression(pattern: "<c([^>]*)>(.*?)</c>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
+    }()
+    private static let xlsxValuePattern: NSRegularExpression = {
+        (try? NSRegularExpression(pattern: "<v[^>]*>(.*?)</v>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
+    }()
+    private static let xlsxInlineTextPattern: NSRegularExpression = {
+        (try? NSRegularExpression(pattern: "<t[^>]*>(.*?)</t>", options: [.dotMatchesLineSeparators])) ?? NSRegularExpression()
     }()
 
     private static func parseXLSXSheet(_ data: Data, sharedStrings: [String]) -> String {
@@ -280,15 +313,25 @@ enum FileContentExtractor {
             let rowRange2 = NSRange(rowXml.startIndex..., in: rowXml)
             let cells = xlsxCellPattern.matches(in: rowXml, range: rowRange2).compactMap { match -> String? in
                 guard match.numberOfRanges > 2,
-                      let r = Range(match.range(at: 2), in: rowXml) else { return nil }
-                var val = String(rowXml[r]).trimmingCharacters(in: .whitespacesAndNewlines)
-                // Shared-string cells (t="s") store an index into sharedStrings.xml.
-                if let tRange = Range(match.range(at: 1), in: rowXml),
-                   String(rowXml[tRange]) == "s",
-                   let idx = Int(val), idx >= 0, idx < sharedStrings.count {
-                    val = sharedStrings[idx]
+                      let attrsRange = Range(match.range(at: 1), in: rowXml),
+                      let innerRange = Range(match.range(at: 2), in: rowXml) else { return nil }
+                let attrs = String(rowXml[attrsRange])
+                let inner = String(rowXml[innerRange])
+                let rawValue = firstCapture(xlsxValuePattern, in: inner)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+                // Shared-string cell: <v> holds an index into sharedStrings.xml.
+                if attrs.contains("t=\"s\"") {
+                    guard let index = Int(rawValue), sharedStrings.indices.contains(index) else { return nil }
+                    return sharedStrings[index]
                 }
-                return val.isEmpty ? nil : val
+                // Inline string: text lives in <is><t>…</t></is>.
+                if attrs.contains("t=\"inlineStr\"") || attrs.contains("t=\"str\"") {
+                    let text = firstCapture(xlsxInlineTextPattern, in: inner)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return text.isEmpty ? nil : text
+                }
+                return rawValue.isEmpty ? nil : rawValue
             }
             if !cells.isEmpty {
                 rows.append(cells.joined(separator: "\t"))
@@ -297,16 +340,16 @@ enum FileContentExtractor {
         return rows.joined(separator: "\n")
     }
 
-    // MARK: - Text Extension Check
-
-    private static func isTextExtension(_ ext: String) -> Bool {
-        textExtensions.contains(ext.lowercased())
+    /// First capture group of the first match, or nil.
+    private static func firstCapture(_ pattern: NSRegularExpression, in text: String) -> String? {
+        guard let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              match.numberOfRanges > 1,
+              let r = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[r])
     }
 }
 
-// MARK: - Errors
-
-enum FileExtractorError: LocalizedError {
+nonisolated enum FileExtractorError: LocalizedError, Sendable {
     case unsupportedFormat(String)
     case fileTooLarge(String)
 
@@ -320,7 +363,7 @@ enum FileExtractorError: LocalizedError {
     }
 }
 
-private struct ZipArchive {
+nonisolated private struct ZipArchive {
     let data: Data
 
     /// Cached map of entry path → local header offset — avoids O(n²) traversal for repeated lookups.
@@ -408,12 +451,12 @@ private struct ZipArchive {
 }
 
 private extension Data {
-    func readUInt16(_ offset: Int) -> UInt16 {
+    nonisolated func readUInt16(_ offset: Int) -> UInt16 {
         guard offset >= 0, offset + 1 < count else { return 0 }
         return UInt16(self[offset]) | (UInt16(self[offset+1]) << 8)
     }
 
-    func readUInt32(_ offset: Int) -> UInt32 {
+    nonisolated func readUInt32(_ offset: Int) -> UInt32 {
         guard offset >= 0, offset + 3 < count else { return 0 }
         return UInt32(self[offset]) | (UInt32(self[offset+1]) << 8) | (UInt32(self[offset+2]) << 16) | (UInt32(self[offset+3]) << 24)
     }

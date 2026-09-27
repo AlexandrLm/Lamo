@@ -3,7 +3,7 @@ import UIKit
 extension UIImage {
     /// Resizes the image so its longest side does not exceed `maxDimension`.
     /// Returns `self` if already within bounds (no upscaling).
-    func resizedForModel(maxDimension: CGFloat) -> UIImage {
+    nonisolated func resizedForModel(maxDimension: CGFloat) -> UIImage {
         guard maxDimension > 0 else { return self }
         let longestSide = max(size.width, size.height)
         guard longestSide > maxDimension else { return self }

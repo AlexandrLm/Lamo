@@ -2,7 +2,7 @@ import Foundation
 import UniformTypeIdentifiers
 
 /// Represents a file attached to the current input, waiting to be sent.
-struct PendingFile: Identifiable, Equatable, Hashable {
+nonisolated struct PendingFile: Identifiable, Equatable, Hashable, Sendable {
     let id: UUID
     let url: URL
     let name: String
