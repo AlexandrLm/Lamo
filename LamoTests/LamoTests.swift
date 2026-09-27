@@ -337,6 +337,34 @@ struct ServicesTests {
         #expect(!result.included.isEmpty)
     }
 
+    @Test func contextTrackerChargesToolTokensAgainstTheBudget() {
+        // Tool schemas are sent on every turn. If they are not charged, a large
+        // tool set silently pushes the real request past the KV-cache limit.
+        let messages = (0..<6).map { i in
+            ChatMessage(id: UUID(), role: i.isMultiple(of: 2) ? .user : .assistant,
+                        content: "message \(i)")
+        }
+        var tokenCounts: [UUID: Int] = [:]
+        for msg in messages { tokenCounts[msg.id] = 200 }
+
+        let withoutTools = ContextTracker.calculateBudget(
+            messages: messages,
+            tokenCounts: tokenCounts,
+            systemPromptTokens: 100,
+            memoryTokens: 0,
+            maxNumTokens: 2048
+        )
+        let withTools = ContextTracker.calculateBudget(
+            messages: messages,
+            tokenCounts: tokenCounts,
+            systemPromptTokens: 100,
+            memoryTokens: 0,
+            toolTokens: 1000,
+            maxNumTokens: 2048
+        )
+        #expect(withoutTools.includedIDs.count > withTools.includedIDs.count)
+    }
+
     @Test func contextTrackerFormatTokens() {
         #expect(ContextTracker.formatTokens(0) == "0")
         #expect(ContextTracker.formatTokens(256) == "256")

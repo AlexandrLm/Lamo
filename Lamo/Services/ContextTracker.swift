@@ -93,15 +93,23 @@ struct ContextTracker {
     /// Calculate which messages fit in the KV-cache budget using real token counts.
     /// Walks messages most-recent-first, excluding the last message (sent separately).
     /// Returns included IDs, dropped messages, and whether summarization is recommended.
+    ///
+    /// `toolTokens` is part of the context that is sent on every turn, so it has
+    /// to be charged here too — otherwise a large tool schema silently pushes
+    /// the real request past the KV-cache limit.
     static func calculateBudget(
         messages: [ChatMessage],
         tokenCounts: [UUID: Int],
         systemPromptTokens: Int,
         memoryTokens: Int,
+        toolTokens: Int = 0,
         maxNumTokens: Int
     ) -> (includedIDs: Set<UUID>, dropped: [ChatMessage], needsSummary: Bool, usedTokens: Int) {
         let effective = max(maxNumTokens, 512)
-        let budget = max(0, effective - systemPromptTokens - memoryTokens - reservedForReply)
+        let budget = max(
+            0,
+            effective - systemPromptTokens - memoryTokens - toolTokens - reservedForReply
+        )
 
         var usedTokens = 0
         var includedIDs = Set<UUID>()
@@ -139,7 +147,12 @@ struct ContextTracker {
         maxNumTokens: Int
     ) -> ContextTracker {
         let effective = max(maxNumTokens, 512)
-        let budget = max(0, effective - systemPromptTokens - memoryTokens - reservedForReply)
+        // Same accounting as `calculateBudget`: tools are sent every turn and
+        // must be charged before deciding which history still fits.
+        let budget = max(
+            0,
+            effective - systemPromptTokens - memoryTokens - toolTokens - reservedForReply
+        )
 
         // Single reverse walk: resolve tokens, decide inclusion (most-recent
         // wins), accumulate in-context usage, and stage usages reversed.
@@ -232,6 +245,7 @@ struct ContextTracker {
         tokenCounts: [UUID: Int],
         systemPromptTokens: Int,
         memoryTokens: Int,
+        toolTokens: Int = 0,
         maxNumTokens: Int,
         reservedTokens: Int = 512
     ) -> (included: [ChatMessage], dropped: [ChatMessage], needsSummary: Bool) {
@@ -240,6 +254,7 @@ struct ContextTracker {
             tokenCounts: tokenCounts,
             systemPromptTokens: systemPromptTokens,
             memoryTokens: memoryTokens,
+            toolTokens: toolTokens,
             maxNumTokens: maxNumTokens
         )
 

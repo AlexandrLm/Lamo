@@ -101,63 +101,10 @@ struct ConversationBuilder {
         // The same block is counted by the tracker via currentTimeBlock().
         augmentedPrompt += Self.currentTimeBlock(messageCount: messages.count)
 
-        // --- Token budget calculation (real tokenizer, not char/4) ---
-        let effectiveMaxTokens = maxNumTokens ?? max(pm.maxNumTokens, 2048)
-        // systemPrompt already contains the memory context — counting memory
-        // separately here would subtract the same tokens twice and shrink the
-        // usable context (messages dropped earlier than needed).
-        let systemTokens = await pm.tokenizeCount(augmentedPrompt)
-
-        // Use ContextTracker for accurate message selection
-        let messageTokenCounts = await pm.tokenizeMessages(messages)
-        let budgetResult = ContextTracker.calculateIncluded(
-            messages: messages,
-            tokenCounts: messageTokenCounts,
-            systemPromptTokens: systemTokens,
-            // Memory is already inside systemTokens — never charge it twice.
-            memoryTokens: 0,
-            maxNumTokens: effectiveMaxTokens
-        )
-
-        // --- Auto-summarization when context is full ---
-        let includedMessages = budgetResult.included
-        if budgetResult.needsSummary,
-           !budgetResult.dropped.isEmpty {
-            if let summary = await summarizeOldContext(dropped: budgetResult.dropped) {
-                LamoLogger.engine.info("Auto-summary: \(budgetResult.dropped.count) messages → \(summary.count) chars")
-                // Inject summary into system prompt
-                augmentedPrompt += "\n\n<earlier_context_summary>\n\(summary)\n</earlier_context_summary>"
-                // Persist summary for future conversations
-                let conversationID = messages.first?.conversationID
-                if let conversationID {
-                    await MemoryService.shared.updateConversationSummary(summary, conversationID: conversationID)
-                }
-            }
-        }
-
-
-        await AgenticLoopBudget.shared.reset()
-
-        // --- Build LiteRT-LM messages ---
-        let systemMessage = LiteRTLM.Message(augmentedPrompt, role: .system)
-        var allMessages: [LiteRTLM.Message] = [systemMessage]
-
-        for msg in includedMessages {
-            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
-            if msg.role == .user && !msg.fileContent.isEmpty {
-                let fileContext = "Content of attached files:\n\n\(msg.fileContent.prefix(Self.maxFileChars))"
-                allMessages.append(LiteRTLM.Message(fileContext, role: .user))
-                if !msg.content.isEmpty {
-                    allMessages.append(LiteRTLM.Message(msg.content, role: .user))
-                }
-            } else {
-                allMessages.append(LiteRTLM.Message(msg.content, role: role))
-            }
-        }
-
-        // --- Create conversation ---
+        // --- Build tool list (needed before budgeting: tool schemas occupy
+        // context on every single turn) ---
         let samplerConfig = try buildSamplerConfig()
-        // Build tool list. Web tools only included when network is available.
+        // Web tools only included when network is available.
         var allTools: [LiteRTLM.Tool] = []
         if AppDefaults.toolGetLocation.wrappedValue { allTools.append(GetLocationTool()) }
         if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
@@ -187,6 +134,60 @@ struct ConversationBuilder {
         pm.lastToolTokens = toolDefTokens
         pm.lastToolCount = allTools.count
         pm.lastToolCountTotal = ToolDefinitions.allNames.count
+
+        // --- Token budget calculation (real tokenizer, not char/4) ---
+        let effectiveMaxTokens = maxNumTokens ?? max(pm.maxNumTokens, 2048)
+        // systemPrompt already contains the memory context — counting memory
+        // separately here would subtract the same tokens twice and shrink the
+        // usable context (messages dropped earlier than needed).
+        let systemTokens = await pm.tokenizeCount(augmentedPrompt)
+
+        // Use ContextTracker for accurate message selection
+        let messageTokenCounts = await pm.tokenizeMessages(messages)
+        let budgetResult = ContextTracker.calculateIncluded(
+            messages: messages,
+            tokenCounts: messageTokenCounts,
+            systemPromptTokens: systemTokens,
+            // Memory is already inside systemTokens — never charge it twice.
+            memoryTokens: 0,
+            toolTokens: toolDefTokens,
+            maxNumTokens: effectiveMaxTokens
+        )
+
+        // --- Auto-summarization when context is full ---
+        let includedMessages = budgetResult.included
+        if budgetResult.needsSummary,
+           !budgetResult.dropped.isEmpty {
+            if let summary = await summarizeOldContext(dropped: budgetResult.dropped) {
+                LamoLogger.engine.info("Auto-summary: \(budgetResult.dropped.count) messages → \(summary.count) chars")
+                // Inject summary into system prompt
+                augmentedPrompt += "\n\n<earlier_context_summary>\n\(summary)\n</earlier_context_summary>"
+                // Persist summary for future conversations
+                let conversationID = messages.first?.conversationID
+                if let conversationID {
+                    await MemoryService.shared.updateConversationSummary(summary, conversationID: conversationID)
+                }
+            }
+        }
+
+        await AgenticLoopBudget.shared.reset()
+
+        // --- Build LiteRT-LM messages ---
+        let systemMessage = LiteRTLM.Message(augmentedPrompt, role: .system)
+        var allMessages: [LiteRTLM.Message] = [systemMessage]
+
+        for msg in includedMessages {
+            let role: LiteRTLM.Role = (msg.role == .assistant) ? .model : .user
+            if msg.role == .user && !msg.fileContent.isEmpty {
+                let fileContext = "Content of attached files:\n\n\(msg.fileContent.prefix(Self.maxFileChars))"
+                allMessages.append(LiteRTLM.Message(fileContext, role: .user))
+                if !msg.content.isEmpty {
+                    allMessages.append(LiteRTLM.Message(msg.content, role: .user))
+                }
+            } else {
+                allMessages.append(LiteRTLM.Message(msg.content, role: role))
+            }
+        }
 
         // --- Accurate conversation tokens (real tokenizer, conservative fallback) ---
         // Fallback uses the shared estimator (ASCII ≈ 4 chars/token, CJK ≈ 1)
