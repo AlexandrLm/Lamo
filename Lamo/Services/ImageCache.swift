@@ -60,7 +60,7 @@ final class ImageCache: @unchecked Sendable {
     }
 
     /// Forces decode into a bitmap context so drawing later is cheap.
-    private static func decodedImage(_ image: UIImage) -> UIImage? {
+    nonisolated private static func decodedImage(_ image: UIImage) -> UIImage? {
         guard let cg = image.cgImage else { return nil }
         let w = cg.width, h = cg.height
         guard w > 0, h > 0 else { return nil }

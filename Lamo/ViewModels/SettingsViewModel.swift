@@ -1,6 +1,7 @@
 import Foundation
 import LiteRTLM
 import SwiftUI
+import os
 
 /// ViewModel for the settings screen. Manages all LiteRT-LM parameters.
 @MainActor
@@ -114,8 +115,10 @@ final class SettingsViewModel {
     private var modelInfoTask: Task<Void, Never>?
 
     /// Shared cache — Capabilities(modelPath:) + stat hit disk + native init.
-    private static var modelInfoCache: [String: ModelInfo] = [:]
-    private static let modelInfoCacheLock = NSLock()
+    /// Lock-protected value storage: `OSLock` is not callable from async contexts.
+    private static let modelInfoCache = OSAllocatedUnfairLock(
+        initialState: [String: ModelInfo]()
+    )
 
     // MARK: - Init
 
@@ -135,9 +138,7 @@ final class SettingsViewModel {
             modelInfo = nil
             return
         }
-        Self.modelInfoCacheLock.lock()
-        let cached = Self.modelInfoCache[path]
-        Self.modelInfoCacheLock.unlock()
+        let cached = Self.modelInfoCache.withLock { $0[path] }
         if let cached {
             modelInfo = cached
             return
@@ -150,9 +151,7 @@ final class SettingsViewModel {
             let info = await Task.detached { ModelInfo.from(path: pathCopy) }.value
             guard let self, !Task.isCancelled else { return }
             guard let info else { return }
-            Self.modelInfoCacheLock.lock()
-            Self.modelInfoCache[pathCopy] = info
-            Self.modelInfoCacheLock.unlock()
+            Self.modelInfoCache.withLock { $0[pathCopy] = info }
             // Ignore stale results after a rapid re-selection.
             guard self.selectedModel == pathCopy else { return }
             self.modelInfo = info
@@ -187,12 +186,12 @@ final class SettingsViewModel {
 
 // MARK: - Model Info
 
-struct ModelInfo: Hashable, Sendable {
+nonisolated struct ModelInfo: Hashable, Sendable {
     let name: String
     let fileSize: Int64
     let hasSpeculativeDecoding: Bool
 
-    static func from(path: String) -> ModelInfo? {
+    nonisolated static func from(path: String) -> ModelInfo? {
         let fileSize: Int64
         if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
            let size = attrs[.size] as? Int64 {
@@ -205,7 +204,7 @@ struct ModelInfo: Hashable, Sendable {
         let hasSpecDecoding = caps?.hasSpeculativeDecodingSupport() ?? false
 
         return ModelInfo(
-            name: ProviderManager.displayName(forModelPath: path),
+            name: ModelDiscovery.displayName(forModelPath: path),
             fileSize: fileSize,
             hasSpeculativeDecoding: hasSpecDecoding
         )

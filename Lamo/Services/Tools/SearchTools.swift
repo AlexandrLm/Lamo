@@ -186,7 +186,7 @@ struct FetchUrlTool: Tool {
 
     /// Frame fetched content as untrusted so a page cannot pose as a user/system
     /// instruction ("ignore previous instructions…").
-    static func wrapUntrusted(_ content: String) -> String {
+    nonisolated static func wrapUntrusted(_ content: String) -> String {
         "<tool_result source=\"web\" trust=\"untrusted\">\n\(content)\n</tool_result>"
     }
 

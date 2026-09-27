@@ -184,7 +184,7 @@ struct HTMLPreviewView: View {
             }
     }
 
-    private static func wrapHTML(_ raw: String, dark: Bool) -> String {
+    nonisolated private static func wrapHTML(_ raw: String, dark: Bool) -> String {
         if raw.lowercased().contains("<html") || raw.lowercased().contains("<!doctype") {
             return injectAdaptiveStyles(raw, dark: dark)
         }
@@ -240,7 +240,7 @@ struct HTMLPreviewView: View {
         """
     }
 
-    private static func injectAdaptiveStyles(_ raw: String, dark: Bool) -> String {
+    nonisolated private static func injectAdaptiveStyles(_ raw: String, dark: Bool) -> String {
         let style: String
         if dark {
             style = "<style>:root{color-scheme:dark}body{font-family:-apple-system,sans-serif;background:#141414!important;color:#e5e5e7!important;padding:14px 16px;line-height:1.6}a{color:#64d2ff!important}img,video,svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{border:1px solid #3a3a3c;padding:8px 12px}th{background:#2c2c2e}code,pre{font-family:'SF Mono',Menlo,monospace}pre{background:#000;border:1px solid #333;border-radius:10px;padding:12px;overflow-x:auto}</style>"

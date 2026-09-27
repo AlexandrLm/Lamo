@@ -86,7 +86,7 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         )
         let networkAvailable = Self.checkNetworkAvailable()
 
-        var builder = ConversationBuilder(
+        let builder = ConversationBuilder(
             engine: resolvedEngine,
             modelPath: modelPath,
             useGPU: useGPU,

@@ -37,7 +37,8 @@ struct ContextBarView: View {
 /// Full context breakdown — presented as a sheet from the chat.
 struct ContextDetailView: View {
     let tracker: ContextTracker?
-    @State private var metrics = SystemMetrics.snapshot()
+    /// Placeholder until the first off-actor sample arrives in `.task`.
+    @State private var metrics = SystemMetrics.snapshot(modelName: "", backend: "")
     /// Tape segment highlighted together with its breakdown row.
     @State private var selectedSegment: MapSegment?
 
@@ -66,8 +67,17 @@ struct ContextDetailView: View {
                 // Таймер через structured concurrency + снапшот в фоне —
                 // раньше Timer дёргал task_info/host_statistics на main каждые 5с.
                 while !Task.isCancelled {
-                    let snap = await Task.detached(priority: .utility) { SystemMetrics.snapshot() }.value
-                    await MainActor.run { metrics = snap }
+                    // UIKit battery + provider state must be read on the main
+                    // actor; only the mach sampling happens off-actor.
+                    let model = ProviderManager.shared.currentModelDisplayName
+                    let name = model.isEmpty ? String(localized: "None") : model
+                    let backend = AppDefaults.useGPU.wrappedValue
+                        ? String(localized: "GPU")
+                        : String(localized: "CPU×\(AppDefaults.cpuThreadCount.wrappedValue)")
+                    let snap = await Task.detached(priority: .utility) {
+                        SystemMetrics.snapshot(modelName: name, backend: backend)
+                    }.value
+                    metrics = snap
                     try? await Task.sleep(for: .seconds(5))
                 }
             }
@@ -639,7 +649,8 @@ private struct BreakdownRowContent: View, Equatable {
 // MARK: - System Metrics
 
 /// Live system metrics for the context detail sheet.
-struct SystemMetrics {
+/// A plain value type so it can be produced off the main actor and handed back.
+struct SystemMetrics: Sendable {
     let memoryUsedMB: Double
     let cpuPercent: Double
     let thermalState: ProcessInfo.ThermalState
@@ -648,7 +659,7 @@ struct SystemMetrics {
     let modelName: String
     let backend: String
 
-    static func snapshot() -> SystemMetrics {
+    nonisolated static func snapshot(modelName: String, backend: String) -> SystemMetrics {
         // Memory
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / 4)
@@ -675,27 +686,20 @@ struct SystemMetrics {
             if total > 0 { cpu = ((user + sys + nice) / total) * 100 }
         }
 
-        // Battery
-        UIDevice.current.isBatteryMonitoringEnabled = true
-        let batt = UIDevice.current.batteryLevel
-        let charging = UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full
-
-        // Model
-        let pm = ProviderManager.shared
-        let modelName: String = {
-            let name = pm.currentModelDisplayName
-            return name.isEmpty ? String(localized: "None") : name
-        }()
-        let gpu = AppDefaults.useGPU.wrappedValue
-        let backend = gpu
-            ? String(localized: "GPU")
-            : String(localized: "CPU×\(AppDefaults.cpuThreadCount.wrappedValue)")
+        // Battery state is UIKit state — read it on the main actor.
+        let battery = MainActor.assumeIsolated { () -> (Float, Bool) in
+            UIDevice.current.isBatteryMonitoringEnabled = true
+            let level = UIDevice.current.batteryLevel
+            let charging = UIDevice.current.batteryState == .charging
+                || UIDevice.current.batteryState == .full
+            return (level, charging)
+        }
 
         return SystemMetrics(
             memoryUsedMB: memMB, cpuPercent: cpu,
             thermalState: ProcessInfo.processInfo.thermalState,
-            batteryLevel: batt < 0 ? 1.0 : batt,
-            batteryCharging: charging,
+            batteryLevel: battery.0 < 0 ? 1.0 : battery.0,
+            batteryCharging: battery.1,
             modelName: modelName, backend: backend
         )
     }

@@ -3,24 +3,27 @@ import LiteRTLM
 import os
 
 /// Token budget calculation and tokenization with caching.
-@MainActor
-final class TokenBudget {
+///
+/// All mutable state lives inside lock-protected value types, so the class is
+/// safe to use from any actor; it is explicitly `nonisolated` to keep the
+/// tokenizer off the main actor.
+nonisolated final class TokenBudget {
     /// Tokenization cache — avoids re-tokenizing unchanged messages.
     /// Key: (hashValue, count) pair instead of the full string, so the cache
     /// doesn't retain every message body. Bounded at 500 entries (FIFO evict).
     /// State is held inside OSAllocatedUnfairLock for async-safe access.
-    private struct CacheKey: Hashable {
+    nonisolated private struct CacheKey: Hashable {
         let hash: Int
         let count: Int
     }
-    private struct CacheState {
+    nonisolated private struct CacheState {
         var values: [CacheKey: Int] = [:]
         var order: [CacheKey] = []
     }
-    private static let maxCacheEntries = 500
+    nonisolated private static let maxCacheEntries = 500
     private let tokenCacheLock = OSAllocatedUnfairLock(initialState: CacheState())
 
-    private static func cacheKey(for text: String) -> CacheKey {
+    nonisolated private static func cacheKey(for text: String) -> CacheKey {
         CacheKey(hash: text.hashValue, count: text.count)
     }
 

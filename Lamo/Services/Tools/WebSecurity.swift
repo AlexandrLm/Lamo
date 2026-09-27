@@ -80,7 +80,7 @@ nonisolated enum SecureURLPolicy {
         guard let host = url.host?.lowercased(), !host.isEmpty else { return }
         // A literal IP needs no resolution.
         if isPrivateIPv4(host) || host.contains(":") { return }
-        try await Task.checkCancellation()
+        try Task.checkCancellation()
         try validateDNSResolution(of: host)
     }
 

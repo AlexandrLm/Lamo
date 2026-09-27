@@ -271,7 +271,7 @@ final class ProviderManager: ObservableObject {
         return value
     }
 
-    static var modelsDirectory: URL { ModelDiscovery.modelsDirectory }
+    nonisolated static var modelsDirectory: URL { ModelDiscovery.modelsDirectory }
     static func displayName(forModelPath path: String) -> String { ModelDiscovery.displayName(forModelPath: path) }
     static func resolveModelPath(custom: String? = nil) -> String? { ModelDiscovery.resolveModelPath(custom: custom) }
     static func findFirstModel() -> String? { ModelDiscovery.findFirstModel() }

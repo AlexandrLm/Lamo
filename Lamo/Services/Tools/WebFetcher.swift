@@ -65,7 +65,7 @@ actor WebFetcher {
             return try await existing.value
         }
         let task = Task<PageMetadata, Error> {
-            defer { stateLock.withLock { $0.inFlight.removeValue(forKey: cacheKey) } }
+            defer { _ = stateLock.withLock { $0.inFlight.removeValue(forKey: cacheKey) } }
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 Task { await WebFetcher.shared.enqueue(continuation) }
             }
@@ -426,7 +426,7 @@ actor WebFetcher {
 
 // MARK: - Types
 
-struct PageMetadata {
+nonisolated struct PageMetadata: Sendable {
     let title: String?
     let description: String?
     let contentType: String?

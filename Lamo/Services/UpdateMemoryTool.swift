@@ -71,7 +71,7 @@ struct UpdateMemoryTool: Tool {
         }
 
         if includeExisting {
-            let allFacts = await MemoryService.shared.allFactTexts()
+            let allFacts = MemoryService.shared.allFactTexts()
             if allFacts.isEmpty {
                 result["existing_facts"] = []
                 result["note"] = "No facts stored yet."

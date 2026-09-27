@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-enum LamoLogger {
+nonisolated enum LamoLogger {
     /// Centralized subsystem identifier. Uses CFBundle to avoid @MainActor isolation.
     nonisolated static let subsystem: String = {
         if let id = CFBundleGetIdentifier(CFBundleGetMainBundle()) as String? {

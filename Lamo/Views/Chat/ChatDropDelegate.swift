@@ -51,7 +51,7 @@ struct ChatDropDelegate: DropDelegate {
         DropProposal(operation: .copy)
     }
 
-    static let maxImageDimension: CGFloat = 1024
+    nonisolated static let maxImageDimension: CGFloat = 1024
     /// Keep drops consistent with the photo picker limit.
     static let maxImages = 5
 }
