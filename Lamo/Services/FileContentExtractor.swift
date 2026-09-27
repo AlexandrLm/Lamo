@@ -347,6 +347,20 @@ nonisolated enum FileContentExtractor {
               let r = Range(match.range(at: 1), in: text) else { return nil }
         return String(text[r])
     }
+    // MARK: - Test Hooks
+    // Exposed for unit tests; the parsing helpers are private otherwise.
+
+    static func parseSharedStringsForTesting(_ data: Data) -> [String] {
+        parseSharedStrings(data)
+    }
+
+    static func unescapeXMLForTesting(_ text: String) -> String {
+        unescapeXML(text)
+    }
+
+    static func parseSpreadsheetForTesting(sharedStringsXML: Data, sheetXML: Data) -> String {
+        parseXLSXSheet(sheetXML, sharedStrings: parseSharedStrings(sharedStringsXML))
+    }
 }
 
 nonisolated enum FileExtractorError: LocalizedError, Sendable {

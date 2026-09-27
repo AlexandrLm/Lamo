@@ -11,6 +11,16 @@
 		1FE3249B2FF0080E00681741 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 1FE324982FF0080E00681741 /* Markdown */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		C0DEC0DE0000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1FE323662FEFFCAE00681741 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1FE3236D2FEFFCAE00681741;
+			remoteInfo = Lamo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		1FE3236E2FEFFCAE00681741 /* Lamo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lamo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FE3441C872FEFFCAE00681741 /* LamoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LamoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -104,6 +114,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				C0DEC0DE0000000000000004 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2FE3638C062FEFFCAE00681741 /* LamoTests */,
@@ -185,6 +196,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C0DEC0DE0000000000000004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1FE3236D2FEFFCAE00681741 /* Lamo */;
+			targetProxy = C0DEC0DE0000000000000003 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1FE323772FEFFCAF00681741 /* Debug */ = {

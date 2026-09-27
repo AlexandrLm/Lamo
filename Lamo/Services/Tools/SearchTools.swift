@@ -93,7 +93,8 @@ struct WebSearchTool: Tool {
                 guard let urlStr = sr["url"], let url = URL(string: urlStr) else { continue }
                 group.addTask {
                     if let content = try? await WebFetcher.fetch(url: url) {
-                        return (i, SearchResultCompactor.cutAtBoundary(content, maxChars: 900))
+                        let excerpt = SearchResultCompactor.cutAtBoundary(content, maxChars: 900)
+                        return (i, FetchUrlTool.wrapUntrusted(excerpt))
                     }
                     return (i, "")
                 }
@@ -121,7 +122,7 @@ struct FetchUrlTool: Tool {
     static let name = ToolDefinitions.FetchURL.name
     static let description = ToolDefinitions.FetchURL.description
 
-    @ToolParam(description: "Full URL starting with http:// or https:// — copy it exactly from a search result or the user's message.")
+    @ToolParam(description: "Full secure URL starting with https:// — copy it exactly from a search result or the user's message.")
     var url: String
 
     func run() async throws -> Any {
@@ -131,37 +132,62 @@ struct FetchUrlTool: Tool {
             return notice
         }
 
-        guard let fetchURL = URL(string: url), let scheme = fetchURL.scheme, scheme.hasPrefix("http") else {
-            let err: [String: Any] = [
-                "error": String(localized: "Invalid URL: '\(url)'"),
-                "hint": "The URL is malformed. Copy the exact URL (including https://) from the search results or the user's message and retry once.",
-            ]
-            await ToolCallReporter.shared.reportResult(name: Self.name, result: err)
-            return err
+        // Only public https:// pages. A model-chosen URL must never reach the
+        // router, a LAN service, or a loopback/metadata address.
+        guard let fetchURL = URL(string: url) else {
+            return await reject("Invalid URL: '\(url)'", hint: "The URL is malformed. Copy the exact URL (including https://) from the search results or the user's message and retry once.")
+        }
+        do {
+            try SecureURLPolicy.validate(fetchURL)
+            try await SecureURLPolicy.validateResolvedAddresses(of: fetchURL)
+        } catch {
+            return await reject(
+                "Blocked URL: '\(url)'",
+                hint: "Only public https:// pages can be fetched. Use a link from the search results instead."
+            )
         }
 
         // Single cache: WebFetcher's internal NSCache (TTL + in-flight dedup).
         // URLCacheStore is intentionally not used here to avoid double caching.
         do {
             let result = try await WebFetcher.fetchStructured(url: fetchURL)
+            // Redirects are followed inside URLSession, so re-check where we
+            // actually ended up before trusting the payload.
+            if let finalURL = result.finalURL {
+                try SecureURLPolicy.validate(finalURL)
+            }
             var output: [String: Any] = [:]
             if let title = result.title, !title.isEmpty { output["title"] = title }
             if let description = result.description, !description.isEmpty { output["description"] = description }
             if let contentType = result.contentType { output["type"] = contentType }
-            output["content"] = await budgetedContent(result.content)
+            // Fetched page text is attacker-controlled data, not instructions.
+            output["content"] = Self.wrapUntrusted(await budgetedContent(result.content))
             output["url"] = url
 
             let limited = await AgenticLoopBudget.shared.limitResult(output)
             await ToolCallReporter.shared.reportResult(name: Self.name, result: limited)
             return limited
         } catch {
-            let err: [String: Any] = [
-                "error": String(localized: "Failed to fetch the page: \(error.localizedDescription)"),
-                "hint": "The page could not be loaded (site down, blocked, or no internet). Try a different URL from the search results instead.",
-            ]
-            await ToolCallReporter.shared.reportResult(name: Self.name, result: err)
-            return err
+            return await reject(
+                "Failed to fetch the page: \(error.localizedDescription)",
+                hint: "The page could not be loaded (site down, blocked, or no internet). Try a different URL from the search results instead."
+            )
         }
+    }
+
+    private func reject(_ error: String, hint: String) async -> [String: Any] {
+        let err: [String: Any] = [
+            "error": String(localized: "\(error)"),
+            "hint": hint,
+        ]
+        await ToolCallReporter.shared.reportResult(name: Self.name, result: err)
+        return err
+    }
+
+    /// Frame fetched content as untrusted so a page cannot pose as a user/system
+    /// instruction ("ignore previous instructions…").
+    static func wrapUntrusted(_ content: String) -> String {
+        "<tool_result source=\"web\" trust=\"untrusted\">\n\(content)\n</tool_result>"
     }
 
     /// Trim page text to the current token budget at a sentence boundary, keeping

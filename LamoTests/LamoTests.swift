@@ -860,14 +860,17 @@ struct ServicesTests {
     // MARK: LamoError
 
     @Test func lamoErrorDescriptions() {
+        // Descriptions are localized, so assert on the interpolated payload and
+        // on the localized text itself rather than on English wording.
         #expect(LamoError.modelNotFound("path").errorDescription?.contains("path") ?? false)
         #expect(LamoError.engineInitFailed("reason").errorDescription?.contains("reason") ?? false)
         #expect(LamoError.modelCorrupted("corrupt").errorDescription?.contains("corrupt") ?? false)
         #expect(LamoError.insufficientMemory(available: 2.0, required: 4.0).errorDescription?.contains("2.0") ?? false)
-        #expect(LamoError.insufficientDiskSpace.errorDescription?.contains("storage") ?? false)
+        #expect(LamoError.insufficientDiskSpace.errorDescription == String(localized: "Not enough storage. Free up at least 1 GB."))
         #expect(LamoError.modelTooSmall(0.5).errorDescription?.contains("0.50") ?? false)
-        #expect(LamoError.noModelAvailable.errorDescription?.contains("No model") ?? false)
-        #expect(LamoError.modelStuckInLoop.errorDescription?.contains("loop") ?? false)
+        #expect(LamoError.noModelAvailable.errorDescription == String(localized: "No model available. Download a model in Settings."))
+        #expect(LamoError.modelStuckInLoop.errorDescription == String(localized: "Model stuck in a loop. Try rephrasing your message or adjusting temperature in Settings."))
+        #expect(LamoError.engineNotReady.errorDescription?.isEmpty == false)
     }
 
 
@@ -887,6 +890,9 @@ struct ServicesTests {
     // MARK: KeychainHelper
 
     @Test func keychainHelperSaveLoadDelete() {
+        // Unsigned test hosts (CODE_SIGNING_ALLOWED=NO) have no Keychain
+        // entitlement at all, so the assertions below cannot run there.
+        guard KeychainHelper.isKeychainAvailable() else { return }
         let key = "test_key_\(UUID().uuidString)"
         KeychainHelper.save(key: key, value: "secret_value")
         let loaded = KeychainHelper.load(key: key)

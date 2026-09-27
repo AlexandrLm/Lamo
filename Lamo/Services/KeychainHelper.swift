@@ -100,6 +100,20 @@ nonisolated enum KeychainHelper {
         }
     }
 
+    /// Test hook: true when the process can actually use the Keychain.
+    /// Unsigned simulator/CI test hosts get `errSecMissingEntitlement` (-34018)
+    /// or `errSecNotAvailable` (-25291) and must skip Keychain assertions.
+    nonisolated static func isKeychainAvailable() -> Bool {
+        let probe = "lamo_keychain_probe"
+        do {
+            try saveChecked(key: probe, value: "1")
+            defer { try? deleteChecked(key: probe) }
+            return try loadChecked(key: probe) == "1"
+        } catch {
+            return false
+        }
+    }
+
     private static func identityQuery(key: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,

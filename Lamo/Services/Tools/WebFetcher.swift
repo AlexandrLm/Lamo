@@ -42,6 +42,9 @@ actor WebFetcher {
     private static let contentCacheTTL: TimeInterval = 1800 // 30 min
     private static let maxDownloadBytes = 2_000_000 // 2 MB — refuse huge files before parsing
 
+    /// Ephemeral session: no shared cookies/credential store, bounded timeouts.
+    private static let session: URLSession = SecureURLPolicy.makeSession()
+
     /// Fetch a URL and return plain text content.
     static func fetch(url: URL) async throws -> String {
         let result = try await fetchStructured(url: url)
@@ -55,7 +58,7 @@ actor WebFetcher {
         let cacheKey = url.absoluteString
         if let cached = contentCache.object(forKey: cacheKey as NSString),
            Date().timeIntervalSince(cached.timestamp) < contentCacheTTL {
-            return PageMetadata(title: nil, description: nil, contentType: nil, content: cached.content)
+            return PageMetadata(title: nil, description: nil, contentType: nil, content: cached.content, finalURL: url)
         }
         // In-flight dedup: join the existing task if present.
         if let existing = stateLock.withLock({ $0.inFlight[cacheKey] }) {
@@ -137,13 +140,17 @@ actor WebFetcher {
     }
 
     private static func fetchOnceStructured(url: URL) async throws -> PageMetadata {
+        // Defence in depth: the tool validates first, but every fetch goes
+        // through here, so this is the last place a private address can slip in.
+        try SecureURLPolicy.validate(url)
+
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,application/pdf;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
-        request.timeoutInterval = 15
+        request.timeoutInterval = SecureURLPolicy.requestTimeout
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw FetchError.badStatus((response as? HTTPURLResponse)?.statusCode ?? -1)
@@ -151,6 +158,10 @@ actor WebFetcher {
         guard data.count <= maxDownloadBytes else {
             throw FetchError.tooLarge(data.count)
         }
+        // URLSession follows redirects transparently; re-validate the hop we
+        // actually landed on.
+        let finalURL = http.url ?? url
+        try SecureURLPolicy.validate(finalURL)
 
         let mimeType = http.mimeType ?? ""
         let isPDF = mimeType.contains("pdf") || url.pathExtension == "pdf"
@@ -158,11 +169,13 @@ actor WebFetcher {
             #if canImport(PDFKit)
             if let pdfText = extractPDFText(from: data) {
                 let truncated = truncateContent(pdfText, maxLength: 4000)
-                return PageMetadata(title: url.lastPathComponent, description: nil, contentType: "pdf", content: truncated)
+                return PageMetadata(title: url.lastPathComponent, description: nil, contentType: "pdf",
+                                    content: truncated, finalURL: finalURL)
             }
             #endif
             return PageMetadata(title: url.lastPathComponent, description: nil, contentType: "pdf",
-                                content: String(localized: "[PDF — text extraction failed: \(url.absoluteString)]"))
+                                content: String(localized: "[PDF — text extraction failed: \(url.absoluteString)]"),
+                                finalURL: finalURL)
         }
 
         // Plain text, JSON, XML — return as-is
@@ -176,12 +189,12 @@ actor WebFetcher {
                    let pretty = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
                    let prettyStr = String(data: pretty, encoding: .utf8) {
                     return PageMetadata(title: url.lastPathComponent, description: nil, contentType: "json",
-                                        content: truncateContent(prettyStr, maxLength: 4000))
+                                        content: truncateContent(prettyStr, maxLength: 4000), finalURL: finalURL)
                 }
             }
             return PageMetadata(title: url.lastPathComponent, description: nil,
                                 contentType: mimeType.isEmpty ? "text" : mimeType,
-                                content: truncateContent(text, maxLength: 4000))
+                                content: truncateContent(text, maxLength: 4000), finalURL: finalURL)
         }
 
         guard let html = String(data: data, encoding: .utf8) ??
@@ -202,7 +215,8 @@ actor WebFetcher {
             title: metadata.title,
             description: metadata.description,
             contentType: metadata.contentType,
-            content: truncateContent(content, maxLength: 4000)
+            content: truncateContent(content, maxLength: 4000),
+            finalURL: finalURL
         )
     }
 
@@ -417,6 +431,17 @@ struct PageMetadata {
     let description: String?
     let contentType: String?
     let content: String
+    /// Where the request ended up after redirects — re-validated by the caller
+    /// so a redirect cannot walk into the local network.
+    let finalURL: URL?
+
+    init(title: String?, description: String?, contentType: String?, content: String, finalURL: URL? = nil) {
+        self.title = title
+        self.description = description
+        self.contentType = contentType
+        self.content = content
+        self.finalURL = finalURL
+    }
 }
 
 enum FetchError: LocalizedError {
