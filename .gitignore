@@ -22,4 +22,3 @@ Packages/*/.build/
 # Project specific
 .mimocode
 all_swift_files.txt
-Packages/LiteRT-LM
