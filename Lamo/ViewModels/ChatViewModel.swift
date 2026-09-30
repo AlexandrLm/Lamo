@@ -368,9 +368,7 @@ final class ChatViewModel {
         return str
     }
 
-    /// Finalize streaming state. Called on completion, error, or cancellation.
     private func finalizeStreaming(success: Bool? = nil, error: Error? = nil) {
-        // Flush any remaining buffered text to the SwiftData model
         flushStreamingBuffer(force: true)
 
         guard let index = indexForStreamingMessage() else {
@@ -387,12 +385,6 @@ final class ChatViewModel {
             messages[index].benchmark = benchmark
             pendingBenchmark = nil
         }
-        let lastUserID = messages.last(where: { $0.role == .user })?.id
-        for i in 0..<messages.count {
-            if messages[i].role == .user && messages[i].id != lastUserID {
-                messages[i].fileContent = ""
-            }
-        }
         messages[index].isStreaming = false
         streamingMessageID = nil
         streamingIndex = nil
@@ -400,7 +392,6 @@ final class ChatViewModel {
         streamBuffer.reset()
         conversation.updatedAt = .now
         saveWithErrorHandling()
-        messages[index].fileContent = ""
         invalidateChatMessages()
         if success == true {
             feedbackGenerator.notificationOccurred(.success)
@@ -415,7 +406,6 @@ final class ChatViewModel {
                 Task { await generateConversationSummary() }
             }
         }
-        // Single refresh — the old code ran this twice on success.
         Task { await refreshContextTracker() }
     }
 

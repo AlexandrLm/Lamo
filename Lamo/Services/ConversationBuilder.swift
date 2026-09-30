@@ -100,6 +100,17 @@ struct ConversationBuilder {
             if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
         }
 
+        var unavailable: [String] = []
+        if !AppDefaults.toolGetLocation.wrappedValue { unavailable.append("get_location") }
+        if !AppDefaults.toolWeather.wrappedValue { unavailable.append("weather") }
+        if !AppDefaults.toolCalendar.wrappedValue { unavailable.append("calendar") }
+        if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
+        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue { unavailable.append("web_search") }
+        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue { unavailable.append("fetch_url") }
+        if !unavailable.isEmpty {
+            augmentedPrompt += "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
+        }
+
         let toolKey = [
             AppDefaults.toolGetLocation.wrappedValue,
             AppDefaults.toolWeather.wrappedValue,

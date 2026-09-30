@@ -46,7 +46,8 @@ struct MemoryContextBuilder {
         var includedFacts: [MemoryEntry] = []
         for entry in scored.prefix(maxFacts) {
             if useSemantic && entry.semantic < minSemanticScore { continue }
-            let line = "• \(entry.fact.text)\n"
+            let safe = Self.escape(entry.fact.text)
+            let line = "• \(safe)\n"
             if totalChars + line.count > maxMemoryChars { break }
             context += line
             totalChars += line.count
@@ -65,6 +66,16 @@ struct MemoryContextBuilder {
         let decay = exp(-ageDays / ageDecayHalfLife)
         let usageBoost = 1.0 + Double(fact.usageCount) * 0.5
         return usageBoost * decay
+    }
+
+    static func escape(_ text: String) -> String {
+        var s = text.replacingOccurrences(of: "&", with: "&amp;")
+        s = s.replacingOccurrences(of: "<", with: "&lt;")
+        s = s.replacingOccurrences(of: ">", with: "&gt;")
+        s = s.replacingOccurrences(of: "\n", with: " ")
+        s = s.replacingOccurrences(of: "\r", with: " ")
+        while s.contains("  ") { s = s.replacingOccurrences(of: "  ", with: " ") }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func blendedScore(

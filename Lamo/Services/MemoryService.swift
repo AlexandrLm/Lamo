@@ -31,6 +31,11 @@ final class MemoryService: ObservableObject {
 
     private let embeddings = EmbeddingService.shared
     private let embeddingDedupThreshold: Float = 0.96
+    private static let noiseMarkers = [
+        "asked about", "asked a question", "said hello", "said hi",
+        "greeted", "started a conversation", "temporary", "one-off",
+        "test message", "hello world"
+    ]
 
     // MARK: - Init
 
@@ -54,7 +59,13 @@ final class MemoryService: ObservableObject {
 
         for fact in facts {
             let trimmed = fact.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard trimmed.count >= 10 else { skipped.append(trimmed); continue }
+            guard trimmed.count >= 8 else { skipped.append(trimmed); continue }
+            let lowered = trimmed.lowercased()
+            var isNoise = false
+            for marker in Self.noiseMarkers {
+                if lowered.contains(marker) { isNoise = true; break }
+            }
+            if isNoise { skipped.append(trimmed); continue }
 
             if MemoryDeduplicator.isDuplicateText(trimmed, existingFacts: factsCache, wordSetsCache: &wordSetsCache, normalizedCache: &normalizedCache) {
                 skipped.append(trimmed)

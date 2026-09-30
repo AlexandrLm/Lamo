@@ -86,30 +86,35 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             continuation.finish(); return
         }
 
-        // --- Native tools + session ---
         let networkAvailable = !DownloadManager.shared.isExpensive
         let tools = FoundationModelsTools.enabledTools(networkAvailable: networkAvailable)
 
-        // --- Agentic loop budget (same protection as the LiteRT path) ---
-        // The FM framework manages a 4096-token context window; overhead is estimated
-        // with the same conservative estimator AgenticLoopBudget uses for accounting.
+        var unavailable: [String] = []
+        if !AppDefaults.toolGetLocation.wrappedValue { unavailable.append("get_location") }
+        if !AppDefaults.toolWeather.wrappedValue { unavailable.append("weather") }
+        if !AppDefaults.toolCalendar.wrappedValue { unavailable.append("calendar") }
+        if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
+        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue { unavailable.append("web_search") }
+        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue { unavailable.append("fetch_url") }
+        let effectiveSystemPrompt = unavailable.isEmpty ? systemPrompt : systemPrompt + "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
+
         let toolSchemaTokens = tools.reduce(0) {
             $0 + AgenticLoopBudget.estimateTokens(of: $1.name + " " + $1.description)
         }
         await AgenticLoopBudget.shared.reset()
         await AgenticLoopBudget.shared.configure(
             totalBudget: Self.contextWindowTokens,
-            systemOverhead: AgenticLoopBudget.estimateTokens(of: systemPrompt) + toolSchemaTokens,
+            systemOverhead: AgenticLoopBudget.estimateTokens(of: effectiveSystemPrompt) + toolSchemaTokens,
             conversationSkeletonTokens: AgenticLoopBudget.estimateTokens(of: promptText),
             maxIterations: AgenticLoopBudget.defaultMaxIterations
         )
 
         let session: LanguageModelSession
-        if !systemPrompt.isEmpty {
+        if !effectiveSystemPrompt.isEmpty {
             session = LanguageModelSession(
                 model: SystemLanguageModel.default,
                 tools: tools,
-                instructions: systemPrompt
+                instructions: effectiveSystemPrompt
             )
         } else {
             session = LanguageModelSession(model: SystemLanguageModel.default, tools: tools)
@@ -117,13 +122,11 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
 
         let options = GenerationOptions(
             samplingMode: nil,
-            // The framework requires temperature in 0...1; clamp the user setting defensively.
             temperature: min(max(ProviderManager.shared.temperature, 0), 1),
             maximumResponseTokens: Self.maxResponseTokens,
             toolCallingMode: .allowed
         )
 
-        // --- Stream the response (snapshot → delta) ---
         let startTime = Date()
         var firstTokenTime: Date?
         var totalChars = 0
