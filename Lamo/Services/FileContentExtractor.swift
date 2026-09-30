@@ -165,10 +165,24 @@ nonisolated enum FileContentExtractor {
         if let ssData = archive.readEntry("xl/sharedStrings.xml") {
             sharedStrings = parseSharedStrings(ssData)
         }
-        guard let sheetData = archive.readEntry("xl/worksheets/sheet1.xml") else {
-            throw FileExtractorError.unsupportedFormat("XLSX")
+        var sheets: [String] = []
+        for i in 1...20 {
+            let path = "xl/worksheets/sheet\(i).xml"
+            guard let sheetData = archive.readEntry(path) else {
+                if i == 1 { throw FileExtractorError.unsupportedFormat("XLSX") }
+                break
+            }
+            let text = parseXLSXSheet(sheetData, sharedStrings: sharedStrings)
+            if text.isEmpty { continue }
+            if i == 1 {
+                sheets.append(text)
+            } else {
+                sheets.append("--- Sheet \(i) ---\n\(text)")
+            }
+            if sheets.joined(separator: "\n\n").count >= maxCharsPerFile { break }
         }
-        return parseXLSXSheet(sheetData, sharedStrings: sharedStrings)
+        guard !sheets.isEmpty else { throw FileExtractorError.unsupportedFormat("XLSX") }
+        return sheets.joined(separator: "\n\n")
     }
 
     // MARK: - PPTX

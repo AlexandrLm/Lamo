@@ -274,20 +274,13 @@ struct ConversationBuilder {
 
     // MARK: - Summarization
 
-    /// Summarize old context via a single prompt (no expensive Conversation prefill).
-    /// Concatenates dropped messages as text and asks the model for a summary,
-    /// avoiding the full KV-cache rebuild that Conversation.createConversation() requires.
     func summarizeOldContext(dropped: [ChatMessage]) async -> String? {
         guard !dropped.isEmpty else { return nil }
 
-        // Cap dropped history: only the newest 20 messages, 500 chars each,
-        // 8000 chars total — unbounded concatenation blew the prefill on long
-        // histories (the summary request itself overflowed).
         let capped = Array(dropped.suffix(20))
-        // Concatenate dropped messages into a single text block
         var conversationText = capped.map { msg in
             let roleLabel = msg.role == .user ? "User" : "Assistant"
-            let content = msg.content.prefix(500) // Truncate each to 500 chars
+            let content = msg.content.prefix(500)
             return "[\(roleLabel)]: \(content)"
         }.joined(separator: "\n\n")
         if conversationText.count > Self.maxSummaryChars {
@@ -311,8 +304,14 @@ struct ConversationBuilder {
                 samplerConfig: samplerConfig
             )
             let summaryConv = try await engine.createConversation(with: config)
+            let guardrails = GenerationGuardrails.summarization
             var summaryText = ""
-            for try await chunk in summaryConv.sendMessageStream(LiteRTLM.Message("")) {
+            for try await chunk in summaryConv.sendMessageStream(
+                LiteRTLM.Message(""),
+                repetitionPenaltyConfig: guardrails.repetitionPenaltyConfig,
+                noRepeatNgramConfig: guardrails.noRepeatNgramConfig,
+                maxOutputTokens: guardrails.maxOutputTokens
+            ) {
                 let text = chunk.toString
                 if !text.isEmpty {
                     summaryText += text

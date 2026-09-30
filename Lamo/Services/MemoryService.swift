@@ -57,7 +57,11 @@ final class MemoryService: ObservableObject {
         var stored: [String] = []
         var skipped: [String] = []
 
-        for fact in facts {
+        let capped = facts.prefix(20)
+        if facts.count > capped.count {
+            skipped.append(contentsOf: facts.dropFirst(capped.count))
+        }
+        for fact in capped {
             let trimmed = fact.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.count >= 8 else { skipped.append(trimmed); continue }
             let lowered = trimmed.lowercased()

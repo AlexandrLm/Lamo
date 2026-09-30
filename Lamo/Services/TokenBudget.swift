@@ -1,30 +1,24 @@
 import Foundation
 import LiteRTLM
+import CryptoKit
 import os
 
-/// Token budget calculation and tokenization with caching.
-///
-/// All mutable state lives inside lock-protected value types, so the class is
-/// safe to use from any actor; it is explicitly `nonisolated` to keep the
-/// tokenizer off the main actor.
 nonisolated final class TokenBudget {
-    /// Tokenization cache — avoids re-tokenizing unchanged messages.
-    /// Key: (hashValue, count) pair instead of the full string, so the cache
-    /// doesn't retain every message body. Bounded at 500 entries (FIFO evict).
-    /// State is held inside OSAllocatedUnfairLock for async-safe access.
     nonisolated private struct CacheKey: Hashable {
-        let hash: Int
+        let hash: UInt64
         let count: Int
     }
     nonisolated private struct CacheState {
         var values: [CacheKey: Int] = [:]
         var order: [CacheKey] = []
     }
-    nonisolated private static let maxCacheEntries = 500
+    private static let maxCacheEntries = 500
     private let tokenCacheLock = OSAllocatedUnfairLock(initialState: CacheState())
 
     nonisolated private static func cacheKey(for text: String) -> CacheKey {
-        CacheKey(hash: text.hashValue, count: text.count)
+        let digest = SHA256.hash(data: Data(text.utf8))
+        let prefix = digest.withUnsafeBytes { $0.load(as: UInt64.self) }
+        return CacheKey(hash: prefix, count: text.count)
     }
 
     private func cachedCount(for text: String) -> Int? {
@@ -134,12 +128,7 @@ nonisolated final class TokenBudget {
         return count
     }
 
-    /// Tokenize all messages and return per-message token counts.
-    /// Uses cached token counts for unchanged messages.
-    /// Attached file text counts too — ConversationBuilder sends it as a
-    /// separate message, so ignoring it would under-report messages with PDFs.
     func tokenizeMessages(_ messages: [ChatMessage], engine: LiteRTLM.Engine?) async -> [UUID: Int] {
-        // Matches the exact prefix ConversationBuilder injects for file content.
         func fileText(for msg: ChatMessage) -> String {
             msg.fileContent.isEmpty ? "" : "Content of attached files:\n\n\(msg.fileContent)"
         }
@@ -151,25 +140,28 @@ nonisolated final class TokenBudget {
             return counts
         }
 
-        // Parallel tokenization across messages — engine calls dominate latency.
-        // File texts are precomputed so task closures only capture Sendable strings.
         let jobs = messages.map { msg in
             (id: msg.id, content: msg.content,
              file: msg.fileContent.isEmpty ? nil as String? : "Content of attached files:\n\n\(msg.fileContent)")
         }
-        return await withTaskGroup(of: (UUID, Int).self, returning: [UUID: Int].self) { group in
-            for job in jobs {
-                group.addTask { [engine] in
-                    let content = await self.tokenizeCount(job.content, engine: engine)
-                    let files = await self.filePartCount(job.file, engine: engine)
-                    return (job.id, content + files)
+        var counts: [UUID: Int] = [:]
+        counts.reserveCapacity(messages.count)
+        for chunk in jobs.chunked(into: 8) {
+            let partial = await withTaskGroup(of: (UUID, Int).self, returning: [UUID: Int].self) { group in
+                for job in chunk {
+                    group.addTask { [engine] in
+                        let content = await self.tokenizeCount(job.content, engine: engine)
+                        let files = await self.filePartCount(job.file, engine: engine)
+                        return (job.id, content + files)
+                    }
                 }
+                var out: [UUID: Int] = [:]
+                for await (id, count) in group { out[id] = count }
+                return out
             }
-            var counts: [UUID: Int] = [:]
-            counts.reserveCapacity(messages.count)
-            for await (id, count) in group { counts[id] = count }
-            return counts
+            for (id, count) in partial { counts[id] = count }
         }
+        return counts
     }
 
     /// File-part token count helper so `withTaskGroup` closures capture only
@@ -182,5 +174,20 @@ nonisolated final class TokenBudget {
     /// Clear tokenization cache (e.g., when engine changes).
     func clearTokenCache() {
         tokenCacheLock.withLock { $0 = CacheState() }
+    }
+}
+
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        var out: [[Element]] = []
+        out.reserveCapacity((count + size - 1) / size)
+        var i = startIndex
+        while i < endIndex {
+            let j = index(i, offsetBy: size, limitedBy: endIndex) ?? endIndex
+            out.append(Array(self[i..<j]))
+            i = j
+        }
+        return out
     }
 }

@@ -126,6 +126,7 @@
       }
     },
     "[Audio file: %@]" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -134,6 +135,9 @@
           }
         }
       }
+    },
+    "[Audio/video file: %@ — model cannot hear audio, do not invent contents; ask user for transcript if needed]" : {
+
     },
     "[Error reading file %@: %@]" : {
       "localizations" : {
