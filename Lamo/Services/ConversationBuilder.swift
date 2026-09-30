@@ -110,6 +110,9 @@ struct ConversationBuilder {
         if !unavailable.isEmpty {
             augmentedPrompt += "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
         }
+        if ProviderManager.shared.thinkingMode {
+            augmentedPrompt += "\n\n<reasoning>\nThink step by step for complex problems. Keep reasoning concise. For simple Q&A answer directly without overthinking.\n</reasoning>"
+        }
 
         let toolKey = [
             AppDefaults.toolGetLocation.wrappedValue,

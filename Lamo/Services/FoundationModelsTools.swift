@@ -145,7 +145,7 @@ struct FMMemoryTool: Tool {
         @Guide(description: "New facts about the user to remember. Each fact is one short sentence. Old contradictory facts are auto-replaced.")
         var facts: [String]?
 
-        @Guide(description: "Exact full text of facts to forget (not substring). Use include_existing=true first to see current facts and copy exact text.")
+        @Guide(description: "Facts to forget: exact text, [index] from include_existing, or close paraphrase. Use include_existing=true first.")
         var forget: [String]?
 
         @Guide(description: "Brief summary of the conversation so far (2-3 sentences). Use when conversation is long.")
@@ -203,7 +203,7 @@ struct FMFetchURLTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "Full URL starting with http:// or https:// — copy it exactly from a search result or the user's message.")
+        @Guide(description: "Full secure URL starting with https:// — copy it exactly from a search result or the user's message.")
         var url: String
     }
 
@@ -215,7 +215,6 @@ struct FMFetchURLTool: Tool {
 
 // MARK: - Helpers
 
-/// Serialize tool arguments to the JSON string the LiteRT decoder expects.
 @available(iOS 27.0, macOS 27.0, *)
 nonisolated private func fmJSONArguments(_ dict: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: dict),
@@ -223,7 +222,6 @@ nonisolated private func fmJSONArguments(_ dict: [String: Any]) -> String {
     return str
 }
 
-/// Format a tool result dictionary for the model, truncating at a character boundary.
 @available(iOS 27.0, macOS 27.0, *)
 nonisolated private func fmFormattedResult(_ dict: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted),

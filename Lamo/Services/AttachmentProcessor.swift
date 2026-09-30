@@ -3,17 +3,10 @@ import Foundation
 import UIKit
 import UniformTypeIdentifiers
 
-/// Stateless attachment processing — resizes images, extracts file content,
-/// copies to the shared attachments directory.
-///
-/// All heavy work (image decode/resize/encode, PDF render, archive parsing)
-/// runs in a detached task: on a large attachment this used to block the main
-/// actor for seconds while the chat UI was frozen.
 nonisolated enum AttachmentProcessor {
 
     // MARK: - Attachments Directory
 
-    /// Shared directory for all attachment files (images, audio, documents).
     static let attachmentsDirectory: URL = {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = docs.appendingPathComponent("Attachments", isDirectory: true)
@@ -21,7 +14,6 @@ nonisolated enum AttachmentProcessor {
         return dir
     }()
 
-    /// Accumulator for one file's contribution to the outgoing message.
     struct Processed: Sendable {
         var imagePaths: [String] = []
         var filePaths: [String] = []
@@ -38,8 +30,6 @@ nonisolated enum AttachmentProcessor {
         }
     }
 
-    /// `UIImage` is not `Sendable`; it is only decoded/encoded here and never
-    /// mutated by the caller while the task runs.
     private struct ImageBox: @unchecked Sendable {
         let images: [UIImage]
         init(_ images: [UIImage]) { self.images = images }
@@ -47,8 +37,6 @@ nonisolated enum AttachmentProcessor {
 
     // MARK: - Public API
 
-    /// Process attached images and files — resize images, extract file content,
-    /// copy to attachments dir. Runs off the main actor.
     static func process(
         images: [UIImage],
         files: [PendingFile]
@@ -74,9 +62,6 @@ nonisolated enum AttachmentProcessor {
 
     // MARK: - Per-File Processing
 
-    /// Body of one loop iteration. Kept in its own function so the `defer`
-    /// releases the security-scoped URL per iteration — a `defer` inside `for`
-    /// would keep every URL open until the whole batch finished.
     private static func processFile(_ file: PendingFile) async -> Processed {
         let accessing = file.url.startAccessingSecurityScopedResource()
         defer { if accessing { file.url.stopAccessingSecurityScopedResource() } }
@@ -95,7 +80,7 @@ nonisolated enum AttachmentProcessor {
             out.filePaths = [copy.path]
             out.fileNames = [name]
             out.fileSizes = [size]
-            out.textParts = [String(localized: "[Audio file: \(name)]")]
+            out.textParts = [String(localized: "[Audio/video file: \(name) — model cannot hear audio, do not invent contents; ask user for transcript if needed]")]
         } else if file.type.conforms(to: .pdf) {
             if FileContentExtractor.pdfHasTextLayer(file.url) {
                 do {
@@ -112,7 +97,6 @@ nonisolated enum AttachmentProcessor {
                     LamoLogger.ui.error("Failed to extract PDF text: \(error)")
                 }
             } else {
-                // Scanned PDF — render pages as images for the multimodal model.
                 let pageImages = FileContentExtractor.extractPDFImages(from: file.url)
                 out.imagePaths = saveImages(pageImages)
                 out.fileNames = [name]
@@ -140,7 +124,6 @@ nonisolated enum AttachmentProcessor {
         return out
     }
 
-    /// Copy a processed file into the shared attachments directory.
     private static func copyToAttachments(_ source: URL, prefix: String) -> URL? {
         let filename = "\(prefix)_\(UUID().uuidString).\(source.pathExtension)"
         let destination = attachmentsDirectory.appendingPathComponent(filename)
@@ -155,8 +138,6 @@ nonisolated enum AttachmentProcessor {
 
     // MARK: - Image Saving
 
-    /// Save UIImages as JPEG (resized to max 1024px) and return file paths.
-    /// Stored in Documents so they persist until the conversation is deleted.
     static func saveImages(_ images: [UIImage]) -> [String] {
         var paths: [String] = []
         paths.reserveCapacity(images.count)

@@ -203,24 +203,26 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
 
     // MARK: - Formatting
 
-    /// Build conversation context prefix from message history.
-    /// Provides the last few turns so the model has conversational memory.
     private func buildContextPrefix(messages: [ChatMessage]) -> String {
-        // Hoisted last-user id — was recomputed inside the filter closure (O(n²)).
         let lastUserID = messages.last(where: { $0.role == .user })?.id
-        // Take last 10 messages (5 turns) to stay within 4096 token context
-        let recent = messages.suffix(10).filter { $0.role != .user || $0.id != lastUserID }
+        let recent = messages.suffix(20).filter { $0.role != .user || $0.id != lastUserID }
         let filtered = recent.filter { !$0.content.isEmpty || !$0.fileContent.isEmpty }
 
         guard !filtered.isEmpty else { return "" }
 
-        let lines = filtered.map { msg in
+        var lines: [String] = []
+        var usedTokens = 0
+        for msg in filtered.reversed() {
             let roleLabel = msg.role == .user ? "User" : "Assistant"
-            let text = msg.content.prefix(300)
-            return "[\(roleLabel)]: \(text)"
+            let text = String(msg.content.prefix(500))
+            let line = "[\(roleLabel)]: \(text)"
+            usedTokens += AgenticLoopBudget.estimateTokens(of: line)
+            if usedTokens > 1500 { break }
+            lines.append(line)
         }
+        guard !lines.isEmpty else { return "" }
 
-        return "Previous conversation:\n" + lines.joined(separator: "\n\n")
+        return "Previous conversation:\n" + lines.reversed().joined(separator: "\n\n")
     }
 
     private func buildUserText(from msg: ChatMessage) -> String {

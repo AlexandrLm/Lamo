@@ -19,8 +19,6 @@ struct WebSearchTool: Tool {
     private static let validTimeRanges: Set<String> = ["day", "week", "month", "year"]
 
     func run() async throws -> Any {
-        // Cap at 5: each result costs ~100-400 tokens, so 10 results alone can
-        // eat a small on-device context window before the answer even starts.
         let clampedMax = max(1, min(maxResults, 5))
         let cleanQuery = SearchResultCompactor.sanitizeQuery(query)
         guard !cleanQuery.isEmpty else {
@@ -49,16 +47,13 @@ struct WebSearchTool: Tool {
                 query: cleanQuery, maxResults: clampedMax, timeRange: range
             )
             var enriched = await enrichWithFetchedContent(searchResults)
-            // Domain-aware fit BEFORE the generic truncation: keeps every URL and
-            // title intact, shrinks excerpts/snippets first. The generic pass in
-            // limitResult() stays as a final safety net.
             let budget = await AgenticLoopBudget.shared.projectedResultLimit()
             enriched = SearchResultCompactor.fitResults(enriched, tokenLimit: budget)
             result = enriched
         } catch {
             let err: [String: Any] = [
                 "error": String(localized: "Web search failed: \(error.localizedDescription)"),
-                "hint": "Rephrase the query and retry once. If it keeps failing, the internet may be unreachable — say so and answer from your own knowledge, noting it may be outdated.",
+                "hint": "Rephrase the query and retry once. If it keeps failing, say the internet is unreachable and do not invent facts.",
             ]
             await ToolCallReporter.shared.reportResult(name: Self.name, result: err)
             return err
@@ -70,9 +65,6 @@ struct WebSearchTool: Tool {
     }
 
     /// Smart fetch: pull a short excerpt only for results with thin snippets
-    /// (<80 chars), max 2 pages. Skipped entirely when the token budget is tight —
-    /// fetching would burn network and tokens for data that gets truncated anyway.
-    /// The model can always call fetch_url for the full page afterwards.
     private func enrichWithFetchedContent(_ searchResults: [[String: String]]) async -> [[String: Any]] {
         let base: [[String: Any]] = searchResults.map {
             ["title": $0["title"] ?? "", "snippet": $0["snippet"] ?? "", "url": $0["url"] ?? ""]
@@ -132,8 +124,6 @@ struct FetchUrlTool: Tool {
             return notice
         }
 
-        // Only public https:// pages. A model-chosen URL must never reach the
-        // router, a LAN service, or a loopback/metadata address.
         guard let fetchURL = URL(string: url) else {
             return await reject("Invalid URL: '\(url)'", hint: "The URL is malformed. Copy the exact URL (including https://) from the search results or the user's message and retry once.")
         }
@@ -147,12 +137,8 @@ struct FetchUrlTool: Tool {
             )
         }
 
-        // Single cache: WebFetcher's internal NSCache (TTL + in-flight dedup).
-        // URLCacheStore is intentionally not used here to avoid double caching.
         do {
             let result = try await WebFetcher.fetchStructured(url: fetchURL)
-            // Redirects are followed inside URLSession, so re-check where we
-            // actually ended up before trusting the payload.
             if let finalURL = result.finalURL {
                 try SecureURLPolicy.validate(finalURL)
             }
@@ -160,7 +146,6 @@ struct FetchUrlTool: Tool {
             if let title = result.title, !title.isEmpty { output["title"] = title }
             if let description = result.description, !description.isEmpty { output["description"] = description }
             if let contentType = result.contentType { output["type"] = contentType }
-            // Fetched page text is attacker-controlled data, not instructions.
             output["content"] = Self.wrapUntrusted(await budgetedContent(result.content))
             output["url"] = url
 
@@ -184,22 +169,14 @@ struct FetchUrlTool: Tool {
         return err
     }
 
-    /// Frame fetched content as untrusted so a page cannot pose as a user/system
-    /// instruction ("ignore previous instructions…").
     nonisolated static func wrapUntrusted(_ content: String) -> String {
         "<tool_result source=\"web\" trust=\"untrusted\">\n\(content)\n</tool_result>"
     }
 
-    /// Trim page text to the current token budget at a sentence boundary, keeping
-    /// the head of the page (usually the lede with the answer). The generic
-    /// truncation in `limitResult()` stays as a final safety net.
     private func budgetedContent(_ content: String) async -> String {
         let limit = await AgenticLoopBudget.shared.projectedResultLimit()
         var target = min(content.count, max(400, limit * 3))
         var text = SearchResultCompactor.cutAtBoundary(content, maxChars: target)
-        // Non-ASCII text packs ~1 token/char, so a char-based first guess can still
-        // overshoot — halve until the real estimate fits (never below 400 chars,
-        // shorter than that is rarely useful anyway).
         var rounds = 0
         while SearchResultCompactor.estimateTokens(of: text) > limit, target > 400, rounds < 6 {
             rounds += 1
