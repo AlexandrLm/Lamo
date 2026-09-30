@@ -18,18 +18,18 @@ import FoundationModels
 @available(iOS 27.0, macOS 27.0, *)
 enum FoundationModelsTools {
     /// The FM tools to register on a session, honoring user settings.
-    static func enabledTools(networkAvailable: Bool) -> [any Tool] {
-        var tools: [any Tool] = [
-            FMWeatherTool(),
-            FMLocationTool(),
-            FMCalendarTool(),
-        ]
+    static func enabledTools(networkAvailable: Bool, userText: String = "") -> [any Tool] {
+        let route = ToolRouter.route(for: userText)
+        var tools: [any Tool] = []
+        if AppDefaults.toolWeather.wrappedValue && route.weather { tools.append(FMWeatherTool()) }
+        if AppDefaults.toolGetLocation.wrappedValue && route.location { tools.append(FMLocationTool()) }
+        if AppDefaults.toolCalendar.wrappedValue && route.calendar { tools.append(FMCalendarTool()) }
         if AppDefaults.memoryEnabled.wrappedValue {
             tools.append(FMMemoryTool())
         }
         if networkAvailable {
-            if AppDefaults.toolWebSearch.wrappedValue { tools.append(FMWebSearchTool()) }
-            if AppDefaults.toolFetchURL.wrappedValue { tools.append(FMFetchURLTool()) }
+            if AppDefaults.toolWebSearch.wrappedValue && route.webSearch { tools.append(FMWebSearchTool()) }
+            if AppDefaults.toolFetchURL.wrappedValue && route.fetchURL { tools.append(FMFetchURLTool()) }
         }
         return tools
     }
@@ -44,10 +44,10 @@ struct FMWeatherTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "City name (English spelling works best, e.g. 'Berlin', 'New York'). Leave empty to use the device's current location.")
+        @Guide(description: "City (English best). Empty = device location.")
         var city: String?
 
-        @Guide(description: "Forecast days, 1-7. Use 1-2 for 'today' or 'tomorrow' questions; more only for trip planning.")
+        @Guide(description: "Days 1-7 (default 3; 1-2 for today).")
         var days: Int?
     }
 
@@ -68,7 +68,7 @@ struct FMLocationTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "Set true for faster, less accurate IP-based location (also works when GPS permission is denied).")
+        @Guide(description: "true = fast IP location, no GPS needed.")
         var ipOnly: Bool?
     }
 
@@ -89,31 +89,31 @@ struct FMCalendarTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "'list' shows events in a date range, 'create' adds a new event (requires a title), 'search' finds events by keyword in title/notes/location.")
+        @Guide(description: "'list' (date range), 'create' (needs title), 'search' (keyword).")
         var mode: String?
 
-        @Guide(description: "Date in YYYY-MM-DD format. For list: range start (default today). For create: the event day (default today).")
+        @Guide(description: "Start YYYY-MM-DD (default today).")
         var startDate: String?
 
-        @Guide(description: "Date in YYYY-MM-DD format. For list: range end (default 7 days after start).")
+        @Guide(description: "End YYYY-MM-DD (default +7 days).")
         var endDate: String?
 
-        @Guide(description: "Event title. Required for create.")
+        @Guide(description: "Title (required for create).")
         var title: String?
 
-        @Guide(description: "Event notes, for create.")
+        @Guide(description: "Notes.")
         var notes: String?
 
-        @Guide(description: "Event location, for create.")
+        @Guide(description: "Location.")
         var location: String?
 
-        @Guide(description: "Start time HH:MM (24-hour), for create. When omitted, the event is all-day.")
+        @Guide(description: "Start HH:MM (all-day if omitted).")
         var startTime: String?
 
-        @Guide(description: "End time HH:MM (24-hour), for create. Default: one hour after start.")
+        @Guide(description: "End HH:MM (default +1h).")
         var endTime: String?
 
-        @Guide(description: "Keyword to find, for search.")
+        @Guide(description: "Search keyword.")
         var query: String?
     }
 
@@ -145,13 +145,13 @@ struct FMMemoryTool: Tool {
         @Guide(description: "New facts about the user to remember. Each fact is one short sentence. Old contradictory facts are auto-replaced.")
         var facts: [String]?
 
-        @Guide(description: "Facts to forget: exact text, [index] from include_existing, or close paraphrase. Use include_existing=true first.")
+        @Guide(description: "Forget: exact text, [index], or paraphrase (include_existing first).")
         var forget: [String]?
 
-        @Guide(description: "Brief summary of the conversation so far (2-3 sentences). Use when conversation is long.")
+        @Guide(description: "2-3 sentence recap for long chats.")
         var summary: String?
 
-        @Guide(description: "Set to true to read back all currently stored facts. Always do this before forgetting or updating.")
+        @Guide(description: "true = read stored facts first.")
         var includeExisting: Bool?
     }
 
@@ -175,13 +175,13 @@ struct FMWebSearchTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "Short keyword query (2-6 words works best), NOT a full sentence. Write it in the user's language.")
+        @Guide(description: "Keywords, 2-6 words, user language.")
         var query: String
 
-        @Guide(description: "Number of results, 1-5. The default 5 is enough for most questions — prefer 3 to save context.")
+        @Guide(description: "1-5 results (default 5, prefer 3).")
         var maxResults: Int?
 
-        @Guide(description: "Freshness filter: 'day', 'week', 'month', or 'year'. Set only when the user asks about recent events.")
+        @Guide(description: "day/week/month/year, only for recent events.")
         var timeRange: String?
     }
 

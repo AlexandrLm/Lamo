@@ -8,31 +8,31 @@ struct CalendarTool: Tool {
     static let name = ToolDefinitions.Calendar.name
     static let description = ToolDefinitions.Calendar.description
 
-    @ToolParam(description: "'list' shows events in a date range, 'create' adds a new event (requires a title), 'search' finds events by keyword in title/notes/location.")
+    @ToolParam(description: "'list' (date range), 'create' (needs title), 'search' (keyword).")
     var mode: String = "list"
 
-    @ToolParam(description: "Date in YYYY-MM-DD format. For list: range start (default today). For create: the event day (default today).")
+    @ToolParam(description: "Start YYYY-MM-DD (default today).")
     var startDate: String?
 
-    @ToolParam(description: "Date in YYYY-MM-DD format. For list: range end (default 7 days after start).")
+    @ToolParam(description: "End YYYY-MM-DD (default +7 days).")
     var endDate: String?
 
-    @ToolParam(description: "Event title. Required for create.")
+    @ToolParam(description: "Title (required for create).")
     var title: String?
 
-    @ToolParam(description: "Event notes, for create.")
+    @ToolParam(description: "Notes.")
     var notes: String?
 
-    @ToolParam(description: "Event location, for create.")
+    @ToolParam(description: "Location.")
     var location: String?
 
-    @ToolParam(description: "Start time HH:MM (24-hour), for create. When omitted, the event is all-day.")
+    @ToolParam(description: "Start HH:MM (all-day if omitted).")
     var startTime: String?
 
-    @ToolParam(description: "End time HH:MM (24-hour), for create. Default: one hour after start.")
+    @ToolParam(description: "End HH:MM (default +1h).")
     var endTime: String?
 
-    @ToolParam(description: "Keyword to find, for search.")
+    @ToolParam(description: "Search keyword.")
     var query: String?
 
     /// Cap on events returned per call — keeps context small; the hint tells the model how to get more.

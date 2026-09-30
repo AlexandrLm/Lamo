@@ -2397,3 +2397,62 @@ struct AttachmentProcessorTests {
         try? FileManager.default.removeItem(atPath: paths[0])
     }
 }
+
+// MARK: - ToolRouter Tests
+
+struct ToolRouterTests {
+
+    @Test func weatherQueryRoutesWeather() {
+        let route = ToolRouter.route(for: "Какая погода в Казани завтра?")
+        #expect(route.weather == true)
+        #expect(route.calendar == false)
+        #expect(route.location == false)
+    }
+
+    @Test func calendarQueryRoutesCalendar() {
+        let route = ToolRouter.route(for: "What meetings do I have tomorrow?")
+        #expect(route.calendar == true)
+        #expect(route.weather == false)
+    }
+
+    @Test func locationQueryRoutesLocation() {
+        let route = ToolRouter.route(for: "где я сейчас?")
+        #expect(route.location == true)
+        #expect(route.weather == false)
+    }
+
+    @Test func factualQuestionRoutesWeb() {
+        let route = ToolRouter.route(for: "Кто выиграл чемпионат мира в прошлом году по футболу?")
+        #expect(route.webSearch == true)
+        #expect(route.fetchURL == true)
+        #expect(route.calendar == false)
+    }
+
+    @Test func plainChatRoutesNothingExtra() {
+        let route = ToolRouter.route(for: "Расскажи анекдот про программистов, пожалуйста.")
+        #expect(route.weather == false)
+        #expect(route.calendar == false)
+        #expect(route.location == false)
+        #expect(route.webSearch == false)
+    }
+
+    @Test func shortFollowUpRoutesAll() {
+        let route = ToolRouter.route(for: "а завтра?")
+        #expect(route.weather == true)
+        #expect(route.calendar == true)
+        #expect(route.webSearch == true)
+    }
+
+    @Test func emptyRoutesAll() {
+        let route = ToolRouter.route(for: "   ")
+        #expect(route.weather == true)
+        #expect(route.calendar == true)
+        #expect(route.location == true)
+    }
+
+    @Test func urlRoutesWeb() {
+        let route = ToolRouter.route(for: "Прочитай https://example.com/article про здоровье")
+        #expect(route.webSearch == true)
+        #expect(route.fetchURL == true)
+    }
+}

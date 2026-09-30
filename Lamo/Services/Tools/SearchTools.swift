@@ -7,13 +7,13 @@ struct WebSearchTool: Tool {
     static let name = ToolDefinitions.WebSearch.name
     static let description = ToolDefinitions.WebSearch.description
 
-    @ToolParam(description: "Short keyword query (2-6 words works best), NOT a full sentence. Write it in the user's language.")
+    @ToolParam(description: "Keywords, 2-6 words, user language.")
     var query: String
 
-    @ToolParam(description: "Number of results, 1-5. The default 5 is enough for most questions — prefer 3 to save context.")
+    @ToolParam(description: "1-5 results (default 5, prefer 3).")
     var maxResults: Int = 5
 
-    @ToolParam(description: "Freshness filter: 'day', 'week', 'month', or 'year'. Set only when the user asks about recent events.")
+    @ToolParam(description: "day/week/month/year, only for recent events.")
     var timeRange: String?
 
     private static let validTimeRanges: Set<String> = ["day", "week", "month", "year"]
@@ -114,7 +114,7 @@ struct FetchUrlTool: Tool {
     static let name = ToolDefinitions.FetchURL.name
     static let description = ToolDefinitions.FetchURL.description
 
-    @ToolParam(description: "Full secure URL starting with https:// — copy it exactly from a search result or the user's message.")
+    @ToolParam(description: "Full https:// URL, copied exactly.")
     var url: String
 
     func run() async throws -> Any {

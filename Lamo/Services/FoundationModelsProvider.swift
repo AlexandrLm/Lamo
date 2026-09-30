@@ -87,15 +87,17 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         }
 
         let networkAvailable = !DownloadManager.shared.isExpensive
-        let tools = FoundationModelsTools.enabledTools(networkAvailable: networkAvailable)
+        let recentUserText = messages.suffix(6).filter { $0.role == .user }.suffix(3).map(\.content).joined(separator: "\n")
+        let route = ToolRouter.route(for: recentUserText)
+        let tools = FoundationModelsTools.enabledTools(networkAvailable: networkAvailable, userText: recentUserText)
 
         var unavailable: [String] = []
-        if !AppDefaults.toolGetLocation.wrappedValue { unavailable.append("get_location") }
-        if !AppDefaults.toolWeather.wrappedValue { unavailable.append("weather") }
-        if !AppDefaults.toolCalendar.wrappedValue { unavailable.append("calendar") }
+        if !AppDefaults.toolGetLocation.wrappedValue || !route.location { unavailable.append("get_location") }
+        if !AppDefaults.toolWeather.wrappedValue || !route.weather { unavailable.append("weather") }
+        if !AppDefaults.toolCalendar.wrappedValue || !route.calendar { unavailable.append("calendar") }
         if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
-        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue { unavailable.append("web_search") }
-        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue { unavailable.append("fetch_url") }
+        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue || !route.webSearch { unavailable.append("web_search") }
+        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue || !route.fetchURL { unavailable.append("fetch_url") }
         let effectiveSystemPrompt = unavailable.isEmpty ? systemPrompt : systemPrompt + "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
 
         let toolSchemaTokens = tools.reduce(0) {

@@ -10,7 +10,7 @@ struct GetLocationTool: Tool {
     static let name = ToolDefinitions.GetLocation.name
     static let description = ToolDefinitions.GetLocation.description
 
-    @ToolParam(description: "Set true for faster, less accurate IP-based location (also works when GPS permission is denied).")
+    @ToolParam(description: "true = fast IP location, no GPS needed.")
     var ipOnly: Bool = false
 
     func run() async throws -> Any {
@@ -56,10 +56,10 @@ struct WeatherTool: Tool {
     static let name = ToolDefinitions.Weather.name
     static let description = ToolDefinitions.Weather.description
 
-    @ToolParam(description: "City name (English spelling works best, e.g. 'Berlin', 'New York'). Leave empty to use the device's current location.")
+    @ToolParam(description: "City (English best). Empty = device location.")
     var city: String = ""
 
-    @ToolParam(description: "Forecast days, 1-7. Use 1-2 for 'today' or 'tomorrow' questions; more only for trip planning.")
+    @ToolParam(description: "Days 1-7 (default 3; 1-2 for today).")
     var days: Int = 3
 
     func run() async throws -> Any {

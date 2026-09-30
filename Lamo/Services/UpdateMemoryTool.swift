@@ -8,13 +8,13 @@ struct UpdateMemoryTool: Tool {
     @ToolParam(description: "New facts about the user to remember (max 20 per call). Each fact is one short sentence. Old contradictory facts are auto-replaced.")
     var facts: [String]?
 
-    @ToolParam(description: "Facts to forget: exact text, [index] from include_existing, or close paraphrase. Use include_existing=true first.")
+    @ToolParam(description: "Forget: exact text, [index], or paraphrase (include_existing first).")
     var forget: [String]?
 
-    @ToolParam(description: "Brief summary of the conversation so far (2-3 sentences). Use when conversation is long.")
+    @ToolParam(description: "2-3 sentence recap for long chats.")
     var summary: String?
 
-    @ToolParam(description: "Set to true to read back all currently stored facts. Always do this before forgetting or updating.")
+    @ToolParam(description: "true = read stored facts first.")
     var includeExisting: Bool = false
 
     func run() async throws -> Any {

@@ -90,23 +90,25 @@ struct ConversationBuilder {
         augmentedPrompt += Self.currentTimeBlock(messageCount: messages.count)
 
         let samplerConfig = try buildSamplerConfig()
+        let recentUserText = messages.suffix(6).filter { $0.role == .user }.suffix(3).map(\.content).joined(separator: "\n")
+        let route = ToolRouter.route(for: recentUserText)
         var allTools: [LiteRTLM.Tool] = []
-        if AppDefaults.toolGetLocation.wrappedValue { allTools.append(GetLocationTool()) }
-        if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
-        if AppDefaults.toolCalendar.wrappedValue { allTools.append(CalendarTool()) }
+        if AppDefaults.toolGetLocation.wrappedValue && route.location { allTools.append(GetLocationTool()) }
+        if AppDefaults.toolWeather.wrappedValue && route.weather { allTools.append(WeatherTool()) }
+        if AppDefaults.toolCalendar.wrappedValue && route.calendar { allTools.append(CalendarTool()) }
         if AppDefaults.memoryEnabled.wrappedValue { allTools.append(UpdateMemoryTool()) }
         if networkAvailable {
-            if AppDefaults.toolWebSearch.wrappedValue { allTools.append(WebSearchTool()) }
-            if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
+            if AppDefaults.toolWebSearch.wrappedValue && route.webSearch { allTools.append(WebSearchTool()) }
+            if AppDefaults.toolFetchURL.wrappedValue && route.fetchURL { allTools.append(FetchUrlTool()) }
         }
 
         var unavailable: [String] = []
-        if !AppDefaults.toolGetLocation.wrappedValue { unavailable.append("get_location") }
-        if !AppDefaults.toolWeather.wrappedValue { unavailable.append("weather") }
-        if !AppDefaults.toolCalendar.wrappedValue { unavailable.append("calendar") }
+        if !AppDefaults.toolGetLocation.wrappedValue || !route.location { unavailable.append("get_location") }
+        if !AppDefaults.toolWeather.wrappedValue || !route.weather { unavailable.append("weather") }
+        if !AppDefaults.toolCalendar.wrappedValue || !route.calendar { unavailable.append("calendar") }
         if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
-        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue { unavailable.append("web_search") }
-        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue { unavailable.append("fetch_url") }
+        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue || !route.webSearch { unavailable.append("web_search") }
+        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue || !route.fetchURL { unavailable.append("fetch_url") }
         if !unavailable.isEmpty {
             augmentedPrompt += "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
         }
@@ -122,6 +124,11 @@ struct ConversationBuilder {
             networkAvailable,
             AppDefaults.toolWebSearch.wrappedValue,
             AppDefaults.toolFetchURL.wrappedValue,
+            route.location,
+            route.weather,
+            route.calendar,
+            route.webSearch,
+            route.fetchURL,
         ].map(String.init).joined(separator: "-")
         let toolSchemaText = Self.toolSchemaText(for: toolKey) {
             var text = ""
