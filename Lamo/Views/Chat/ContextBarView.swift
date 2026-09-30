@@ -37,9 +37,7 @@ struct ContextBarView: View {
 /// Full context breakdown — presented as a sheet from the chat.
 struct ContextDetailView: View {
     let tracker: ContextTracker?
-    /// Placeholder until the first off-actor sample arrives in `.task`.
-    @State private var metrics = SystemMetrics.snapshot(modelName: "", backend: "")
-    /// Tape segment highlighted together with its breakdown row.
+    @State private var metrics = SystemMetrics.snapshot(modelName: "", backend: "", batteryLevel: 1.0, batteryCharging: false)
     @State private var selectedSegment: MapSegment?
 
     var body: some View {
@@ -64,18 +62,19 @@ struct ContextDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .task {
-                // Таймер через structured concurrency + снапшот в фоне —
-                // раньше Timer дёргал task_info/host_statistics на main каждые 5с.
                 while !Task.isCancelled {
-                    // UIKit battery + provider state must be read on the main
-                    // actor; only the mach sampling happens off-actor.
                     let model = ProviderManager.shared.currentModelDisplayName
                     let name = model.isEmpty ? String(localized: "None") : model
                     let backend = AppDefaults.useGPU.wrappedValue
                         ? String(localized: "GPU")
                         : String(localized: "CPU×\(AppDefaults.cpuThreadCount.wrappedValue)")
+                    UIDevice.current.isBatteryMonitoringEnabled = true
+                    let rawLevel = UIDevice.current.batteryLevel
+                    let level: Float = rawLevel < 0 ? 1.0 : rawLevel
+                    let charging = UIDevice.current.batteryState == .charging
+                        || UIDevice.current.batteryState == .full
                     let snap = await Task.detached(priority: .utility) {
-                        SystemMetrics.snapshot(modelName: name, backend: backend)
+                        SystemMetrics.snapshot(modelName: name, backend: backend, batteryLevel: level, batteryCharging: charging)
                     }.value
                     metrics = snap
                     try? await Task.sleep(for: .seconds(5))
@@ -648,8 +647,6 @@ private struct BreakdownRowContent: View, Equatable {
 
 // MARK: - System Metrics
 
-/// Live system metrics for the context detail sheet.
-/// A plain value type so it can be produced off the main actor and handed back.
 struct SystemMetrics: Sendable {
     let memoryUsedMB: Double
     let cpuPercent: Double
@@ -659,19 +656,17 @@ struct SystemMetrics: Sendable {
     let modelName: String
     let backend: String
 
-    nonisolated static func snapshot(modelName: String, backend: String) -> SystemMetrics {
-        // Memory
+    nonisolated static func snapshot(modelName: String, backend: String, batteryLevel: Float, batteryCharging: Bool) -> SystemMetrics {
         var info = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / 4)
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
         let memResult = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
                 task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
             }
         }
         let memMB = memResult == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : 0
 
-        // CPU
-        var cpuSize = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / 4)
+        var cpuSize = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / MemoryLayout<integer_t>.size)
         var cpuInfo = host_cpu_load_info()
         let cpuResult = withUnsafeMutablePointer(to: &cpuInfo) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(cpuSize)) {
@@ -686,20 +681,11 @@ struct SystemMetrics: Sendable {
             if total > 0 { cpu = ((user + sys + nice) / total) * 100 }
         }
 
-        // Battery state is UIKit state — read it on the main actor.
-        let battery = MainActor.assumeIsolated { () -> (Float, Bool) in
-            UIDevice.current.isBatteryMonitoringEnabled = true
-            let level = UIDevice.current.batteryLevel
-            let charging = UIDevice.current.batteryState == .charging
-                || UIDevice.current.batteryState == .full
-            return (level, charging)
-        }
-
         return SystemMetrics(
             memoryUsedMB: memMB, cpuPercent: cpu,
             thermalState: ProcessInfo.processInfo.thermalState,
-            batteryLevel: battery.0 < 0 ? 1.0 : battery.0,
-            batteryCharging: battery.1,
+            batteryLevel: batteryLevel,
+            batteryCharging: batteryCharging,
             modelName: modelName, backend: backend
         )
     }
