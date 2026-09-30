@@ -46,6 +46,12 @@
             "state" : "new",
             "value" : "Lamo uses the camera to take photos you attach to the chat."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamo использует камеру для съёмки фото, которые вы прикрепляете в чат"
+          }
         }
       }
     },
