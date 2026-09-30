@@ -103,7 +103,7 @@ nonisolated final class TokenBudget {
         }
 
         let capped = min(requested, maxTokensFromMemory)
-        let result = (capped / 256) * 256
+        let result = max(512, (capped / 256) * 256)
         // Assemble first, then log: OSLogMessage requires a literal at the call site.
         let kvText = String(format: "%.0f", kvMBPer1K)
         let availableText = String(format: "%.0f", availableMB)

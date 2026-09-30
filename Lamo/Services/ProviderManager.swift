@@ -275,24 +275,25 @@ final class ProviderManager: ObservableObject {
     static func findFirstModel() -> String? { ModelDiscovery.findFirstModel() }
     static func listModels() -> [String] { ModelDiscovery.listModels() }
 
-    /// Summarize conversation messages using the LLM. Returns nil if no engine or messages are empty.
     func summarizeMessages(_ messages: [ChatMessage]) async -> String? {
         guard selectedProviderType == .litertLM,
               let engine = engineForSummarization, !messages.isEmpty else { return nil }
 
-        let conversationText = messages.map { msg in
+        let capped = Array(messages.suffix(20))
+        let conversationText = capped.map { msg in
             let roleLabel = msg.role == .user ? "User" : "Assistant"
             return "[\(roleLabel)]: \(msg.content.prefix(500))"
         }.joined(separator: "\n\n")
+        let trimmedText = String(conversationText.prefix(8_000))
 
-        guard !conversationText.isEmpty else { return nil }
+        guard !trimmedText.isEmpty else { return nil }
 
         let summaryRequest = """
         Summarize the following conversation into a concise context block. \
         Preserve: key facts, decisions, user preferences, code, file names, and conclusions. \
         Be brief but complete — this summary replaces the original messages.
 
-        \(conversationText)
+        \(trimmedText)
         """
 
         do {

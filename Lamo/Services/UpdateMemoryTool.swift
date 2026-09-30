@@ -1,15 +1,6 @@
 import Foundation
 import LiteRTLM
 
-/// Tool that Gemma 4 can call to save, update, remove, or read remembered facts.
-///
-/// The model calls this automatically during its response when it detects
-/// facts worth remembering or when the conversation needs summarizing.
-///
-/// Key behaviors:
-/// - New facts are automatically deduplicated and conflicting old facts are replaced.
-/// - Forgetting requires exact text — always use include_existing=true first to see current facts.
-/// - Conversation summaries persist across sessions and help with long context windows.
 struct UpdateMemoryTool: Tool {
     static let name = ToolDefinitions.UpdateMemory.name
     static let description = ToolDefinitions.UpdateMemory.description
@@ -17,7 +8,7 @@ struct UpdateMemoryTool: Tool {
     @ToolParam(description: "New facts about the user to remember. Each fact is one short sentence. Old contradictory facts are auto-replaced.")
     var facts: [String]?
 
-    @ToolParam(description: "Exact full text of facts to forget (not substring). Use include_existing=true first to see current facts and copy exact text.")
+    @ToolParam(description: "Facts to forget: exact text, [index] from include_existing, or close paraphrase. Use include_existing=true first.")
     var forget: [String]?
 
     @ToolParam(description: "Brief summary of the conversation so far (2-3 sentences). Use when conversation is long.")
@@ -27,8 +18,6 @@ struct UpdateMemoryTool: Tool {
     var includeExisting: Bool = false
 
     func run() async throws -> Any {
-        // Owning conversation comes from the active stream (set by LiteRTLMProvider),
-        // since ToolManager re-decodes tool instances from JSON args before run().
         let conversationID = await ToolCallReporter.shared.currentConversationID
         let hasFacts = facts != nil && !(facts?.isEmpty ?? true)
         let hasForget = forget != nil && !(forget?.isEmpty ?? true)
@@ -63,7 +52,7 @@ struct UpdateMemoryTool: Tool {
             result["forgot"] = outcome.removed
             if !outcome.notFound.isEmpty {
                 result["not_found"] = outcome.notFound
-                result["hint"] = "Some facts were not found — exact text is required. Call again with include_existing=true to see the stored facts, then retry with their exact text."
+                result["hint"] = "Some facts were not found. Call again with include_existing=true, then retry with exact text or [index]."
             }
         }
         if hasSummary, let summary = summary {
@@ -76,7 +65,6 @@ struct UpdateMemoryTool: Tool {
                 result["existing_facts"] = []
                 result["note"] = "No facts stored yet."
             } else {
-                // Numbered list for easy reference when model wants to forget specific facts
                 var numbered: [String] = []
                 for (i, fact) in allFacts.enumerated() {
                     numbered.append("[\(i)] \(fact)")
@@ -86,8 +74,10 @@ struct UpdateMemoryTool: Tool {
                 result["total"] = allFacts.count
             }
         }
-        // Truncate to budget without ever dropping the write itself (no soft-stop check:
-        // memory writes are cheap, local, and must not be lost).
+        if includeExisting {
+            await ToolCallReporter.shared.reportResult(name: Self.name, result: result)
+            return result
+        }
         let limited = await AgenticLoopBudget.shared.limitResult(result)
         await ToolCallReporter.shared.reportResult(name: Self.name, result: limited)
         return limited

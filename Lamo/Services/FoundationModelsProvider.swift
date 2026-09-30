@@ -220,17 +220,13 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         return "Previous conversation:\n" + lines.joined(separator: "\n\n")
     }
 
-    /// Build the user prompt text from a ChatMessage.
     private func buildUserText(from msg: ChatMessage) -> String {
         var parts: [String] = []
 
         if !msg.fileContent.isEmpty {
-            parts.append("Attached file content:\n\n\(msg.fileContent)")
+            parts.append("Attached file content:\n\n\(msg.fileContent.prefix(8_000))")
         }
 
-        // Images are described inline since Foundation Models multimodal attachment
-        // API surface is not wired up yet in this provider (follow-up: Transcript
-        // image attachments).
         if !msg.imagePaths.isEmpty {
             parts.append("[Image\(msg.imagePaths.count > 1 ? "s" : "") attached — describe what you see]")
         }

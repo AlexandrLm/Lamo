@@ -2,62 +2,28 @@ import Foundation
 import NaturalLanguage
 import os
 
-/// A text embedding tagged with the model that produced it.
-///
-/// Different embedding models live in different vector spaces. Vectors with
-/// different `modelKey`s must never be compared directly — `EmbeddingService`
-/// returns similarity 0 for such pairs.
 struct EmbeddedText {
     let vector: [Double]
     let modelKey: String
 }
 
-/// Semantic embedding service using Apple's on-device `NLContextualEmbedding`.
-///
-/// The legacy `NLEmbedding` static model has no Russian sentence model, so this
-/// service uses `NLContextualEmbedding`, which ships a Cyrillic model covering
-/// Russian, Ukrainian, Bulgarian, and Kazakh. This is what makes Russian
-/// semantics work.
-///
-/// **Two gotchas discovered empirically (don't regress these):**
-/// 1. **Case changes tokenization.** The Cyrillic model tokenizes `"Сегодня"`
-///    into characters (`С/е/г/одн/я`) but `"сегодня"` as one token — so the same
-///    fact capitalized differently produces an incompatible vector. Text is
-///    lowercased before embedding so all vectors share one tokenization.
-/// 2. **Mean-pooling over subword tokens is dominated by the shared alphabet**
-///    (unrelated Russian sentences land at ~0.94 similarity). We pool per word
-///    instead: average subword vectors within each whitespace-delimited word,
-///    then average word vectors and L2-normalize. This restores discrimination
-///    (unrelated ≈ 0.42–0.58, near-duplicates ≈ 0.84–0.97).
-///
-/// Model assets download over-the-air on first use (`requestAssets`). Until
-/// they're ready `isAvailable == false` and callers degrade to text heuristics.
 @MainActor
 final class EmbeddingService {
     static let shared = EmbeddingService()
 
-    /// Whether the Cyrillic (primary/Russian) model is ready for inference.
-    private(set) var isAvailable: Bool = false
-    /// Whether model assets are still downloading/loading.
+    var isAvailable: Bool { cyrillic.isReady || latin.isReady }
     private(set) var isWarmingUp: Bool = false
 
-    /// One contextual embedding model per writing script.
     private let latin: ContextualSlot
     private let cyrillic: ContextualSlot
 
-    /// Cached embeddings keyed by fact UUID.
-    private var cache: [UUID: EmbeddedText] = [:]
-    /// Max cache entries before eviction.
+    private var cache: [String: EmbeddedText] = [:]
     private let maxCacheSize = 200
-    /// LRU tracking: fact IDs in access order (most recent last).
-    private var lruOrder: [UUID] = []
+    private var lruOrder: [String] = []
 
-    /// Language recognizer for auto-detection.
     private let recognizer = NLLanguageRecognizer()
 
-    /// Languages covered by the Cyrillic contextual model.
     private static let cyrillicLanguages: Set<NLLanguage> = [.russian, .ukrainian, .bulgarian, .kazakh]
-    /// Languages covered by the Latin contextual model.
     private static let latinLanguages: Set<NLLanguage> = [
         .croatian, .czech, .danish, .dutch, .english, .finnish, .french, .german,
         .hungarian, .indonesian, .italian, .norwegian, .polish, .portuguese,
@@ -70,14 +36,14 @@ final class EmbeddingService {
         latin = ContextualSlot(script: .latin, label: "latin")
         cyrillic = ContextualSlot(script: .cyrillic, label: "cyrillic")
 
-        // Russian is the app's primary language — download Cyrillic assets eagerly.
         isWarmingUp = true
         Task { @MainActor in
-            let ready = await cyrillic.ensureReady()
+            let cyrillicReady = await cyrillic.ensureReady()
+            let latinReady = await latin.ensureReady()
+            let ready = cyrillicReady || latinReady
             isWarmingUp = false
             if ready {
-                isAvailable = true
-                LamoLogger.memory.info("Embedding ready: Cyrillic contextual model loaded")
+                LamoLogger.memory.info("Embedding ready")
             } else {
                 LamoLogger.memory.warning("Embedding assets unavailable — using text-based dedup")
             }
@@ -86,8 +52,6 @@ final class EmbeddingService {
 
     // MARK: - Language Detection
 
-    /// Detect the dominant language of a text string.
-    /// Returns nil if detection fails (text too short or mixed).
     func detectLanguage(_ text: String) -> NLLanguage? {
         recognizer.reset()
         recognizer.processString(text)
@@ -98,8 +62,6 @@ final class EmbeddingService {
         return lang
     }
 
-    /// Pick the model slot for a language; triggers a lazy asset download for
-    /// the Latin model on first use (Cyrillic is always pre-warmed).
     private func slot(for language: NLLanguage?) -> ContextualSlot? {
         guard let lang = language else {
             latin.warmIfNeeded()
@@ -115,36 +77,75 @@ final class EmbeddingService {
 
     // MARK: - Public API
 
-    /// Generate an embedding for a text string.
-    /// Auto-detects the language and selects the matching contextual model.
-    /// Returns nil if the model isn't ready or the language is unsupported.
     func embed(_ text: String) -> EmbeddedText? {
         let lang = detectLanguage(text)
         return embed(text, language: lang)
     }
 
-    /// Generate an embedding with an explicit language hint.
     func embed(_ text: String, language: NLLanguage?) -> EmbeddedText? {
         guard let slot = slot(for: language) else { return nil }
         guard let vector = slot.embed(text.lowercased()) else { return nil }
         return EmbeddedText(vector: vector, modelKey: slot.label)
     }
 
-    /// Get cached embedding for a fact, computing it if needed.
-    func embedding(for factID: UUID, text: String) -> EmbeddedText? {
-        if let cached = cache[factID] {
-            touchLRU(factID)
-            return cached
+    func embedAll(_ text: String) -> [EmbeddedText] {
+        let lowered = text.lowercased()
+        var result: [EmbeddedText] = []
+        if let vec = cyrillic.embed(lowered) {
+            result.append(EmbeddedText(vector: vec, modelKey: cyrillic.label))
         }
-        guard let vec = embed(text) else { return nil }
-        cache[factID] = vec
-        touchLRU(factID)
-        evictIfNeeded()
-        return vec
+        if let vec = latin.embed(lowered) {
+            result.append(EmbeddedText(vector: vec, modelKey: latin.label))
+        }
+        if result.isEmpty, let fallback = embed(text) {
+            result.append(fallback)
+        }
+        return result
     }
 
-    /// Compute cosine similarity between two embeddings (0...1).
-    /// Vectors from different models live in different spaces — returns 0.
+    func embedding(for factID: UUID, text: String) -> EmbeddedText? {
+        let all = embeddingAll(for: factID, text: text)
+        if let lang = detectLanguage(text) {
+            if Self.cyrillicLanguages.contains(lang) {
+                return all.first { $0.modelKey == cyrillic.label } ?? all.first
+            } else {
+                return all.first { $0.modelKey == latin.label } ?? all.first
+            }
+        }
+        return all.first
+    }
+
+    func embeddingAll(for factID: UUID, text: String) -> [EmbeddedText] {
+        let lowered = text.lowercased()
+        var result: [EmbeddedText] = []
+        for slot in [cyrillic, latin] {
+            let key = cacheKey(id: factID, modelKey: slot.label)
+            if let cached = cache[key] {
+                touchLRU(key)
+                result.append(cached)
+                continue
+            }
+            guard let vec = slot.embed(lowered) else { continue }
+            let embedded = EmbeddedText(vector: vec, modelKey: slot.label)
+            cache[key] = embedded
+            touchLRU(key)
+            result.append(embedded)
+        }
+        evictIfNeeded()
+        return result
+    }
+
+    func semanticSimilarity(queryVectors: [EmbeddedText], factID: UUID, factText: String) -> Float {
+        let factVectors = embeddingAll(for: factID, text: factText)
+        var best: Float = 0
+        for q in queryVectors {
+            for f in factVectors where f.modelKey == q.modelKey {
+                best = max(best, cosineSimilarity(q, f))
+            }
+        }
+        return best
+    }
+
     func cosineSimilarity(_ a: EmbeddedText, _ b: EmbeddedText) -> Float {
         guard a.modelKey == b.modelKey,
               a.vector.count == b.vector.count,
@@ -160,14 +161,33 @@ final class EmbeddingService {
         }
         let denominator = sqrt(normA) * sqrt(normB)
         guard denominator > 0 else { return 0 }
-        return Float(dotProduct / denominator)
+        return max(-1, min(1, Float(dotProduct / denominator)))
+    }
+
+    func remove(ids: [UUID]) {
+        for id in ids {
+            for modelKey in [cyrillic.label, latin.label] {
+                let key = cacheKey(id: id, modelKey: modelKey)
+                cache.removeValue(forKey: key)
+                lruOrder.removeAll { $0 == key }
+            }
+        }
+    }
+
+    func removeAll() {
+        cache.removeAll()
+        lruOrder.removeAll()
     }
 
     // MARK: - Private
 
-    private func touchLRU(_ id: UUID) {
-        lruOrder.removeAll { $0 == id }
-        lruOrder.append(id)
+    private func cacheKey(id: UUID, modelKey: String) -> String {
+        "\(id.uuidString)-\(modelKey)"
+    }
+
+    private func touchLRU(_ key: String) {
+        lruOrder.removeAll { $0 == key }
+        lruOrder.append(key)
     }
 
     private func evictIfNeeded() {
@@ -178,15 +198,12 @@ final class EmbeddingService {
     }
 }
 
-/// Manages one `NLContextualEmbedding` model: asset download, loading, and
-/// sentence-vector inference with word-aware pooling. Text passed to `embed`
-/// should already be lowercased.
 @MainActor
 private final class ContextualSlot {
     let label: String
     private let script: NLScript
     private var model: NLContextualEmbedding?
-    private var isReady = false
+    var isReady = false
     private var assetRequested = false
 
     init(script: NLScript, label: String) {
@@ -194,8 +211,6 @@ private final class ContextualSlot {
         self.label = label
     }
 
-    /// Kick off an asset download if not already requested (lazy warm-up for the
-    /// non-primary scripts). Returns immediately.
     func warmIfNeeded() {
         guard !isReady, !assetRequested else { return }
         assetRequested = true
@@ -240,8 +255,6 @@ private final class ContextualSlot {
         return Self.wordAwareVector(from: result, text: text, dimension: model.dimension)
     }
 
-    /// Mean-pool subword vectors per whitespace-delimited word, then average the
-    /// word vectors and L2-normalize. See `EmbeddingService` docs for why.
     private static func wordAwareVector(from result: NLContextualEmbeddingResult, text: String, dimension: Int) -> [Double]? {
         var words: [[[Double]]] = []
         var idx = text.startIndex
@@ -251,9 +264,14 @@ private final class ContextualSlot {
                 continue
             }
             if vec.count == dimension {
-                let isWordStart = range.lowerBound == text.startIndex
-                    || text[text.index(before: range.lowerBound)] == " "
-                if isWordStart { words.append([]) }
+                let isWordStart: Bool
+                if range.lowerBound == text.startIndex {
+                    isWordStart = true
+                } else {
+                    let prev = text[text.index(before: range.lowerBound)]
+                    isWordStart = prev.isWhitespace || prev.isPunctuation
+                }
+                if isWordStart || words.isEmpty { words.append([]) }
                 words[words.count - 1].append(vec)
             }
             idx = range.upperBound

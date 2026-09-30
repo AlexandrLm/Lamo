@@ -280,20 +280,17 @@ final class ChatViewModel {
                 case .loopDetected:
                     if retryCount < maxRetries {
                         LamoLogger.engine.warning("Loop detected, retry #\(retryCount + 1)")
-                        // Delete the botched partial message
                         if let msgIdx = indexForStreamingMessage() {
                             modelContext.delete(messages[msgIdx])
                             messages.remove(at: msgIdx)
                         }
-                        // Reset streaming state
                         streamingTask?.cancel()
                         streamBuffer.reset()
                         streamingMessageID = nil
                         streamingIndex = nil
                         isStreaming = false
                         invalidateChatMessages()
-                        // Create a fresh message for the retry
-                        let retryMsg = Message(content: String(localized: "[Retrying…]"), role: .assistant, isStreaming: true, conversation: conversation)
+                        let retryMsg = Message(content: "", role: .assistant, isStreaming: true, conversation: conversation)
                         addMessage(retryMsg)
                         streamingMessageID = retryMsg.id
                         streamingIndex = messages.firstIndex(where: { $0.id == retryMsg.id })
@@ -384,16 +381,12 @@ final class ChatViewModel {
             return
         }
         if success == false, let error {
-            // Keep any partial content streamed before the failure; surface the error
-            // in a dedicated state so the UI can offer a retry action.
             messages[index].errorDescription = error.localizedDescription
         }
         if let benchmark = pendingBenchmark {
             messages[index].benchmark = benchmark
             pendingBenchmark = nil
         }
-        // Clear fileContent from older user messages — already processed by model.
-        // Hoisted the last-user lookup out of the loop (was O(n²)).
         let lastUserID = messages.last(where: { $0.role == .user })?.id
         for i in 0..<messages.count {
             if messages[i].role == .user && messages[i].id != lastUserID {
@@ -407,19 +400,16 @@ final class ChatViewModel {
         streamBuffer.reset()
         conversation.updatedAt = .now
         saveWithErrorHandling()
-        // Free memory AFTER save: clear fileContent (transient), keep thinking visible
         messages[index].fileContent = ""
         invalidateChatMessages()
         if success == true {
             feedbackGenerator.notificationOccurred(.success)
-            // Proactive summarization: if KV-cache exceeds configured threshold, compress.
             let threshold = ProviderManager.shared.compressionThreshold
             if let tracker = contextTracker,
                tracker.fillRatio > threshold,
                messages.count > 6 {
                 Task { await compressConversation() }
             }
-            // Fallback: if messages were dropped from context, generate a basic summary.
             if (contextTracker?.hasDroppedMessages ?? false)
                 && conversation.summary.isEmpty && messages.count > 15 {
                 Task { await generateConversationSummary() }
@@ -442,7 +432,6 @@ final class ChatViewModel {
         let pm = ProviderManager.shared
         let currentChatMessages = self.chatMessages
 
-        // Extract last user message for semantic memory retrieval (RAG).
         let userQuery = messages.last(where: { $0.role == .user })?.content
 
         let fullSystem = memoryService.buildFullSystemPrompt(
@@ -451,15 +440,8 @@ final class ChatViewModel {
             userQuery: userQuery
         )
 
-        // Memory context is already baked into fullSystem — count it once.
-        // Splitting it back out keeps the tracker breakdown honest (memory shown
-        // as its own row) without charging the budget twice and dropping
-        // messages earlier than necessary.
         let memCtx = memoryService.buildMemoryContext(for: userQuery)
-        // Count exactly what the builder sends: full system prompt + the same
-        // <current_time> block (ConversationBuilder.currentTimeBlock).
         let timedSystem = fullSystem + ConversationBuilder.currentTimeBlock(messageCount: currentChatMessages.count)
-        // Concurrent tokenization — the three counts are independent.
         async let sysTokensTask: Int = pm.tokenizeCount(timedSystem)
         async let tokenCountsTask: [UUID: Int] = pm.tokenizeMessages(currentChatMessages)
         async let memTokensRawTask: Int = pm.tokenizeCount(memCtx)
@@ -479,7 +461,6 @@ final class ChatViewModel {
         )
     }
 
-    /// Save with error logging — never silently swallows SwiftData errors.
     private func saveWithErrorHandling() {
         do {
             try modelContext.save()
@@ -488,11 +469,8 @@ final class ChatViewModel {
         }
     }
 
-    /// Generate a basic summary from dropped messages as a fallback.
-    /// Skipped if the model already provided a summary via update_memory tool.
     private func generateConversationSummary() async {
         guard let tracker = contextTracker else { return }
-        // Skip if the model already generated a summary via update_memory
         guard conversation.summary.isEmpty else { return }
 
         let droppedIDs = Set(tracker.messageUsages.filter { !$0.isInContext && !$0.isStreaming }.map(\.id))
@@ -509,26 +487,31 @@ final class ChatViewModel {
         saveWithErrorHandling()
     }
 
-    /// Compress conversation history using LLM summarization when KV-cache exceeds 60%.
-    /// Stores result in conversation.summary, which is injected into system prompt on next turn.
     private func compressConversation() async {
-        // Don't compress if already done recently (summary exists and messages haven't doubled since)
         if !conversation.summary.isEmpty, messages.count < 25 { return }
 
         let chatMessages = self.chatMessages
         guard chatMessages.count > 4 else { return }
 
-        // Exclude the last exchange (user+assistant) — keep context for continuity
         let toCompress = Array(chatMessages.dropLast(2))
         guard toCompress.count >= 4 else { return }
 
         guard let summary = await ProviderManager.shared.summarizeMessages(toCompress) else { return }
 
-        // Guard: user may have sent a new message while we were summarizing.
-        // Don't show a stale compression card over new streaming content.
         guard !isStreaming, streamingMessageID == nil else { return }
 
-        let capped = String(summary.prefix(Conversation.maxSummaryChars))
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let capped: String
+        if conversation.summary.isEmpty {
+            capped = String(trimmed.prefix(Conversation.maxSummaryChars))
+        } else if !trimmed.contains(conversation.summary) && !conversation.summary.contains(trimmed) {
+            capped = String((conversation.summary + "\n" + trimmed).suffix(Conversation.maxSummaryChars))
+        } else if trimmed.count > conversation.summary.count {
+            capped = String(trimmed.prefix(Conversation.maxSummaryChars))
+        } else {
+            return
+        }
         conversation.summary = capped
         saveWithErrorHandling()
         memoryService.invalidateCaches()

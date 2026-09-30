@@ -3,17 +3,6 @@ import Foundation
 import SwiftData
 import os
 
-/// Provider that runs a local LLM via Google's LiteRT-LM framework.
-/// Supports GPU (Metal) acceleration, streaming, and persistent conversation caching.
-///
-/// Performance notes:
-/// - Conversation is rebuilt each turn, but tokenization is cached for speed.
-/// - When context fills up, old messages are auto-summarized via the model.
-/// - Budget is calculated using the real tokenizer, not char/4 approximation.
-///
-/// @unchecked Sendable: required because LiteRTLM.Engine is imported via
-/// @preconcurrency and Swift cannot verify its Sendable conformance. All
-/// mutable state is protected by OSAllocatedUnfairLock.
 final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
     let name = "LiteRT-LM"
 
@@ -64,19 +53,11 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         messages: [ChatMessage],
         continuation: AsyncStream<StreamingToken>.Continuation
     ) async throws {
-        // The engine is owned by ProviderManager/EngineLifecycle. Lazily
-        // creating + initializing one here blocked the streaming path on
-        // model-load I/O and duplicated EngineLifecycle config — fail fast
-        // instead so the UI can show the real engine state.
         guard let resolvedEngine = engine else {
             throw LamoError.engineNotReady
         }
 
-        // Extract last user message for semantic memory retrieval (RAG).
         let userQuery = messages.last(where: { $0.role == .user })?.content
-        // buildFullSystemPrompt already bakes the memory context into the prompt —
-        // no separate buildMemoryContext call (avoids re-running RAG and
-        // double-counting memory tokens in the budget).
         let systemPrompt = MemoryService.shared.buildFullSystemPrompt(
             base: ProviderManager.shared.systemPrompt,
             conversationID: messages.first?.conversationID,
@@ -127,16 +108,15 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
 
         let repDetector = RepetitionDetector(windowSize: 2000, minBufferSize: 100, checkFrequency: 5)
 
-        // Native decode-time guardrails: repetition penalties prevent loops before
-        // RepetitionDetector would have to kill the stream, and maxOutputTokens
-        // bounds runaway generations (protects the KV-cache budget).
         let guardrails = GenerationGuardrails.main
+        let headroom = await AgenticLoopBudget.shared.headroom
+        let maxOut = GenerationGuardrails.maxOutputTokens(headroom: max(headroom, 512))
         for try await chunk in conversation.sendMessageStream(
             message,
             extraContext: extraContext,
             repetitionPenaltyConfig: guardrails.repetitionPenaltyConfig,
             noRepeatNgramConfig: guardrails.noRepeatNgramConfig,
-            maxOutputTokens: guardrails.maxOutputTokens
+            maxOutputTokens: maxOut
         ) {
             guard !Task.isCancelled else {
                 try? conversation.cancel()
@@ -179,9 +159,6 @@ final class LiteRTLMProvider: LLMProvider, @unchecked Sendable {
         continuation.finish()
     }
 
-    /// Build a LiteRTLM.Message from a ChatMessage.
-    /// Attached-file text is capped at 8000 chars — uncapped PDFs previously
-    /// blew the context window before the user prompt was even counted.
     private static let maxFileChars = 8000
 
     private func buildLiteMessage(from msg: ChatMessage, role: LiteRTLM.Role) -> LiteRTLM.Message {

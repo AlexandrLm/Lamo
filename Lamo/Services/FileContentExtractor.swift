@@ -4,16 +4,12 @@ import UIKit
 import UniformTypeIdentifiers
 import os
 
-/// Extracts readable text from various file formats for LLM consumption.
 nonisolated enum FileContentExtractor {
     private static let logger = Logger(subsystem: LamoLogger.subsystem, category: "FileExtractor")
 
-    /// Max characters to extract per file (to stay within token budget).
-    static let maxCharsPerFile = 15_000
-    /// Refuse to load files larger than this into memory.
+    static let maxCharsPerFile = 8_000
     static let maxFileBytes = 5 * 1024 * 1024
 
-    /// Extract text content from a file URL.
     static func extract(from url: URL) async throws -> String {
         try checkFileSize(url)
         let type = UTType(filenameExtension: url.pathExtension) ?? .data
@@ -33,9 +29,6 @@ nonisolated enum FileContentExtractor {
         } else if url.pathExtension == "pptx" {
             raw = try extractPPTX(from: url)
         } else {
-            // Every remaining type is read as text: known text extensions are
-            // checked explicitly, unknown ones get one decoding attempt and a
-            // clear error if that fails.
             raw = try readTextFile(from: url)
         }
 
@@ -50,12 +43,10 @@ nonisolated enum FileContentExtractor {
         """
     }
 
-    /// For scanned/image PDFs — render pages as images for multimodal models.
-    /// Returns rendered page images (max 20 pages, 2x scale).
     static func extractPDFImages(from url: URL) -> [UIImage] {
         guard let doc = PDFDocument(url: url) else { return [] }
         var images: [UIImage] = []
-        let maxPages = min(doc.pageCount, 20)
+        let maxPages = min(doc.pageCount, 8)
 
         for i in 0..<maxPages {
             let image: UIImage? = autoreleasepool {

@@ -48,7 +48,7 @@ enum ToolDefinitions {
             or asks you to remember something. \
             Use 'facts' to save new personal info (each fact one short sentence, e.g. "User lives in Berlin"). \
             Old contradictory facts are automatically replaced — no need to manually forget first. \
-            Use 'forget' to remove facts by EXACT text (use include_existing=true first to see what's stored). \
+            Use 'forget' to remove facts by exact text, [index], or close paraphrase (use include_existing=true first). \
             Use 'summary' for a brief 2-3 sentence recap of the conversation so far. \
             Use 'include_existing'=true to read all stored facts before making changes. \
             DO NOT call for generic questions, one-off tasks, or temporary info — only for persistent personal facts. \

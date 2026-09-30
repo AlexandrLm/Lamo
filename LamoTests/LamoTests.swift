@@ -2262,6 +2262,21 @@ struct MemoryDeduplicatorTests {
 
     @Test func findConflictingFactDetected() {
         let id = UUID()
+        let fact = MemoryEntry(id: id, text: "user name is Alice Johnson", conversationID: UUID())
+        let wordCache: [UUID: Set<String>] = [id: MemoryDeduplicator.wordSet(from: "user name is Alice Johnson")]
+        let normCache: [UUID: String] = [id: MemoryDeduplicator.normalizeText("user name is Alice Johnson")]
+
+        let conflictID = MemoryDeduplicator.findConflictingFact(
+            "user name is Bob Smith",
+            existingFacts: [fact],
+            wordSetsCache: wordCache,
+            normalizedCache: normCache
+        )
+        #expect(conflictID == id)
+    }
+
+    @Test func findConflictingFactLikesNoConflict() {
+        let id = UUID()
         let fact = MemoryEntry(id: id, text: "user really loves visiting Paris every summer", conversationID: UUID())
         let wordCache: [UUID: Set<String>] = [id: MemoryDeduplicator.wordSet(from: "user really loves visiting Paris every summer")]
         let normCache: [UUID: String] = [id: MemoryDeduplicator.normalizeText("user really loves visiting Paris every summer")]
@@ -2272,7 +2287,7 @@ struct MemoryDeduplicatorTests {
             wordSetsCache: wordCache,
             normalizedCache: normCache
         )
-        #expect(conflictID == id)
+        #expect(conflictID == nil)
     }
 
     @Test func findConflictingFactNoConflict() {

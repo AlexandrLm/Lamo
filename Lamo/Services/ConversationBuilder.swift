@@ -37,12 +37,8 @@ struct ConversationBuilder {
 
     // MARK: - Shared constants and caches
 
-    /// Hard cap for file text injected into a single message.
-    static let maxFileChars = 15_000
-    /// Hard cap for the auto-summarization request payload.
+    static let maxFileChars = 8_000
     static let maxSummaryChars = 8_000
-    /// Tool schema JSON per tool-set key. Tool sets change only in Settings,
-    /// so caching avoids re-serializing every schema on each turn.
     private static let toolSchemaTextCache = OSAllocatedUnfairLock(initialState: [String: String]())
 
     /// Cached tool-schema text for one tool-set key.
@@ -83,9 +79,6 @@ struct ConversationBuilder {
 
     // MARK: - Conversation Building
 
-    /// Build a conversation with token-accurate budget and auto-summarization.
-    /// `systemPrompt` must already include memory context (buildFullSystemPrompt
-    /// bakes it in) — memory tokens are NOT charged a second time.
     func build(
         messages: [ChatMessage],
         systemPrompt: String,
@@ -93,31 +86,20 @@ struct ConversationBuilder {
     ) async throws -> LiteRTLM.Conversation {
         let pm = ProviderManager.shared
 
-        // --- System prompt (mutable copy for augmentation) ---
         var augmentedPrompt = systemPrompt
-
-        // --- Inject current time into system prompt ---
-        // Done BEFORE tokenizing so the budget matches what is actually sent.
-        // The same block is counted by the tracker via currentTimeBlock().
         augmentedPrompt += Self.currentTimeBlock(messageCount: messages.count)
 
-        // --- Build tool list (needed before budgeting: tool schemas occupy
-        // context on every single turn) ---
         let samplerConfig = try buildSamplerConfig()
-        // Web tools only included when network is available.
         var allTools: [LiteRTLM.Tool] = []
         if AppDefaults.toolGetLocation.wrappedValue { allTools.append(GetLocationTool()) }
         if AppDefaults.toolWeather.wrappedValue { allTools.append(WeatherTool()) }
         if AppDefaults.toolCalendar.wrappedValue { allTools.append(CalendarTool()) }
         if AppDefaults.memoryEnabled.wrappedValue { allTools.append(UpdateMemoryTool()) }
-        // Internet-dependent tools
         if networkAvailable {
             if AppDefaults.toolWebSearch.wrappedValue { allTools.append(WebSearchTool()) }
             if AppDefaults.toolFetchURL.wrappedValue { allTools.append(FetchUrlTool()) }
         }
 
-        // --- Tokenize tool schemas using real getSchema() output ---
-        // Schema text cached per tool-set key; counts via TokenBudget cache.
         let toolKey = [
             AppDefaults.toolGetLocation.wrappedValue,
             AppDefaults.toolWeather.wrappedValue,
@@ -143,44 +125,35 @@ struct ConversationBuilder {
         pm.lastToolCount = allTools.count
         pm.lastToolCountTotal = ToolDefinitions.allNames.count
 
-        // --- Token budget calculation (real tokenizer, not char/4) ---
-        let effectiveMaxTokens = maxNumTokens ?? max(pm.maxNumTokens, 2048)
-        // systemPrompt already contains the memory context — counting memory
-        // separately here would subtract the same tokens twice and shrink the
-        // usable context (messages dropped earlier than needed).
-        let systemTokens = await pm.tokenizeCount(augmentedPrompt)
+        let effectiveMaxTokens = maxNumTokens ?? pm.maxNumTokens
+        let systemTokensBeforeSummary = await pm.tokenizeCount(augmentedPrompt)
 
-        // Use ContextTracker for accurate message selection
         let messageTokenCounts = await pm.tokenizeMessages(messages)
         let budgetResult = ContextTracker.calculateIncluded(
             messages: messages,
             tokenCounts: messageTokenCounts,
-            systemPromptTokens: systemTokens,
-            // Memory is already inside systemTokens — never charge it twice.
+            systemPromptTokens: systemTokensBeforeSummary,
             memoryTokens: 0,
             toolTokens: toolDefTokens,
             maxNumTokens: effectiveMaxTokens
         )
 
-        // --- Auto-summarization when context is full ---
         let includedMessages = budgetResult.included
         if budgetResult.needsSummary,
            !budgetResult.dropped.isEmpty {
             if let summary = await summarizeOldContext(dropped: budgetResult.dropped) {
                 LamoLogger.engine.info("Auto-summary: \(budgetResult.dropped.count) messages → \(summary.count) chars")
-                // Inject summary into system prompt
                 augmentedPrompt += "\n\n<earlier_context_summary>\n\(summary)\n</earlier_context_summary>"
-                // Persist summary for future conversations
                 let conversationID = messages.first?.conversationID
                 if let conversationID {
                     await MemoryService.shared.updateConversationSummary(summary, conversationID: conversationID)
                 }
             }
         }
+        let systemTokens = await pm.tokenizeCount(augmentedPrompt)
 
         await AgenticLoopBudget.shared.reset()
 
-        // --- Build LiteRT-LM messages ---
         let systemMessage = LiteRTLM.Message(augmentedPrompt, role: .system)
         var allMessages: [LiteRTLM.Message] = [systemMessage]
 
@@ -197,9 +170,6 @@ struct ConversationBuilder {
             }
         }
 
-        // --- Accurate conversation tokens (real tokenizer, conservative fallback) ---
-        // Fallback uses the shared estimator (ASCII ≈ 4 chars/token, CJK ≈ 1)
-        // instead of count/4, matching the tracker and the budget.
         let conversationTokens = includedMessages.reduce(0) { acc, msg in
             acc + (messageTokenCounts[msg.id] ?? AgenticLoopBudget.estimateTokens(of: msg.content))
         }
@@ -210,7 +180,6 @@ struct ConversationBuilder {
             maxIterations: 5
         )
 
-        // Enable constrained decoding to force valid tool calls (reduces hallucinations)
         ExperimentalFlags.optIntoExperimentalAPIs()
         ExperimentalFlags.enableConversationConstrainedDecoding = true
 
@@ -223,8 +192,6 @@ struct ConversationBuilder {
         do {
             return try await engine.createConversation(with: config)
         } catch {
-            // Fallback: minimal history (system prompt + last user message only),
-            // but KEEP tools — dropping them makes the model hallucinate tool calls.
             LamoLogger.engine.warning("Conversation creation failed, falling back to minimal: \(error)")
             var minimal: [LiteRTLM.Message] = [systemMessage]
             if let last = allMessages.last, last.role == .user {
@@ -241,16 +208,13 @@ struct ConversationBuilder {
 
     // MARK: - Current Time Block (shared with tracker)
 
-    /// Current-time injection, shared with the context tracker so the menu
-    /// counts exactly the string that is sent to the model.
-    /// First message: full info (date, weekday, tz, unix). Subsequent: time only.
     static func currentTimeBlock(messageCount: Int, now: Date = Date()) -> String {
         Self.formatterLock.lock()
         defer { Self.formatterLock.unlock() }
+        let todayStr = Self.dateFormatter.string(from: now)
+        let timeStr = Self.timeFormatter.string(from: now)
+        let weekdayStr = Self.weekdayFormatter.string(from: now)
         if messageCount <= 1 {
-            let todayStr = Self.dateFormatter.string(from: now)
-            let timeStr = Self.timeFormatter.string(from: now)
-            let weekdayStr = Self.weekdayFormatter.string(from: now)
             let tz = TimeZone.current
             let utcOffset = tz.secondsFromGMT(for: now) / 3600
             return """
@@ -267,7 +231,11 @@ struct ConversationBuilder {
         } else {
             return """
 
-            <current_time>\(Self.timeFormatter.string(from: now))</current_time>
+            <current_time>
+              iso_date: \(todayStr)
+              time: \(timeStr)
+              weekday: \(weekdayStr)
+            </current_time>
             """
         }
     }

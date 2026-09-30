@@ -3,15 +3,6 @@ import SwiftData
 import Combine
 import os
 
-/// Semantic memory that stores facts about the user.
-///
-/// Architecture:
-/// 1. During LLM response → model calls update_memory tool with facts
-/// 2. Facts stored as plain text in SwiftData
-/// 3. Embeddings computed via NLContextualEmbedding (on-device BERT) for semantic dedup
-/// 4. Before each LLM call → semantically relevant facts injected into system prompt
-///
-/// Hybrid approach: embeddings for semantic understanding + text heuristics as fallback.
 @MainActor
 final class MemoryService: ObservableObject {
     static let shared = MemoryService()
@@ -27,62 +18,33 @@ final class MemoryService: ObservableObject {
     private(set) var modelContext: ModelContext?
     private var factsCache: [MemoryEntry] = []
     private var cacheLoaded = false
-    /// Cached result of buildMemoryContext() — invalidated on any fact change.
-    /// Keyed by query (nil = generic ranking). The query path is cached too:
-    /// without it, embedding + ranking re-runs up to 4× per response
-    /// (tracker build + provider inference), and each run re-bumps usageCount.
     private var memoryContextCache: (query: String?, result: String)?
-    /// Cached word sets for duplicate detection — computed on load, updated on mutation.
     private var wordSetsCache: [UUID: Set<String>] = [:]
-    /// Cached normalized text for conflict detection.
     private var normalizedCache: [UUID: String] = [:]
-    /// Cache for the full system prompt including memory — invalidated on fact/summary change.
     private var systemPromptCache: (base: String, conversationID: UUID?, result: String)?
 
-    /// Max facts to inject into system prompt.
     private let maxFacts = 50
-    /// Max chars for memory context injected into system prompt (~750 tokens for most tokenizers).
     private let maxMemoryChars = 3000
-    /// Days for age-based relevance decay (half-life).
     private let ageDecayHalfLife: Double = 30
 
-    /// Context builder for ranking and formatting memory facts.
     private let contextBuilder = MemoryContextBuilder(maxFacts: 50, maxMemoryChars: 3000, ageDecayHalfLife: 30)
 
-    /// Embedding service for semantic similarity.
     private let embeddings = EmbeddingService.shared
-    /// Cosine similarity threshold for considering two facts duplicates.
-    ///
-    /// Calibrated against the on-device NLContextualEmbedding vectors (word-pooled,
-    /// lowercased): genuine rephrasings ("user name is Alice Johnson" vs "... Bob
-    /// Smith" aside) cluster at 0.96–0.99, while structurally similar but distinct
-    /// facts land at 0.85–0.95. A threshold of 0.96 merges rephrasings without
-    /// dropping distinct facts — e.g. a name change must be replaced, not treated
-    /// as a duplicate.
     private let embeddingDedupThreshold: Float = 0.96
 
     // MARK: - Init
 
-    /// Internal so tests can construct isolated instances (per-test containers)
-    /// instead of all racing on the shared singleton's model context.
     init() {
-        // isEnabled is already initialized via AppDefaults in the property declaration
     }
 
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        // A different store means different facts — drop all caches so the next
-        // build reads from the new context (test isolation, engine reload).
         invalidateCaches()
         updateEntryCount()
     }
 
     // MARK: - Fact Extraction
 
-    /// Store facts directly (called by UpdateMemoryTool).
-    /// Deduplicates against existing facts and resolves conflicts (replaces old contradictory facts).
-    /// `conversationID` records provenance; nil falls back to a fresh UUID.
-    /// Returns what actually happened per fact so the tool can report back to the model.
     @discardableResult
     func storeFacts(_ facts: [String], conversationID: UUID? = nil) async -> (stored: [String], skipped: [String]) {
         guard isEnabled, let context = modelContext else { return ([], []) }
@@ -94,27 +56,22 @@ final class MemoryService: ObservableObject {
             let trimmed = fact.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.count >= 10 else { skipped.append(trimmed); continue }
 
-            // Fast text-based pre-filter
             if MemoryDeduplicator.isDuplicateText(trimmed, existingFacts: factsCache, wordSetsCache: &wordSetsCache, normalizedCache: &normalizedCache) {
                 skipped.append(trimmed)
                 continue
             }
 
-            // Embedding-based semantic check (deeper check)
-            if MemoryDeduplicator.isDuplicateEmbedding(trimmed, existingFacts: factsCache, embeddingService: embeddings, threshold: embeddingDedupThreshold) {
-                skipped.append(trimmed)
-                continue
-            }
-
-            // Check for conflicting fact (same subject, different statement)
             if let conflictID = MemoryDeduplicator.findConflictingFact(trimmed, existingFacts: factsCache, wordSetsCache: wordSetsCache, normalizedCache: normalizedCache) {
-                // Replace the old conflicting fact with the new one
                 if let oldEntry = factsCache.first(where: { $0.id == conflictID }) {
                     context.delete(oldEntry)
                     factsCache.removeAll { $0.id == conflictID }
                     wordSetsCache.removeValue(forKey: conflictID)
                     normalizedCache.removeValue(forKey: conflictID)
+                    embeddings.remove(ids: [conflictID])
                 }
+            } else if MemoryDeduplicator.isDuplicateEmbedding(trimmed, existingFacts: factsCache, embeddingService: embeddings, threshold: embeddingDedupThreshold) {
+                skipped.append(trimmed)
+                continue
             }
 
             let entry = MemoryEntry(
@@ -126,9 +83,6 @@ final class MemoryService: ObservableObject {
             wordSetsCache[entry.id] = MemoryDeduplicator.wordSet(from: trimmed)
             normalizedCache[entry.id] = MemoryDeduplicator.normalizeText(trimmed)
 
-            // Pre-compute embedding in background (non-blocking for store speed).
-            // Capture values only — the model instance may be destroyed if the
-            // context is reset (test teardown, memory pressure) before the task runs.
             if embeddings.isAvailable {
                 let id = entry.id
                 Task { @MainActor in
@@ -153,38 +107,83 @@ final class MemoryService: ObservableObject {
         return (stored, skipped)
     }
 
-    /// Update the summary of a conversation (called by UpdateMemoryTool / ConversationBuilder).
     func updateConversationSummary(_ summary: String, conversationID: UUID? = nil) async {
         guard let context = modelContext, let convID = conversationID else { return }
         let descriptor = FetchDescriptor<Conversation>(
             predicate: #Predicate { $0.id == convID }
         )
         guard let conversation = try? context.fetch(descriptor).first else { return }
-        conversation.summary = summary
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if conversation.summary.isEmpty {
+            conversation.summary = String(trimmed.prefix(Conversation.maxSummaryChars))
+        } else if !trimmed.contains(conversation.summary) && !conversation.summary.contains(trimmed) {
+            let chained = conversation.summary + "\n" + trimmed
+            conversation.summary = String(chained.suffix(Conversation.maxSummaryChars))
+        } else if trimmed.count > conversation.summary.count {
+            conversation.summary = String(trimmed.prefix(Conversation.maxSummaryChars))
+        } else {
+            return
+        }
         try? context.save()
         invalidateCaches()
     }
 
-    /// Remove facts by exact text match (called by UpdateMemoryTool).
-    /// The model must provide the exact fact text — substring matching is NOT used.
-    /// Returns the canonical stored text of removed facts and the inputs that matched nothing,
-    /// so the tool can tell the model which forgets actually happened.
     @discardableResult
     func removeFacts(_ factsToRemove: [String]) async -> (removed: [String], notFound: [String]) {
         guard let context = modelContext else { return ([], factsToRemove) }
-        var remaining = Set(factsToRemove.map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        })
+        if !cacheLoaded { loadCache() }
 
-        // Collect IDs to remove first — avoids mutating the array during iteration.
+        var remainingInputs = factsToRemove
         var idsToRemove = Set<UUID>()
         var removedTexts: [String] = []
-        for entry in factsCache {
-            let normalized = entry.text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            if remaining.contains(normalized) {
-                idsToRemove.insert(entry.id)
-                removedTexts.append(entry.text)
-                remaining.remove(normalized)
+
+        for input in factsToRemove {
+            let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            let indexText = trimmed.hasPrefix("[") && trimmed.hasSuffix("]")
+                ? String(trimmed.dropFirst().dropLast()) : trimmed
+            if let idx = Int(indexText.trimmingCharacters(in: .whitespaces)),
+               idx >= 0, idx < factsCache.count {
+                let sorted = factsCache.sorted { $0.timestamp > $1.timestamp }
+                if idx < sorted.count {
+                    let entry = sorted[idx]
+                    if !idsToRemove.contains(entry.id) {
+                        idsToRemove.insert(entry.id)
+                        removedTexts.append(entry.text)
+                        remainingInputs.removeAll { $0 == input }
+                    }
+                    continue
+                }
+            }
+            let normalizedInput = MemoryDeduplicator.normalizeText(trimmed)
+            var matched = false
+            for entry in factsCache where !idsToRemove.contains(entry.id) {
+                let normalizedStored = normalizedCache[entry.id] ?? MemoryDeduplicator.normalizeText(entry.text)
+                if normalizedStored == normalizedInput {
+                    idsToRemove.insert(entry.id)
+                    removedTexts.append(entry.text)
+                    matched = true
+                    break
+                }
+            }
+            if !matched {
+                for entry in factsCache where !idsToRemove.contains(entry.id) {
+                    let normalizedStored = normalizedCache[entry.id] ?? MemoryDeduplicator.normalizeText(entry.text)
+                    guard normalizedStored.count > 10 && normalizedInput.count > 10 else { continue }
+                    if normalizedStored.contains(normalizedInput) || normalizedInput.contains(normalizedStored) {
+                        let ratio = Double(min(normalizedStored.count, normalizedInput.count))
+                            / Double(max(normalizedStored.count, normalizedInput.count))
+                        if ratio > 0.7 {
+                            idsToRemove.insert(entry.id)
+                            removedTexts.append(entry.text)
+                            matched = true
+                            break
+                        }
+                    }
+                }
+            }
+            if matched {
+                remainingInputs.removeAll { $0 == input }
             }
         }
 
@@ -207,9 +206,8 @@ final class MemoryService: ObservableObject {
         } catch {
             LamoLogger.memory.error("Remove error: \(error)")
         }
-        return (removedTexts, factsToRemove.filter {
-            remaining.contains($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
-        })
+        embeddings.remove(ids: Array(idsToRemove))
+        return (removedTexts, remainingInputs)
     }
 
     /// Returns all currently stored facts as an array of strings.
@@ -220,47 +218,33 @@ final class MemoryService: ObservableObject {
 
     // MARK: - Context Building
 
-    /// Build memory context string for injection into system prompt.
-    ///
-    /// When `query` is provided (the user's latest message), uses true RAG semantic retrieval:
-    /// 1. Embeds the query
-    /// 2. Ranks facts by blended score (semantic similarity 70% + usage/recency 30%)
-    /// 3. Returns only facts relevant to the current query
-    ///
-    /// When `query` is nil (context tracker, settings changes), falls back to
-    /// ranking by usage count + recency only. Result is cached.
-    ///
-    /// Delegates ranking and formatting to MemoryContextBuilder.
     func buildMemoryContext(for query: String? = nil) -> String {
         guard isEnabled else { return "" }
         if !cacheLoaded { loadCache() }
         guard !factsCache.isEmpty else { return "" }
 
-        // Query-keyed cache: the same query resolves to the same ranking within a
-        // turn. Covers both the nil-query (context tracker) and RAG paths.
         if let cached = memoryContextCache, cached.query == query {
             return cached.result
         }
 
-        // Compute query embedding for semantic retrieval
-        let queryVec: EmbeddedText?
+        let queryVecs: [EmbeddedText]
         if let query, embeddings.isAvailable {
-            queryVec = embeddings.embed(query)
+            queryVecs = embeddings.embedAll(query)
         } else {
-            queryVec = nil
+            queryVecs = []
         }
 
         let result = contextBuilder.buildContext(
             factsCache: factsCache,
             embeddingService: embeddings,
             lastQueryText: query ?? "",
-            lastQueryEmbedding: queryVec
+            lastQueryEmbedding: queryVecs.first,
+            lastQueryEmbeddings: queryVecs
         )
 
         memoryContextCache = (query: query, result: result.context)
 
-        // Increment usageCount for included facts (async save, non-blocking)
-        if !result.includedFacts.isEmpty {
+        if !result.includedFacts.isEmpty, query != nil {
             Task { @MainActor [includedFacts = result.includedFacts] in
                 guard let ctx = modelContext else { return }
                 for fact in includedFacts {
@@ -314,19 +298,18 @@ final class MemoryService: ObservableObject {
 
     // MARK: - Maintenance
 
-    /// All stored facts, sorted by date.
     var allFacts: [MemoryEntry] {
         if !cacheLoaded { loadCache() }
         return factsCache.sorted { $0.timestamp > $1.timestamp }
     }
 
-    /// Delete a single fact by ID.
     func deleteFact(_ entry: MemoryEntry) {
         guard let context = modelContext else { return }
         context.delete(entry)
         factsCache.removeAll { $0.id == entry.id }
         wordSetsCache.removeValue(forKey: entry.id)
         normalizedCache.removeValue(forKey: entry.id)
+        embeddings.remove(ids: [entry.id])
         invalidateCaches()
         do {
             try context.save()
@@ -344,6 +327,7 @@ final class MemoryService: ObservableObject {
             factsCache.removeAll()
             wordSetsCache.removeAll()
             normalizedCache.removeAll()
+            embeddings.removeAll()
             cacheLoaded = false
             invalidateCaches()
             updateEntryCount()
@@ -360,11 +344,17 @@ final class MemoryService: ObservableObject {
         )
         do {
             let old = try context.fetch(descriptor)
-            for entry in old { context.delete(entry) }
+            let protectedIDs = Set(factsCache.filter { $0.usageCount >= 3 }.map { $0.id })
+            var removedIDs: [UUID] = []
+            for entry in old where !protectedIDs.contains(entry.id) {
+                context.delete(entry)
+                removedIDs.append(entry.id)
+            }
             try context.save()
             factsCache.removeAll()
             wordSetsCache.removeAll()
             normalizedCache.removeAll()
+            embeddings.remove(ids: removedIDs)
             cacheLoaded = false
             invalidateCaches()
             updateEntryCount()
@@ -373,10 +363,6 @@ final class MemoryService: ObservableObject {
         }
     }
 
-    // MARK: - Private: Pruning
-
-    /// Remove oldest, least-used facts to stay within budget.
-    /// Saves changes to SwiftData.
     private func pruneOldest(keepCount: Int) {
         guard let context = modelContext, factsCache.count > keepCount else { return }
 
@@ -396,6 +382,7 @@ final class MemoryService: ObservableObject {
             wordSetsCache.removeValue(forKey: id)
             normalizedCache.removeValue(forKey: id)
         }
+        embeddings.remove(ids: Array(removeIDs))
 
         try? context.save()
     }

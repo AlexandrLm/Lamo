@@ -1,16 +1,9 @@
 import Foundation
 
-/// Static deduplication helpers for memory facts.
-/// Extracted from MemoryService to reduce complexity.
 enum MemoryDeduplicator {
 
     // MARK: - Text-Based Deduplication
 
-    /// Check if a fact is too similar to any existing fact using word-set comparison.
-    /// Uses two-stage detection:
-    /// 1. Jaccard similarity on word sets (fast, catches rephrasings)
-    /// 2. Normalized text comparison (catches near-identical text)
-    /// Threshold adapts to fact length — shorter facts need higher similarity to be duplicates.
     static func isDuplicateText(
         _ newFact: String,
         existingFacts: [MemoryEntry],
@@ -23,7 +16,6 @@ enum MemoryDeduplicator {
         let newNormalized = normalizeText(newFact)
         let wordCount = newWords.count
 
-        // Stricter threshold for short facts (3-5 words can overlap by chance)
         let jaccardThreshold: Float = wordCount <= 5 ? 0.75 : 0.60
 
         for existing in existingFacts {
@@ -31,12 +23,10 @@ enum MemoryDeduplicator {
             if let cached = wordSetsCache[existing.id] {
                 existingWords = cached
             } else {
-                // Fallback: compute on the fly if cache is missing
                 existingWords = wordSet(from: existing.text)
                 wordSetsCache[existing.id] = existingWords
             }
 
-            // Jaccard similarity check
             let intersection = newWords.intersection(existingWords)
             let union = newWords.union(existingWords)
             if !union.isEmpty {
@@ -44,7 +34,6 @@ enum MemoryDeduplicator {
                 if similarity > jaccardThreshold { return true }
             }
 
-            // Normalized text comparison (catches "User is 25" vs "User is 25 years old")
             let existingNormalized: String
             if let cached = normalizedCache[existing.id] {
                 existingNormalized = cached
@@ -54,10 +43,8 @@ enum MemoryDeduplicator {
             }
             if newNormalized == existingNormalized { return true }
 
-            // One is a substring of the other after normalization
             if newNormalized.count > 10 && existingNormalized.count > 10 {
                 if newNormalized.contains(existingNormalized) || existingNormalized.contains(newNormalized) {
-                    // Only flag if length ratio is close (avoids "I like pizza" matching "I like pizza with extra cheese and pepperoni")
                     let ratio = Double(min(newNormalized.count, existingNormalized.count))
                                 / Double(max(newNormalized.count, existingNormalized.count))
                     if ratio > 0.7 { return true }
@@ -70,9 +57,6 @@ enum MemoryDeduplicator {
 
     // MARK: - Embedding-Based Deduplication
 
-    /// Async embedding-based duplicate check.
-    /// Computes embedding for the new fact and checks cosine similarity against all cached facts.
-    /// Falls back to false (not a duplicate) if embeddings are unavailable or computation fails.
     static func isDuplicateEmbedding(
         _ newFact: String,
         existingFacts: [MemoryEntry],
@@ -81,13 +65,11 @@ enum MemoryDeduplicator {
     ) -> Bool {
         guard embeddingService.isAvailable else { return false }
 
-        guard let newVec = embeddingService.embed(newFact) else { return false }
+        let newVecs = embeddingService.embedAll(newFact)
+        guard !newVecs.isEmpty else { return false }
 
         for existing in existingFacts {
-            guard let existingVec = embeddingService.embedding(for: existing.id, text: existing.text) else {
-                continue
-            }
-            let sim = embeddingService.cosineSimilarity(newVec, existingVec)
+            let sim = embeddingService.semanticSimilarity(queryVectors: newVecs, factID: existing.id, factText: existing.text)
             if sim > threshold {
                 return true
             }
@@ -97,37 +79,40 @@ enum MemoryDeduplicator {
 
     // MARK: - Conflict Detection
 
-    /// Find an existing fact that conflicts with the new one.
-    /// Conflict = same subject entity but different/contradictory predicate.
-    /// Heuristic: extract the "subject" (first noun phrase or first 2-3 words)
-    /// and check if an existing fact shares the subject but differs in the rest.
+    static let singleValuedHints: Set<String> = [
+        "name", "age", "born", "birthday", "birth", "lives", "living",
+        "address", "phone", "email", "job", "works", "working",
+        "married", "spouse", "husband", "wife", "city", "country",
+        "language", "speaks", "called", "named"
+    ]
+
     static func findConflictingFact(
         _ newFact: String,
         existingFacts: [MemoryEntry],
         wordSetsCache: [UUID: Set<String>],
         normalizedCache: [UUID: String]
     ) -> UUID? {
-        // Extract subject: first few words (up to first significant word boundary)
         let newSubject = extractSubject(newFact)
         guard newSubject.count >= 2 else { return nil }
+        guard newSubject.contains(where: { singleValuedHints.contains($0) }) else { return nil }
+        let newPrefix = Array(newSubject.prefix(2))
 
         for existing in existingFacts {
             let existingSubject = extractSubject(existing.text)
             guard existingSubject.count >= 2 else { continue }
+            let existingPrefix = Array(existingSubject.prefix(2))
+            guard newPrefix == existingPrefix else { continue }
 
-            // Same subject?
-            let subjectIntersection = Set(newSubject).intersection(Set(existingSubject))
-            guard subjectIntersection.count >= newSubject.count - 1 else { continue }
-
-            // But different rest of the fact? (not just a rephrase)
             let newWords = wordSet(from: newFact)
             let existingWords = wordSet(from: existing.text)
+            if newWords.isSubset(of: existingWords) || existingWords.isSubset(of: newWords) {
+                continue
+            }
             let intersection = newWords.intersection(existingWords)
             let union = newWords.union(existingWords)
             guard !union.isEmpty else { continue }
             let similarity = Float(intersection.count) / Float(union.count)
 
-            // Same subject but low overall similarity → likely contradiction
             if similarity < 0.5 {
                 return existing.id
             }

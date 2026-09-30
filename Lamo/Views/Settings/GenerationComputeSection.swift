@@ -408,11 +408,9 @@ struct GenerationComputeSection: View {
                     .tint(LamoTheme.Colors.accent)
                     .onChange(of: selectedPresetID) { _, newID in
                         guard let preset = PromptPreset.preset(id: newID) else { return }
-                        vm.systemPrompt = preset.prompt
+                        vm.systemPrompt = PromptPreset.fullPrompt(for: preset)
                         if let temp = preset.temperature { vm.temperature = temp }
                         if let topP = preset.topP { vm.topP = topP }
-                        // Синхронизируем локальные зеркала — иначе слайдеры
-                        // показывают старые значения после применения пресета.
                         samplerTemp = vm.temperature
                         samplerTopK = Double(vm.topK)
                         samplerTopP = vm.topP
