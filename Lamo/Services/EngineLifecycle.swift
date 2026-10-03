@@ -86,10 +86,11 @@ final class EngineLifecycle {
         self.onMemoryPressureChanged = onMemoryPressureChanged
     }
     func initializeEngineIfNeeded() async {
-        // Foundation Models doesn't need engine initialization — just check availability
+        // Foundation Models doesn't need engine initialization — just check availability.
+        // iOS 26+: framework exists (text-only); iOS 27+: +images, toolCallingMode, reasoning.
         if settings.providerType == .foundationModels {
-            guard #available(iOS 27.0, macOS 27.0, *) else {
-                onEngineErrorChanged(.foundationModelsUnavailable(String(localized: "Requires iOS 27 or macOS 27")))
+            guard #available(iOS 26.0, macOS 26.0, *) else {
+                onEngineErrorChanged(.foundationModelsUnavailable(String(localized: "Requires iOS 26 or macOS 26")))
                 return
             }
             if FoundationModelsAvailability.isReady {

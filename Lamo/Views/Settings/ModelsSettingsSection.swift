@@ -108,10 +108,10 @@ struct ModelsSettingsSection: View {
             HStack(spacing: LamoTheme.Spacing.sm) {
                 specChip(icon: "lock.shield.fill", value: String(localized: "Private"))
                 specChip(icon: "bolt.fill", value: String(localized: "On-Device"))
-                specChip(icon: "sparkles", value: "iOS 27+")
+                specChip(icon: "sparkles", value: "iOS 26+")
             }
 
-            Text("Built-in system language model · No download needed · A17 Pro / M1+")
+            Text("Built-in system language model · No download needed · A17 Pro / M1+ · Image input needs iOS 27")
                 .font(.system(.caption2, design: .monospaced))
                 .foregroundStyle(LamoTheme.Colors.textFaint)
         }

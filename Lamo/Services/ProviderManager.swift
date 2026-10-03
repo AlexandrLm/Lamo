@@ -1,6 +1,9 @@
 import Foundation
 import LiteRTLM
 import Combine
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 import os
 /// Thin coordinator that delegates to focused sub-types.
 ///
@@ -58,6 +61,21 @@ final class ProviderManager: ObservableObject {
 
     var currentMaxTokens: Int? { lifecycle.currentMaxTokens }
 
+    /// Context window that actually applies right now, per provider.
+    /// LiteRT uses the dynamic KV-cache budget; Foundation Models uses the
+    /// fixed system-model window (~4K). Used by the context bar so the FM
+    /// fill ratio isn't computed against LiteRT's 16K-scale setting.
+    var effectiveContextLimit: Int {
+        if selectedProviderType == .foundationModels {
+#if canImport(FoundationModels)
+            return FoundationModelsProvider.contextWindowTokens
+#else
+            return 4096
+#endif
+        }
+        return currentMaxTokens ?? maxNumTokens
+    }
+
     @Published var lastToolTokens: Int = 0
     @Published var lastToolCount: Int = 0
     /// Total tool definitions (before enable/network filtering) — for "N/M tools" display.
@@ -81,16 +99,16 @@ final class ProviderManager: ObservableObject {
     }
 
     var availableProviders: [ProviderType] {
+        // Both providers are always listed: the deployment target (iOS 26.2+)
+        // guarantees the FoundationModels framework when built with Xcode 26+,
+        // and hiding the entry would also hide the *reason* (device ineligible,
+        // AI disabled, model downloading) shown on the Settings screen.
+        // canImport keeps builds with an older SDK safe.
         if let cache = cachedProviders,
            Date().timeIntervalSince(cache.at) < providerCacheTTL {
             return cache.value
         }
-        var providers = ProviderType.allCases
-#if canImport(FoundationModels)
-        if !FoundationModelsAvailability.cachedIsSupported {
-            providers.removeAll { $0 == .foundationModels }
-        }
-#endif
+        let providers = ProviderType.allCases
         cachedProviders = (Date(), providers)
         return providers
     }
@@ -276,8 +294,12 @@ final class ProviderManager: ObservableObject {
     static func listModels() -> [String] { ModelDiscovery.listModels() }
 
     func summarizeMessages(_ messages: [ChatMessage]) async -> String? {
-        guard selectedProviderType == .litertLM,
-              let engine = engineForSummarization, !messages.isEmpty else { return nil }
+        // Foundation Models path: summarize with the system model itself
+        // (no tools, short output). Keeps auto-compression working for FM chats.
+        if selectedProviderType == .foundationModels {
+            return await summarizeViaFoundationModels(messages)
+        }
+        guard let engine = engineForSummarization, !messages.isEmpty else { return nil }
 
         let capped = Array(messages.suffix(20))
         let conversationText = capped.map { msg in
@@ -312,5 +334,46 @@ final class ProviderManager: ObservableObject {
             LamoLogger.engine.warning("Conversation summarization failed: \(error)")
             return nil
         }
+    }
+
+    /// Summarization for Apple Intelligence chats — runs on the system model
+    /// (no tools, capped output). iOS 26 API only (`respond(to:options:)`).
+    private func summarizeViaFoundationModels(_ messages: [ChatMessage]) async -> String? {
+#if canImport(FoundationModels)
+        guard #available(iOS 26.0, macOS 26.0, *) else { return nil }
+        guard FoundationModelsAvailability.isSupported, !messages.isEmpty else { return nil }
+
+        let capped = Array(messages.suffix(20))
+        let conversationText = capped.map { msg in
+            let roleLabel = msg.role == .user ? "User" : "Assistant"
+            return "[\(roleLabel)]: \(msg.content.prefix(300))"
+        }.joined(separator: "\n\n")
+        let trimmedText = String(conversationText.prefix(4_000))
+        guard !trimmedText.isEmpty else { return nil }
+
+        let summaryRequest = """
+        Summarize the following conversation into a concise context block. \
+        Preserve: key facts, decisions, user preferences, code, file names, and conclusions. \
+        Be brief but complete — this summary replaces the original messages.
+
+        \(trimmedText)
+        """
+        do {
+            let session = LanguageModelSession(
+                model: SystemLanguageModel.default,
+                tools: [],
+                instructions: "You are a precise summarizer. Reply with the summary only."
+            )
+            let options = GenerationOptions(maximumResponseTokens: 512)
+            let response = try await session.respond(to: summaryRequest, options: options)
+            let result = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return result.isEmpty ? nil : result
+        } catch {
+            LamoLogger.engine.warning("FM summarization failed: \(error)")
+            return nil
+        }
+#else
+        return nil
+#endif
     }
 }

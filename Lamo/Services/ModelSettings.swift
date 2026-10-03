@@ -9,7 +9,13 @@ final class ModelSettings {
     private var cachedTemperature: Double?
     private var cachedSystemPrompt: String?
     var providerType: ProviderType {
-        get { ProviderType(rawValue: AppDefaults.providerType.wrappedValue) ?? .litertLM }
+        get {
+            let stored = AppDefaults.providerType.wrappedValue
+            // Legacy builds stored the display name "LiteRT-LM" instead of the
+            // rawValue "litertLM" — map it instead of silently falling back.
+            if stored == "LiteRT-LM" { return .litertLM }
+            return ProviderType(rawValue: stored) ?? .litertLM
+        }
         set { AppDefaults.providerType.wrappedValue = newValue.rawValue }
     }
 

@@ -41,8 +41,8 @@ struct OptionalUserDefault<T> {
 // MARK: - Centralized Defaults
 
 enum AppDefaults {
-    // Provider
-    static var providerType = UserDefault("providerType", default: "LiteRT-LM")
+    // Provider (stores ProviderType.rawValue: "litertLM" / "foundationModels")
+    static var providerType = UserDefault("providerType", default: ProviderType.litertLM.rawValue)
 
     // Model
     static var modelPath = OptionalUserDefault<String>(key: "litertLMModelPath")
@@ -139,6 +139,6 @@ enum AppDefaults {
         toolGetLocation.wrappedValue = true
         toolWeather.wrappedValue = true
         toolCalendar.wrappedValue = true
-        providerType.wrappedValue = "LiteRT-LM"
+        providerType.wrappedValue = ProviderType.litertLM.rawValue
     }
 }

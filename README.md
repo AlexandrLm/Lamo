@@ -78,13 +78,25 @@ ChatGPT-style persistent memory, entirely on-device:
 |---|---|---|---|---|---|---|
 | **Gemma 4 E4B** | 4B | 3.65 GB | ~6 GB | Moderate | High | Text, Images, Tool Calling, Thinking |
 | **Gemma 4 E2B** | 2B | 2.58 GB | ~3 GB | Fast | Good | Text, Images, Tool Calling |
+| **Apple Intelligence** | ~3B (system) | 0 (built-in) | system-managed | Fast | Good | Text, Tool Calling, Images (iOS 27+) |
 
-Models are downloaded from [HuggingFace](https://huggingface.co/litert-community) and verified with SHA256 checksums. Both support vision (image understanding) and tool calling. E4B additionally supports extended thinking mode.
+Models are downloaded from [HuggingFace](https://huggingface.co/litert-community) and verified with SHA256 checksums. Both Gemma models support vision (image understanding) and tool calling. E4B additionally supports extended thinking mode.
+
+### Apple Intelligence (Foundation Models)
+
+Switch engine in **Settings → Apple Intelligence**. No download needed — uses the built-in system model:
+
+- **Requirements:** iOS 26+ (deployment target 26.2), Apple Intelligence-eligible device (A17 Pro / M1+), Apple Intelligence enabled in system Settings
+- **iOS 26:** text-only prompts, native tool calling (all 6 tools: weather, location, calendar, memory, web search, fetch URL). Attached images can't be seen — the model is told so and won't hallucinate descriptions.
+- **iOS 27+:** adds real image understanding (up to 4 images per turn via `Attachment`), `toolCallingMode`, and thinking mode mapped to `ContextOptions(reasoningLevel: .moderate)`
+- **Context window:** ~4096 tokens (read from `SystemLanguageModel.contextSize`). History prefix capped at ~800 tokens and file text at 4000 chars to fit; the context bar and auto-compression use the FM window (summarization runs on the system model itself)
+- **Sampling:** only temperature applies (clamped to 0–1); Top-K / Top-P are LiteRT-only
+- **Unavailable reasons** are actionable: device not eligible / Apple Intelligence turned off / model still downloading
 
 ## Requirements
 
-- **Xcode 16.2+** (iOS 26 SDK)
-- **iOS 26.2** deployment target
+- **Xcode 27.0+** (iOS 27 SDK, Swift 5 mode)
+- **iOS 26.2** deployment target (runs on iOS 26–27; Apple Intelligence needs iOS 26+ and an A17 Pro / M1+ device with Apple Intelligence enabled; image input needs iOS 27+)
 - Physical iOS device strongly recommended (models require 3–6+ GB RAM)
 - Apple Silicon Mac for building
 - `com.apple.developer.kernel.increased-memory-limit` entitlement for large model loading

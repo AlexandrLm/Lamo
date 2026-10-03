@@ -10,26 +10,45 @@ import os
 ///
 /// Uses `SystemLanguageModel` via `LanguageModelSession` for streaming text generation.
 ///
-/// **Requirements:** A17 Pro / M1+ device, iOS 27+ / macOS 27+, Apple Intelligence enabled.
-/// **Context window:** 4096 tokens (managed by the framework).
+/// **Requirements:** A17 Pro / M1+ device, iOS 26+ / macOS 26+, Apple Intelligence enabled.
+/// **Context window:** read from `SystemLanguageModel.contextSize` (4096 on current OSes).
 ///
-/// iOS 27 notes:
-/// - `streamResponse(to:options:)` yields `Snapshot`s of the *accumulated* content,
-///   so we compute real deltas against a running buffer (iOS 26 yielded deltas —
-///   treating snapshots as deltas duplicated the output).
-/// - Tool calling is native via the `Tool` protocol (`FoundationModelsTools.swift`);
-///   the framework drives the call/result loop internally. The wrapped tools report
-///   call/result to the UI through `ToolCallReporter`.
+/// OS-version behavior:
+/// - iOS 26: text-only prompts, 3-arg `GenerationOptions` (no `toolCallingMode`),
+///   errors surface as `LanguageModelSession.GenerationError`.
+/// - iOS 27: image input via `Attachment`, `toolCallingMode: .allowed`,
+///   `ContextOptions(reasoningLevel:)` for thinking mode, `LanguageModelError` taxonomy.
+///
+/// Tool calling is native via the `Tool` protocol (`FoundationModelsTools.swift`);
+/// the framework drives the call/result loop internally. The wrapped tools report
+/// call/result to the UI through `ToolCallReporter`.
+///
+/// Streaming yields snapshots of the *accumulated* content, so deltas are computed
+/// against a running buffer (treating snapshots as deltas duplicates the output).
 final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
     let name = "Apple Intelligence"
 
     private let logger = Logger(subsystem: LamoLogger.subsystem, category: "FMProvider")
 
-    /// Cap on decoded tokens per response — guards runaway generations.
-    private static let maxResponseTokens = 2048
+    /// Fallback context window when the model doesn't report one.
+    static let fallbackContextWindowTokens = 4096
 
-    /// Context window managed by the Foundation Models framework.
-    private static let contextWindowTokens = 4096
+    /// Reads the real context window from the system model (iOS 26+ API,
+    /// back-deployed). Falls back to 4096 when unavailable (e.g. no SDK).
+    static var contextWindowTokens: Int {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            return SystemLanguageModel.default.contextSize
+        }
+#endif
+        return fallbackContextWindowTokens
+    }
+
+    /// Cap on decoded tokens per response — guards runaway generations.
+    /// Kept at half the window so history + system prompt still fit.
+    private static var maxResponseTokens: Int {
+        max(512, min(2048, contextWindowTokens / 2))
+    }
 
     // MARK: - LLMProvider
 
@@ -46,14 +65,14 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         continuation: AsyncStream<StreamingToken>.Continuation
     ) async throws {
 #if canImport(FoundationModels)
-        guard #available(iOS 27.0, macOS 27.0, *) else {
+        guard #available(iOS 26.0, macOS 26.0, *) else {
             continuation.yield(.error(LamoError.foundationModelsUnavailable(
-                String(localized: "Requires iOS 27 or macOS 27"))))
+                String(localized: "Requires iOS 26 or macOS 26"))))
             continuation.finish()
             return
         }
 
-        // --- Availability check (single source of truth — was a duplicated switch) ---
+        // --- Availability check (single source of truth) ---
         if let reason = FoundationModelsAvailability.unavailabilityReason {
             continuation.yield(.error(LamoError.foundationModelsUnavailable(reason)))
             continuation.finish()
@@ -62,6 +81,7 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
 
         // --- Build system prompt with memory ---
         let userQuery = messages.last(where: { $0.role == .user })?.content
+        let lastUserMessage = messages.last(where: { $0.role == .user })
         let systemPrompt = MemoryService.shared.buildFullSystemPrompt(
             base: ProviderManager.shared.systemPrompt,
             conversationID: messages.first?.conversationID,
@@ -69,9 +89,10 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         )
 
         // --- Build conversation context from message history ---
-        let contextPrefix = buildContextPrefix(messages: messages)
+        let contextWindow = Self.contextWindowTokens
+        let contextPrefix = buildContextPrefix(messages: messages, tokenCap: 800)
         let promptText: String
-        if let lastUser = messages.last(where: { $0.role == .user }) {
+        if let lastUser = lastUserMessage {
             let userText = buildUserText(from: lastUser)
             promptText = contextPrefix.isEmpty ? userText : contextPrefix + "\n\n" + userText
         } else {
@@ -86,18 +107,19 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             continuation.finish(); return
         }
 
+        // --- Tools: register every enabled tool, let the model decide ---
         let networkAvailable = !DownloadManager.shared.isExpensive
-        let recentUserText = messages.suffix(6).filter { $0.role == .user }.suffix(3).map(\.content).joined(separator: "\n")
-        let route = ToolRouter.route(for: recentUserText)
-        let tools = FoundationModelsTools.enabledTools(networkAvailable: networkAvailable, userText: recentUserText)
+        let tools = FoundationModelsTools.enabledTools(networkAvailable: networkAvailable)
 
+        // Tell the model which capabilities are off this turn (settings/offline),
+        // so it says "unavailable" instead of fabricating an answer.
         var unavailable: [String] = []
-        if !AppDefaults.toolGetLocation.wrappedValue || !route.location { unavailable.append("get_location") }
-        if !AppDefaults.toolWeather.wrappedValue || !route.weather { unavailable.append("weather") }
-        if !AppDefaults.toolCalendar.wrappedValue || !route.calendar { unavailable.append("calendar") }
+        if !AppDefaults.toolGetLocation.wrappedValue { unavailable.append("get_location") }
+        if !AppDefaults.toolWeather.wrappedValue { unavailable.append("weather") }
+        if !AppDefaults.toolCalendar.wrappedValue { unavailable.append("calendar") }
         if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
-        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue || !route.webSearch { unavailable.append("web_search") }
-        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue || !route.fetchURL { unavailable.append("fetch_url") }
+        if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue { unavailable.append("web_search") }
+        if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue { unavailable.append("fetch_url") }
         let effectiveSystemPrompt = unavailable.isEmpty ? systemPrompt : systemPrompt + "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
 
         let toolSchemaTokens = tools.reduce(0) {
@@ -105,7 +127,7 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         }
         await AgenticLoopBudget.shared.reset()
         await AgenticLoopBudget.shared.configure(
-            totalBudget: Self.contextWindowTokens,
+            totalBudget: contextWindow,
             systemOverhead: AgenticLoopBudget.estimateTokens(of: effectiveSystemPrompt) + toolSchemaTokens,
             conversationSkeletonTokens: AgenticLoopBudget.estimateTokens(of: promptText),
             maxIterations: AgenticLoopBudget.defaultMaxIterations
@@ -122,19 +144,62 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             session = LanguageModelSession(model: SystemLanguageModel.default, tools: tools)
         }
 
-        let options = GenerationOptions(
-            samplingMode: nil,
-            temperature: min(max(ProviderManager.shared.temperature, 0), 1),
-            maximumResponseTokens: Self.maxResponseTokens,
-            toolCallingMode: .allowed
-        )
+        // toolCallingMode is iOS 27+; the 3-arg init is identical on iOS 26.
+        // Temperature is clamped to 0–1 (the FM-supported range; the app's
+        // 0–2 slider targets LiteRT — see the Inference settings footnote).
+        let temperature = min(max(ProviderManager.shared.temperature, 0), 1)
+        let options: GenerationOptions
+        if #available(iOS 27.0, macOS 27.0, *) {
+            options = GenerationOptions(
+                samplingMode: nil,
+                temperature: temperature,
+                maximumResponseTokens: Self.maxResponseTokens,
+                toolCallingMode: .allowed
+            )
+        } else {
+            options = GenerationOptions(
+                samplingMode: nil,
+                temperature: temperature,
+                maximumResponseTokens: Self.maxResponseTokens
+            )
+        }
 
         let startTime = Date()
         var firstTokenTime: Date?
         var totalChars = 0
         let repDetector = RepetitionDetector(windowSize: 2000, minBufferSize: 200, checkFrequency: 5)
 
-        let stream = session.streamResponse(to: promptText, options: options)
+        // iOS 27+: real image attachments + optional reasoning level for
+        // thinking mode. iOS 26: text-only prompt (model can't see images —
+        // buildUserText() already warns it, so it won't hallucinate).
+        // ContextOptions overloads are iOS 27+; the plain overloads are iOS 26.
+        let stream: LanguageModelSession.ResponseStream<String>
+        if #available(iOS 27.0, macOS 27.0, *) {
+            let attachments = Self.imageAttachments(for: lastUserMessage)
+            if ProviderManager.shared.thinkingMode {
+                let contextOptions = ContextOptions(reasoningLevel: .moderate)
+                if attachments.isEmpty {
+                    stream = session.streamResponse(
+                        to: promptText, options: options, contextOptions: contextOptions)
+                } else {
+                    stream = session.streamResponse(
+                        options: options, contextOptions: contextOptions) {
+                            for attachment in attachments { attachment }
+                            promptText
+                        }
+                }
+            } else if attachments.isEmpty {
+                stream = session.streamResponse(to: promptText, options: options)
+            } else {
+                stream = session.streamResponse(options: options) {
+                    for attachment in attachments { attachment }
+                    promptText
+                }
+            }
+        } else {
+            stream = session.streamResponse(to: promptText, options: options)
+        }
+
         var accumulated = ""
         do {
             for try await snapshot in stream {
@@ -143,17 +208,23 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
                     return
                 }
 
-                // iOS 27 streams snapshots of the FULL content so far — emit only the delta.
-                // hasPrefix-only check (was content.count >= accumulated.count first,
-                // which walks both strings) + single offsetBy pass for the split.
+                // The framework streams snapshots of the FULL content so far —
+                // emit only the delta. Fast path first (common case), then a
+                // longest-common-prefix diff so a mid-stream rewrite neither
+                // duplicates nor silently drops text.
                 let content = snapshot.content
-                guard content.hasPrefix(accumulated) else {
-                    accumulated = content
-                    continue
-                }
                 guard content != accumulated else { continue }
-                let splitIndex = content.index(content.startIndex, offsetBy: accumulated.count)
-                let delta = String(content[splitIndex...])
+                let delta: String
+                if content.hasPrefix(accumulated) {
+                    delta = String(content.dropFirst(accumulated.count))
+                } else {
+                    let commonLen = content.commonPrefix(with: accumulated).count
+                    guard commonLen < content.count, content.count > accumulated.count else {
+                        accumulated = content
+                        continue
+                    }
+                    delta = String(content.dropFirst(commonLen))
+                }
                 accumulated = content
                 if delta.isEmpty { continue }
 
@@ -168,19 +239,13 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
                     return
                 }
             }
-        } catch let error as LanguageModelError {
-            switch error {
-            case .contextSizeExceeded:
-                continuation.yield(.error(LamoError.foundationModelsError(
-                    String(localized: "Context window exceeded (4096 tokens). Start a new conversation or shorten your message."))))
-            case .unsupportedLanguageOrLocale:
-                continuation.yield(.error(LamoError.foundationModelsError(
-                    String(localized: "Apple Intelligence doesn't support this language or locale yet. Try a supported language, or switch to a local model in Settings."))))
-            default:
-                throw error
+        } catch {
+            if let mapped = Self.mapGenerationError(error, contextWindow: contextWindow) {
+                continuation.yield(.error(mapped))
+                continuation.finish()
+                return
             }
-            continuation.finish()
-            return
+            throw error
         }
 
         // --- Benchmark ---
@@ -203,9 +268,90 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
 #endif
     }
 
+    // MARK: - Error mapping (iOS 26 + iOS 27 taxonomies)
+
+    /// Maps framework generation errors to actionable `LamoError`s.
+    /// Returns nil for unknown errors (caller rethrows them).
+    /// - iOS 27+: `LanguageModelError` (contextSizeExceeded, guardrailViolation, …)
+    /// - iOS 26: `LanguageModelSession.GenerationError` (exceededContextWindowSize, …)
+#if canImport(FoundationModels)
+    @available(iOS 26.0, macOS 26.0, *)
+    nonisolated static func mapGenerationError(_ error: any Error, contextWindow: Int) -> LamoError? {
+        if #available(iOS 27.0, macOS 27.0, *) {
+            if let fmError = error as? LanguageModelError {
+                switch fmError {
+                case .contextSizeExceeded:
+                    return .foundationModelsError(String(localized:
+                        "Context window exceeded (\(contextWindow) tokens). Start a new conversation or shorten your message."))
+                case .unsupportedLanguageOrLocale:
+                    return .foundationModelsError(String(localized:
+                        "Apple Intelligence doesn't support this language or locale yet. Try a supported language, or switch to a local model in Settings."))
+                case .guardrailViolation:
+                    return .foundationModelsError(String(localized:
+                        "The request was blocked by the model's safety guardrails. Try rephrasing your message."))
+                case .refusal:
+                    return .foundationModelsError(String(localized:
+                        "The model declined to answer that. Try rephrasing your message."))
+                case .rateLimited:
+                    return .foundationModelsError(String(localized:
+                        "Apple Intelligence is rate-limited right now. Wait a bit and try again."))
+                default:
+                    return nil
+                }
+            }
+            if error is SystemLanguageModel.Error {
+                return .foundationModelsError(String(localized:
+                    "Apple Intelligence assets are unavailable — the model may still be downloading. Try again later."))
+            }
+        }
+        if let genError = error as? LanguageModelSession.GenerationError {
+            switch genError {
+            case .exceededContextWindowSize:
+                return .foundationModelsError(String(localized:
+                    "Context window exceeded (\(contextWindow) tokens). Start a new conversation or shorten your message."))
+            case .unsupportedLanguageOrLocale:
+                return .foundationModelsError(String(localized:
+                    "Apple Intelligence doesn't support this language or locale yet. Try a supported language, or switch to a local model in Settings."))
+            case .guardrailViolation:
+                return .foundationModelsError(String(localized:
+                    "The request was blocked by the model's safety guardrails. Try rephrasing your message."))
+            case .refusal:
+                return .foundationModelsError(String(localized:
+                    "The model declined to answer that. Try rephrasing your message."))
+            case .rateLimited:
+                return .foundationModelsError(String(localized:
+                    "Apple Intelligence is rate-limited right now. Wait a bit and try again."))
+            case .assetsUnavailable:
+                return .foundationModelsError(String(localized:
+                    "Apple Intelligence assets are unavailable — the model may still be downloading. Try again later."))
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Image attachments (iOS 27+ only)
+
+    /// Loads local image files as FM `Attachment`s. `Attachment` (image input)
+    /// is iOS 27+ — on iOS 26 the model is text-only (see `buildUserText`).
+    @available(iOS 27.0, macOS 27.0, *)
+    nonisolated static func imageAttachments(
+        for message: ChatMessage?
+    ) -> [Attachment<ImageAttachmentContent>] {
+        guard let paths = message?.imagePaths, !paths.isEmpty else { return [] }
+        // Cap the batch: each image costs context in a 4K window.
+        return paths.prefix(4).compactMap { path in
+            let url = URL(fileURLWithPath: path)
+            guard FileManager.default.fileExists(atPath: path) else { return nil }
+            return Attachment<ImageAttachmentContent>(imageURL: url)
+        }
+    }
+#endif
+
     // MARK: - Formatting
 
-    private func buildContextPrefix(messages: [ChatMessage]) -> String {
+    private func buildContextPrefix(messages: [ChatMessage], tokenCap: Int = 1500) -> String {
         let lastUserID = messages.last(where: { $0.role == .user })?.id
         let recent = messages.suffix(20).filter { $0.role != .user || $0.id != lastUserID }
         let filtered = recent.filter { !$0.content.isEmpty || !$0.fileContent.isEmpty }
@@ -219,7 +365,7 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             let text = String(msg.content.prefix(500))
             let line = "[\(roleLabel)]: \(text)"
             usedTokens += AgenticLoopBudget.estimateTokens(of: line)
-            if usedTokens > 1500 { break }
+            if usedTokens > tokenCap { break }
             lines.append(line)
         }
         guard !lines.isEmpty else { return "" }
@@ -227,15 +373,26 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         return "Previous conversation:\n" + lines.reversed().joined(separator: "\n\n")
     }
 
+    /// File text is capped tighter than LiteRT's 8000 chars: the FM window is
+    /// ~4K tokens, so the full file budget goes to the most recent content.
+    private static let maxFileChars = 4_000
+
     private func buildUserText(from msg: ChatMessage) -> String {
         var parts: [String] = []
 
         if !msg.fileContent.isEmpty {
-            parts.append("Attached file content:\n\n\(msg.fileContent.prefix(8_000))")
+            parts.append("Attached file content:\n\n\(msg.fileContent.prefix(Self.maxFileChars))")
         }
 
         if !msg.imagePaths.isEmpty {
-            parts.append("[Image\(msg.imagePaths.count > 1 ? "s" : "") attached — describe what you see]")
+            if #available(iOS 27.0, macOS 27.0, *) {
+                // Real image bytes travel as Attachments (see runInference);
+                // the caption just points the model at them.
+                parts.append("[\(msg.imagePaths.count) image\(msg.imagePaths.count > 1 ? "s" : "") attached — look at them and describe what you see]")
+            } else {
+                // iOS 26 is text-only: forbid hallucinated descriptions.
+                parts.append("[The user attached \(msg.imagePaths.count) image\(msg.imagePaths.count > 1 ? "s" : "") which you CANNOT see — image understanding needs iOS 27. Say briefly that you can't view images on this OS version and continue with the text request.]")
+            }
         }
 
         if !msg.content.isEmpty {

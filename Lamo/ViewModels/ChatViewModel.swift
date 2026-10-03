@@ -447,7 +447,9 @@ final class ChatViewModel {
             toolTokens: pm.lastToolTokens,
             toolCount: pm.lastToolCount,
             toolCountTotal: pm.lastToolCountTotal,
-            maxNumTokens: pm.currentMaxTokens ?? pm.maxNumTokens
+            // Per-provider window: FM is a fixed ~4K system window, LiteRT uses
+            // the dynamic KV-cache budget (was: LiteRT setting for both).
+            maxNumTokens: pm.effectiveContextLimit
         )
     }
 

@@ -38,8 +38,8 @@ struct GenerationComputeSection: View {
 
                 if vm.isLiteRTSelected {
                     engineCard
-                    compressionCard
                 }
+                compressionCard
 
                 systemPromptRow
                 resetButton
@@ -82,6 +82,16 @@ struct GenerationComputeSection: View {
                 topKRow
                 ThinDivider()
                 topPRow
+            }
+
+            // Apple Intelligence honors temperature only (clamped to 0–1);
+            // Top-K / Top-P are LiteRT-only and stay saved for when you switch back.
+            if !vm.isLiteRTSelected {
+                ThinDivider()
+                Text("Apple Intelligence uses temperature only (0–1). Top-K / Top-P apply to LiteRT-LM.")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(LamoTheme.Colors.textFaint)
+                    .padding(.vertical, 10)
             }
         }
         .padding(LamoTheme.Spacing.lg)

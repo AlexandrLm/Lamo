@@ -1314,6 +1314,9 @@
         }
       }
     },
+    "Apple Intelligence assets are unavailable — the model may still be downloading. Try again later." : {
+
+    },
     "Apple Intelligence doesn't support this language or locale yet. Try a supported language, or switch to a local model in Settings." : {
       "localizations" : {
         "ru" : {
@@ -1333,6 +1336,12 @@
           }
         }
       }
+    },
+    "Apple Intelligence is rate-limited right now. Wait a bit and try again." : {
+
+    },
+    "Apple Intelligence is turned off. Enable it in Settings → Apple Intelligence & Siri" : {
+
     },
     "Apple Intelligence is unavailable" : {
       "localizations" : {
@@ -1363,6 +1372,9 @@
           }
         }
       }
+    },
+    "Apple Intelligence uses temperature only (0–1). Top-K / Top-P apply to LiteRT-LM." : {
+
     },
     "Attachment" : {
 
@@ -1615,6 +1627,7 @@
 
     },
     "Built-in system language model · No download needed · A17 Pro / M1+" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -1623,6 +1636,9 @@
           }
         }
       }
+    },
+    "Built-in system language model · No download needed · A17 Pro / M1+ · Image input needs iOS 27" : {
+
     },
     "cached" : {
       "localizations" : {
@@ -1890,7 +1906,11 @@
         }
       }
     },
+    "Context window exceeded (%lld tokens). Start a new conversation or shorten your message." : {
+
+    },
     "Context window exceeded (4096 tokens). Start a new conversation or shorten your message." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -4255,7 +4275,11 @@
         }
       }
     },
+    "Requires iOS 26 or macOS 26" : {
+
+    },
     "Requires iOS 27 or macOS 27" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -4748,7 +4772,13 @@
     "That file isn't a .litertlm model. Pick a file ending in .litertlm." : {
 
     },
+    "The model declined to answer that. Try rephrasing your message." : {
+
+    },
     "The model engine is not ready yet. Open the app and wait for it to finish loading, then retry." : {
+
+    },
+    "The request was blocked by the model's safety guardrails. Try rephrasing your message." : {
 
     },
     "Thermal" : {

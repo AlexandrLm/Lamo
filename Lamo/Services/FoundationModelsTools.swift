@@ -3,9 +3,9 @@ import Foundation
 import FoundationModels
 #endif
 
-// MARK: - Native iOS 27 Tool adapters
+// MARK: - Native Tool adapters (iOS 26+)
 
-/// Bridges the app's existing LiteRT-LM tools to the iOS 27 Foundation Models
+/// Bridges the app's existing LiteRT-LM tools to the Foundation Models
 /// `Tool` protocol, so the on-device `SystemLanguageModel` can call them natively
 /// (no manual `<tool_call>` JSON prompt-hacking).
 ///
@@ -14,22 +14,32 @@ import FoundationModels
 /// expects, and delegates to `ToolRegistry.executeTool(name:argumentsJSON:)`.
 /// UI tool blocks keep working unchanged because the underlying `run()` methods
 /// already report call/result via `ToolCallReporter`.
+///
+/// Availability: the `Tool` protocol, `@Generable`/`@Guide` and
+/// `LanguageModelSession(model:tools:instructions:)` all exist since iOS 26,
+/// so the adapters are iOS 26+. Only image *input* (`Attachment`) needs iOS 27.
 #if canImport(FoundationModels)
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 enum FoundationModelsTools {
-    /// The FM tools to register on a session, honoring user settings.
+    /// The FM tools to register on a session, honoring user settings + network.
+    ///
+    /// All enabled tools are always registered — the ~3B system model is
+    /// perfectly capable of ignoring irrelevant tools, while keyword pre-routing
+    /// (`ToolRouter`) regularly misses paraphrased requests and would leave the
+    /// model with no tool at all. Schema cost is a few hundred tokens total.
+    /// `userText` is kept for source compatibility and ignored.
     static func enabledTools(networkAvailable: Bool, userText: String = "") -> [any Tool] {
-        let route = ToolRouter.route(for: userText)
+        _ = userText
         var tools: [any Tool] = []
-        if AppDefaults.toolWeather.wrappedValue && route.weather { tools.append(FMWeatherTool()) }
-        if AppDefaults.toolGetLocation.wrappedValue && route.location { tools.append(FMLocationTool()) }
-        if AppDefaults.toolCalendar.wrappedValue && route.calendar { tools.append(FMCalendarTool()) }
+        if AppDefaults.toolWeather.wrappedValue { tools.append(FMWeatherTool()) }
+        if AppDefaults.toolGetLocation.wrappedValue { tools.append(FMLocationTool()) }
+        if AppDefaults.toolCalendar.wrappedValue { tools.append(FMCalendarTool()) }
         if AppDefaults.memoryEnabled.wrappedValue {
             tools.append(FMMemoryTool())
         }
         if networkAvailable {
-            if AppDefaults.toolWebSearch.wrappedValue && route.webSearch { tools.append(FMWebSearchTool()) }
-            if AppDefaults.toolFetchURL.wrappedValue && route.fetchURL { tools.append(FMFetchURLTool()) }
+            if AppDefaults.toolWebSearch.wrappedValue { tools.append(FMWebSearchTool()) }
+            if AppDefaults.toolFetchURL.wrappedValue { tools.append(FMFetchURLTool()) }
         }
         return tools
     }
@@ -37,7 +47,7 @@ enum FoundationModelsTools {
 
 // MARK: - Weather
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 struct FMWeatherTool: Tool {
     let name = ToolDefinitions.Weather.name
     let description = ToolDefinitions.Weather.description
@@ -61,7 +71,7 @@ struct FMWeatherTool: Tool {
 
 // MARK: - Location
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 struct FMLocationTool: Tool {
     let name = ToolDefinitions.GetLocation.name
     let description = ToolDefinitions.GetLocation.description
@@ -82,7 +92,7 @@ struct FMLocationTool: Tool {
 
 // MARK: - Calendar
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 struct FMCalendarTool: Tool {
     let name = ToolDefinitions.Calendar.name
     let description = ToolDefinitions.Calendar.description
@@ -135,7 +145,7 @@ struct FMCalendarTool: Tool {
 
 // MARK: - Memory
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 struct FMMemoryTool: Tool {
     let name = ToolDefinitions.UpdateMemory.name
     let description = ToolDefinitions.UpdateMemory.description
@@ -168,7 +178,7 @@ struct FMMemoryTool: Tool {
 
 // MARK: - Web search
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 struct FMWebSearchTool: Tool {
     let name = ToolDefinitions.WebSearch.name
     let description = ToolDefinitions.WebSearch.description
@@ -196,7 +206,7 @@ struct FMWebSearchTool: Tool {
 
 // MARK: - Fetch URL
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 struct FMFetchURLTool: Tool {
     let name = ToolDefinitions.FetchURL.name
     let description = ToolDefinitions.FetchURL.description
@@ -215,14 +225,14 @@ struct FMFetchURLTool: Tool {
 
 // MARK: - Helpers
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 nonisolated private func fmJSONArguments(_ dict: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: dict),
           let str = String(data: data, encoding: .utf8) else { return "{}" }
     return str
 }
 
-@available(iOS 27.0, macOS 27.0, *)
+@available(iOS 26.0, macOS 26.0, *)
 nonisolated private func fmFormattedResult(_ dict: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted),
           let str = String(data: data, encoding: .utf8) else {
