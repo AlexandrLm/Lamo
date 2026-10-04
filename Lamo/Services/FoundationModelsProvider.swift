@@ -111,8 +111,9 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         let networkAvailable = !DownloadManager.shared.isExpensive
         let tools = FoundationModelsTools.enabledTools(networkAvailable: networkAvailable)
 
-        // Tell the model which capabilities are off this turn (settings/offline),
-        // so it says "unavailable" instead of fabricating an answer.
+        // Tell the model exactly which capabilities are on/off this turn
+        // (settings/offline/routing), so it calls what's available and says
+        // "unavailable" instead of fabricating an answer for the rest.
         var unavailable: [String] = []
         if !AppDefaults.toolGetLocation.wrappedValue { unavailable.append("get_location") }
         if !AppDefaults.toolWeather.wrappedValue { unavailable.append("weather") }
@@ -120,7 +121,10 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
         if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
         if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue { unavailable.append("web_search") }
         if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue { unavailable.append("fetch_url") }
-        let effectiveSystemPrompt = unavailable.isEmpty ? systemPrompt : systemPrompt + "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
+        let effectiveSystemPrompt = systemPrompt + "\n\n" + ToolPromptSection.build(
+            available: tools.map { $0.name },
+            unavailable: unavailable
+        )
 
         let toolSchemaTokens = tools.reduce(0) {
             $0 + AgenticLoopBudget.estimateTokens(of: $1.name + " " + $1.description)

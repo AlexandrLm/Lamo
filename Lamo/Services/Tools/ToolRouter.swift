@@ -46,6 +46,8 @@ nonisolated enum ToolRouter {
         "новост", "news", "цена", "цены", "стоимость", "сколько стоит",
         "курс", "price", "cost", "latest", "актуальн",
         "кто такой", "кто такая", "что такое", "who is", "what is",
+        "найд", "узнай", "сравн", "рейтинг", "обзор",
+        "find", "search", "compare", "explain", "guide", "how to", "review", "best ",
     ]
     private static let questionMarkers = [
         "кто", "что", "где", "когда", "почему", "сколько", "какой", "какая",
@@ -90,12 +92,18 @@ nonisolated enum ToolRouter {
         if trimmed.count < 30 {
             return ToolRoute(location: true, weather: true, calendar: true, webSearch: true, fetchURL: true)
         }
-        return ToolRoute()
+        // Fail-safe default: a long message that matched nothing is usually an
+        // informational request ("расскажи про квантовые компьютеры..."). Giving
+        // the model web tools lets it verify facts instead of hallucinating;
+        // the model still decides whether a call is actually needed.
+        return ToolRoute(webSearch: true, fetchURL: true)
     }
 
     private static func isQuestion(_ q: String) -> Bool {
-        guard q.contains("?") else { return false }
-        return containsAny(q, questionMarkers)
+        // A "?" alone is usually a short follow-up ("а завтра?") — the length
+        // rule above already routes those to all tools. Wh-words signal an
+        // information need even without a question mark ("кто такой Пушкин").
+        containsAny(q, questionMarkers)
     }
 
     private static func containsAny(_ text: String, _ markers: [String]) -> Bool {

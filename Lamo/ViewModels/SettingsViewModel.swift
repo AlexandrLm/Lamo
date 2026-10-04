@@ -161,7 +161,7 @@ final class SettingsViewModel {
     func resetSamplerDefaults() {
         topK = 64
         topP = 0.95
-        temperature = 1.0
+        temperature = 0.7
     }
 
     func resetAllDefaults() {

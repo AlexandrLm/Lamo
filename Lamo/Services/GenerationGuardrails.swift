@@ -53,6 +53,11 @@ struct GenerationGuardrails: Sendable {
         maxOutputTokens: 1024
     )
 
+    /// Fixed cool sampling for extractive tasks (summarization). Summaries must
+    /// preserve facts, never invent them — so they ignore the chat temperature
+    /// and always use this factual setting.
+    static let summarizationSampling = (topK: 40, topP: Float(0.9), temperature: Float(0.3))
+
     /// Output cap bounded by live KV-cache headroom: never promise more
     /// tokens than the budget can hold.
     static func maxOutputTokens(headroom: Int) -> Int {

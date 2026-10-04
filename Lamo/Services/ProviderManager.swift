@@ -319,9 +319,19 @@ final class ProviderManager: ObservableObject {
         """
 
         do {
+            // Factual cool sampling — summaries must preserve facts, never
+            // invent them (see GenerationGuardrails.summarizationSampling).
+            // nil falls back to the engine default, same as before.
+            let s = GenerationGuardrails.summarizationSampling
+            let samplerConfig = try? LiteRTLM.SamplerConfig(
+                topK: s.topK,
+                topP: s.topP,
+                temperature: s.temperature,
+                seed: Int.random(in: 0..<Int(Int32.max))
+            )
             let config = LiteRTLM.ConversationConfig(
                 initialMessages: [LiteRTLM.Message(summaryRequest)],
-                samplerConfig: nil
+                samplerConfig: samplerConfig
             )
             let summaryConv = try await engine.createConversation(with: config)
             var result = ""

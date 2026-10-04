@@ -93,13 +93,14 @@ struct ConversationBuilder {
         let recentUserText = messages.suffix(6).filter { $0.role == .user }.suffix(3).map(\.content).joined(separator: "\n")
         let route = ToolRouter.route(for: recentUserText)
         var allTools: [LiteRTLM.Tool] = []
-        if AppDefaults.toolGetLocation.wrappedValue && route.location { allTools.append(GetLocationTool()) }
-        if AppDefaults.toolWeather.wrappedValue && route.weather { allTools.append(WeatherTool()) }
-        if AppDefaults.toolCalendar.wrappedValue && route.calendar { allTools.append(CalendarTool()) }
-        if AppDefaults.memoryEnabled.wrappedValue { allTools.append(UpdateMemoryTool()) }
+        var availableNames: [String] = []
+        if AppDefaults.toolGetLocation.wrappedValue && route.location { allTools.append(GetLocationTool()); availableNames.append(ToolDefinitions.GetLocation.name) }
+        if AppDefaults.toolWeather.wrappedValue && route.weather { allTools.append(WeatherTool()); availableNames.append(ToolDefinitions.Weather.name) }
+        if AppDefaults.toolCalendar.wrappedValue && route.calendar { allTools.append(CalendarTool()); availableNames.append(ToolDefinitions.Calendar.name) }
+        if AppDefaults.memoryEnabled.wrappedValue { allTools.append(UpdateMemoryTool()); availableNames.append(ToolDefinitions.UpdateMemory.name) }
         if networkAvailable {
-            if AppDefaults.toolWebSearch.wrappedValue && route.webSearch { allTools.append(WebSearchTool()) }
-            if AppDefaults.toolFetchURL.wrappedValue && route.fetchURL { allTools.append(FetchUrlTool()) }
+            if AppDefaults.toolWebSearch.wrappedValue && route.webSearch { allTools.append(WebSearchTool()); availableNames.append(ToolDefinitions.WebSearch.name) }
+            if AppDefaults.toolFetchURL.wrappedValue && route.fetchURL { allTools.append(FetchUrlTool()); availableNames.append(ToolDefinitions.FetchURL.name) }
         }
 
         var unavailable: [String] = []
@@ -109,9 +110,7 @@ struct ConversationBuilder {
         if !AppDefaults.memoryEnabled.wrappedValue { unavailable.append("update_memory") }
         if !networkAvailable || !AppDefaults.toolWebSearch.wrappedValue || !route.webSearch { unavailable.append("web_search") }
         if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue || !route.fetchURL { unavailable.append("fetch_url") }
-        if !unavailable.isEmpty {
-            augmentedPrompt += "\n\n<tool_availability>\nUnavailable this turn: \(unavailable.joined(separator: ", ")). Do NOT call them. If the user needs one, say it is unavailable instead of fabricating.\n</tool_availability>"
-        }
+        augmentedPrompt += "\n\n" + ToolPromptSection.build(available: availableNames, unavailable: unavailable)
         if ProviderManager.shared.thinkingMode {
             augmentedPrompt += "\n\n<reasoning>\nThink step by step for complex problems. Keep reasoning concise. For simple Q&A answer directly without overthinking.\n</reasoning>"
         }
@@ -281,6 +280,21 @@ struct ConversationBuilder {
 
     // MARK: - Summarization
 
+    /// Factual sampler for summarization: summaries must preserve facts, not
+    /// invent them, so they ignore the chat temperature and use a fixed cool
+    /// setting (see `GenerationGuardrails.summarizationSampling`).
+    /// A fresh random seed every call is deliberate: reusing a seed makes
+    /// sampling deterministic, so a retry would reproduce the same output.
+    func buildSummarizationSamplerConfig() -> LiteRTLM.SamplerConfig? {
+        let s = GenerationGuardrails.summarizationSampling
+        return try? LiteRTLM.SamplerConfig(
+            topK: s.topK,
+            topP: s.topP,
+            temperature: s.temperature,
+            seed: Int.random(in: 0..<Int(Int32.max))
+        )
+    }
+
     func summarizeOldContext(dropped: [ChatMessage]) async -> String? {
         guard !dropped.isEmpty else { return nil }
 
@@ -305,7 +319,7 @@ struct ConversationBuilder {
         """
 
         do {
-            let samplerConfig = try? buildSamplerConfig()
+            let samplerConfig = buildSummarizationSamplerConfig()
             let config = LiteRTLM.ConversationConfig(
                 initialMessages: [LiteRTLM.Message(summaryRequest)],
                 samplerConfig: samplerConfig

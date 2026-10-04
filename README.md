@@ -221,7 +221,7 @@ All configuration persisted via `UserDefaults` (`AppDefaults`). Most apply witho
 
 | Setting | Default | Description |
 |---|---|---|
-| `litertLMTemperature` | `1.0` | Sampling temperature (0.0–2.0) |
+| `litertLMTemperature` | `0.7` | Sampling temperature (0.0–2.0) |
 | `litertLMTopK` | `64` | Top-K sampling |
 | `litertLMTopP` | `0.95` | Nucleus sampling |
 

@@ -24,7 +24,7 @@ struct GenerationComputeSection: View {
         _contextAuto = State(initialValue: vm.kvCacheAuto)
         _gpuOn = State(initialValue: vm.useGPU)
         _contextTokens = State(initialValue: Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens))
-        _samplerAuto = State(initialValue: vm.temperature == 1.0 && vm.topK == 64 && vm.topP == 0.95)
+        _samplerAuto = State(initialValue: vm.temperature == 0.7 && vm.topK == 64 && vm.topP == 0.95)
         _samplerTemp = State(initialValue: vm.temperature)
         _samplerTopK = State(initialValue: Double(vm.topK))
         _samplerTopP = State(initialValue: vm.topP)
@@ -117,7 +117,7 @@ struct GenerationComputeSection: View {
         .onChange(of: samplerAuto) { _, newValue in
             if newValue {
                 vm.resetSamplerDefaults()
-                samplerTemp = 1.0
+                samplerTemp = 0.7
                 samplerTopK = 64
                 samplerTopP = 0.95
             }
@@ -424,7 +424,7 @@ struct GenerationComputeSection: View {
                         samplerTemp = vm.temperature
                         samplerTopK = Double(vm.topK)
                         samplerTopP = vm.topP
-                        samplerAuto = vm.temperature == 1.0 && vm.topK == 64 && vm.topP == 0.95
+                        samplerAuto = vm.temperature == 0.7 && vm.topK == 64 && vm.topP == 0.95
                     }
                 }
                 .padding(.horizontal, LamoTheme.Spacing.lg)
@@ -452,7 +452,7 @@ struct GenerationComputeSection: View {
         Button {
             vm.resetSamplerDefaults()
             // Синхронизируем зеркала — раньше слайдеры залипали на старых значениях.
-            samplerTemp = 1.0
+            samplerTemp = 0.7
             samplerTopK = 64
             samplerTopP = 0.95
             samplerAuto = true

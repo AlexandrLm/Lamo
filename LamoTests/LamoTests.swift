@@ -1186,7 +1186,7 @@ struct ServicesTests {
         #expect(AppDefaults.temperature.wrappedValue == 2.0)
 
         AppDefaults.resetAll()
-        #expect(AppDefaults.temperature.wrappedValue == 1.0)
+        #expect(AppDefaults.temperature.wrappedValue == 0.7)
         #expect(AppDefaults.topK.wrappedValue == 64)
         #expect(AppDefaults.topP.wrappedValue == 0.95)
         #expect(AppDefaults.useGPU.wrappedValue == true)
@@ -2454,5 +2454,53 @@ struct ToolRouterTests {
         let route = ToolRouter.route(for: "Прочитай https://example.com/article про здоровье")
         #expect(route.webSearch == true)
         #expect(route.fetchURL == true)
+    }
+
+    @Test func unknownLongQueryRoutesWebFailsafe() {
+        // Long message with no markers is usually informational — the model
+        // gets web tools so it can verify facts instead of hallucinating.
+        let route = ToolRouter.route(for: "Расскажи про квантовые компьютеры подробно, с примерами использования")
+        #expect(route.webSearch == true)
+        #expect(route.fetchURL == true)
+        #expect(route.weather == false)
+        #expect(route.calendar == false)
+        #expect(route.location == false)
+    }
+
+    @Test func whWordWithoutQuestionMarkRoutesWeb() {
+        let route = ToolRouter.route(for: "Кто такой Пушкин")
+        #expect(route.webSearch == true)
+        #expect(route.fetchURL == true)
+    }
+}
+
+// MARK: - ToolPromptSection Tests
+
+struct ToolPromptSectionTests {
+
+    @Test func availableToolShowsUsageLine() {
+        let block = ToolPromptSection.build(available: ["weather"], unavailable: [])
+        #expect(block.contains("→ weather"))
+        #expect(!block.contains("Unavailable this turn"))
+    }
+
+    @Test func disabledToolLineIsHidden() {
+        let block = ToolPromptSection.build(available: ["weather"], unavailable: ["web_search", "fetch_url"])
+        #expect(!block.contains("→ web_search"))
+        #expect(!block.contains("→ fetch_url"))
+        #expect(block.contains("Unavailable this turn: web_search, fetch_url"))
+    }
+
+    @Test func emptyAvailableShowsNone() {
+        let block = ToolPromptSection.build(available: [], unavailable: ["weather"])
+        #expect(block.contains("(none"))
+        #expect(!block.contains("→ weather"))
+    }
+
+    @Test func linesFollowCanonicalOrder() {
+        let block = ToolPromptSection.build(available: ["calendar", "weather"], unavailable: [])
+        let weatherIdx = block.range(of: "→ weather")!.lowerBound
+        let calendarIdx = block.range(of: "→ calendar")!.lowerBound
+        #expect(weatherIdx < calendarIdx)
     }
 }

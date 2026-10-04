@@ -265,7 +265,7 @@ struct SettingsView: View {
     }
 
     private var isDefaultSampler: Bool {
-        vm.temperature == 1.0 && vm.topK == 64 && vm.topP == 0.95
+        vm.temperature == 0.7 && vm.topK == 64 && vm.topP == 0.95
     }
 
     private var toolsStatus: String {
