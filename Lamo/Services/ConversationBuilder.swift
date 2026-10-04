@@ -112,7 +112,7 @@ struct ConversationBuilder {
         if !networkAvailable || !AppDefaults.toolFetchURL.wrappedValue || !route.fetchURL { unavailable.append("fetch_url") }
         augmentedPrompt += "\n\n" + ToolPromptSection.build(available: availableNames, unavailable: unavailable)
         if ProviderManager.shared.thinkingMode {
-            augmentedPrompt += "\n\n<reasoning>\nThink step by step for complex problems. Keep reasoning concise. For simple Q&A answer directly without overthinking.\n</reasoning>"
+            augmentedPrompt += "\n\n<reasoning>Think briefly for complex tasks; answer simple Q&A directly.</reasoning>"
         }
 
         let toolKey = [
@@ -311,9 +311,7 @@ struct ConversationBuilder {
         guard !conversationText.isEmpty else { return nil }
 
         let summaryRequest = """
-        Summarize the following conversation history into a concise context block. Preserve: \
-        key facts, decisions, user preferences, code changes, file names, and important conclusions. \
-        Be brief but complete — this summary replaces the original messages.
+        Summarize history briefly. Keep: facts, decisions, preferences, code changes, filenames, conclusions.
 
         \(conversationText)
         """

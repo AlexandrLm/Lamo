@@ -392,10 +392,10 @@ final class FoundationModelsProvider: LLMProvider, @unchecked Sendable {
             if #available(iOS 27.0, macOS 27.0, *) {
                 // Real image bytes travel as Attachments (see runInference);
                 // the caption just points the model at them.
-                parts.append("[\(msg.imagePaths.count) image\(msg.imagePaths.count > 1 ? "s" : "") attached — look at them and describe what you see]")
+                parts.append("[\(msg.imagePaths.count) image\(msg.imagePaths.count > 1 ? "s" : "") attached — look at them]")
             } else {
                 // iOS 26 is text-only: forbid hallucinated descriptions.
-                parts.append("[The user attached \(msg.imagePaths.count) image\(msg.imagePaths.count > 1 ? "s" : "") which you CANNOT see — image understanding needs iOS 27. Say briefly that you can't view images on this OS version and continue with the text request.]")
+                parts.append("[\(msg.imagePaths.count) image\(msg.imagePaths.count > 1 ? "s" : "") attached which you CANNOT see (needs iOS 27). Say so briefly, then handle the text.]")
             }
         }
 

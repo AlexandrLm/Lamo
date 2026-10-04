@@ -5,7 +5,7 @@ struct UpdateMemoryTool: Tool {
     static let name = ToolDefinitions.UpdateMemory.name
     static let description = ToolDefinitions.UpdateMemory.description
 
-    @ToolParam(description: "New facts about the user to remember (max 20 per call). Each fact is one short sentence. Old contradictory facts are auto-replaced.")
+    @ToolParam(description: "New user facts (max 20). One short sentence each.")
     var facts: [String]?
 
     @ToolParam(description: "Forget: exact text, [index], or paraphrase (include_existing first).")

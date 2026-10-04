@@ -289,7 +289,7 @@ final class MemoryService: ObservableObject {
         var fullSystem = base
 
         if isEnabled {
-            fullSystem += "\n\nRemember important user facts via update_memory tool. Summarize long conversations via summary parameter."
+            fullSystem += "\n\nSave user facts via update_memory; summarize long chats via its summary param."
 
             if let convID = conversationID,
                let context = modelContext {
