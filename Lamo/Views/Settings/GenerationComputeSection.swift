@@ -7,30 +7,6 @@ struct GenerationComputeSection: View {
     @State private var showSystemPrompt = false
     @State private var selectedPresetID = "assistant"
 
-    // Mirror VM toggles/values so conditional content + sliders re-render reliably.
-    // @Observable computed properties backed by UserDefaults don't always
-    // trigger view updates through the Binding projection.
-    @State private var contextAuto: Bool
-    @State private var gpuOn: Bool
-    @State private var contextTokens: Double
-    @State private var samplerAuto: Bool
-    @State private var samplerTemp: Double
-    @State private var samplerTopK: Double
-    @State private var samplerTopP: Double
-    @State private var compressionPct: Double = 0.6
-
-    init(vm: SettingsViewModel) {
-        self.vm = vm
-        _contextAuto = State(initialValue: vm.kvCacheAuto)
-        _gpuOn = State(initialValue: vm.useGPU)
-        _contextTokens = State(initialValue: Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens))
-        _samplerAuto = State(initialValue: vm.temperature == 0.7 && vm.topK == 64 && vm.topP == 0.95)
-        _samplerTemp = State(initialValue: vm.temperature)
-        _samplerTopK = State(initialValue: Double(vm.topK))
-        _samplerTopP = State(initialValue: vm.topP)
-        _compressionPct = State(initialValue: ProviderManager.shared.compressionThreshold)
-    }
-
     var body: some View {
         ScrollView {
             VStack(spacing: LamoTheme.Spacing.md) {
@@ -61,11 +37,11 @@ struct GenerationComputeSection: View {
 
     /// Человеческое имя стиля вместо сырых T/K/P в тулбаре.
     private var samplerStyleName: String {
-        if samplerAuto { return String(localized: "Balanced") }
-        switch samplerTemp {
-        case ..<0.5: return String(localized: "Focused · \(String(format: "%.2f", samplerTemp))")
-        case 0.5...1.0: return String(localized: "Balanced · \(String(format: "%.2f", samplerTemp))")
-        default: return String(localized: "Creative · \(String(format: "%.2f", samplerTemp))")
+        if vm.samplerAuto { return String(localized: "Balanced") }
+        switch vm.samplerTemp {
+        case ..<0.5: return String(localized: "Focused · \(String(format: "%.2f", vm.samplerTemp))")
+        case 0.5...1.0: return String(localized: "Balanced · \(String(format: "%.2f", vm.samplerTemp))")
+        default: return String(localized: "Creative · \(String(format: "%.2f", vm.samplerTemp))")
         }
     }
     private var samplingCard: some View {
@@ -75,7 +51,7 @@ struct GenerationComputeSection: View {
 
             samplerAutoRow
 
-            if !samplerAuto {
+            if !vm.samplerAuto {
                 ThinDivider()
                 tempRow
                 ThinDivider()
@@ -97,7 +73,7 @@ struct GenerationComputeSection: View {
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-        .animation(.easeInOut(duration: 0.2), value: samplerAuto)
+        .animation(.easeInOut(duration: 0.2), value: vm.samplerAuto)
     }
 
     private var samplerAutoRow: some View {
@@ -108,18 +84,15 @@ struct GenerationComputeSection: View {
             Spacer()
             Text("Auto")
                 .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(samplerAuto ? LamoTheme.Colors.textMedium : LamoTheme.Colors.textFaint)
-            Toggle("", isOn: $samplerAuto)
+                .foregroundStyle(vm.samplerAuto ? LamoTheme.Colors.textMedium : LamoTheme.Colors.textFaint)
+            Toggle("", isOn: $vm.samplerAuto)
                 .labelsHidden()
                 .tint(LamoTheme.Colors.accent)
         }
         .padding(.vertical, 10)
-        .onChange(of: samplerAuto) { _, newValue in
+        .onChange(of: vm.samplerAuto) { _, newValue in
             if newValue {
                 vm.resetSamplerDefaults()
-                samplerTemp = 0.7
-                samplerTopK = 64
-                samplerTopP = 0.95
             }
         }
     }
@@ -131,24 +104,21 @@ struct GenerationComputeSection: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(LamoTheme.Colors.textHigh)
                 Spacer()
-                tempBadge(samplerTemp)
+                tempBadge(vm.samplerTemp)
             }
 
-            Slider(value: $samplerTemp, in: 0.0...2.0, step: 0.05)
+            Slider(value: $vm.samplerTemp, in: 0.0...2.0, step: 0.05)
                 .tint(tempTint)
 
             HStack(spacing: 0) {
-                rangeLabel(String(localized: "Focused"), active: samplerTemp < 0.5)
+                rangeLabel(String(localized: "Focused"), active: vm.samplerTemp < 0.5)
                 Spacer()
-                rangeLabel(String(localized: "Balanced"), active: samplerTemp >= 0.5 && samplerTemp <= 1.0)
+                rangeLabel(String(localized: "Balanced"), active: vm.samplerTemp >= 0.5 && vm.samplerTemp <= 1.0)
                 Spacer()
-                rangeLabel(String(localized: "Creative"), active: samplerTemp > 1.0)
+                rangeLabel(String(localized: "Creative"), active: vm.samplerTemp > 1.0)
             }
         }
         .padding(.vertical, 10)
-        .onChange(of: samplerTemp) { _, newValue in
-            vm.temperature = newValue
-        }
     }
 
     private var topKRow: some View {
@@ -158,22 +128,19 @@ struct GenerationComputeSection: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(LamoTheme.Colors.textHigh)
                 Spacer()
-                valueChip("\(Int(samplerTopK))")
+                valueChip("\(Int(vm.samplerTopK))")
             }
 
-            Slider(value: $samplerTopK, in: 1...200, step: 1)
+            Slider(value: $vm.samplerTopK, in: 1...200, step: 1)
                 .tint(LamoTheme.Colors.textMedium)
 
             HStack(spacing: 0) {
-                rangeLabel("1", active: samplerTopK <= 20)
+                rangeLabel("1", active: vm.samplerTopK <= 20)
                 Spacer()
-                rangeLabel("200", active: samplerTopK > 80)
+                rangeLabel("200", active: vm.samplerTopK > 80)
             }
         }
         .padding(.vertical, 10)
-        .onChange(of: samplerTopK) { _, newValue in
-            vm.topK = Int(newValue)
-        }
     }
 
     private var topPRow: some View {
@@ -183,22 +150,19 @@ struct GenerationComputeSection: View {
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(LamoTheme.Colors.textHigh)
                 Spacer()
-                valueChip(String(format: "%.2f", samplerTopP))
+                valueChip(String(format: "%.2f", vm.samplerTopP))
             }
 
-            Slider(value: $samplerTopP, in: 0.0...1.0, step: 0.05)
+            Slider(value: $vm.samplerTopP, in: 0.0...1.0, step: 0.05)
                 .tint(LamoTheme.Colors.textMedium)
 
             HStack(spacing: 0) {
-                rangeLabel("0", active: samplerTopP <= 0.5)
+                rangeLabel("0", active: vm.samplerTopP <= 0.5)
                 Spacer()
-                rangeLabel("1", active: samplerTopP >= 0.9)
+                rangeLabel("1", active: vm.samplerTopP >= 0.9)
             }
         }
         .padding(.vertical, 10)
-        .onChange(of: samplerTopP) { _, newValue in
-            vm.topP = newValue
-        }
     }
 
     // MARK: - Engine Card
@@ -211,11 +175,11 @@ struct GenerationComputeSection: View {
             gpuRow
             ThinDivider()
 
-            if !gpuOn { cpuRow }
-            if !gpuOn { ThinDivider() }
+            if !vm.gpuOn { cpuRow }
+            if !vm.gpuOn { ThinDivider() }
 
             contextRow
-            if !contextAuto { contextSlider }
+            if !vm.contextAuto { contextSlider }
             ThinDivider()
             specDecRow
             ThinDivider()
@@ -224,8 +188,8 @@ struct GenerationComputeSection: View {
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-        .animation(.easeInOut(duration: 0.2), value: gpuOn)
-        .animation(.easeInOut(duration: 0.2), value: contextAuto)
+        .animation(.easeInOut(duration: 0.2), value: vm.gpuOn)
+        .animation(.easeInOut(duration: 0.2), value: vm.contextAuto)
     }
 
     private var gpuRow: some View {
@@ -234,14 +198,11 @@ struct GenerationComputeSection: View {
                 .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(LamoTheme.Colors.textHigh)
             Spacer()
-            Toggle("", isOn: $gpuOn)
+            Toggle("", isOn: $vm.gpuOn)
                 .labelsHidden()
                 .tint(LamoTheme.Colors.accent)
         }
         .padding(.vertical, 10)
-        .onChange(of: gpuOn) { _, newValue in
-            vm.useGPU = newValue
-        }
     }
 
     private var cpuRow: some View {
@@ -280,25 +241,19 @@ struct GenerationComputeSection: View {
                 .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(LamoTheme.Colors.textHigh)
             Spacer()
-            Text(contextAuto ? "Auto" : "\(Int(contextTokens))")
+            Text(vm.contextAuto ? "Auto" : "\(Int(vm.contextTokens))")
                 .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(contextAuto ? LamoTheme.Colors.textLow : LamoTheme.Colors.textMedium)
-            Toggle("", isOn: $contextAuto)
+                .foregroundStyle(vm.contextAuto ? LamoTheme.Colors.textLow : LamoTheme.Colors.textMedium)
+            Toggle("", isOn: $vm.contextAuto)
                 .labelsHidden()
                 .tint(LamoTheme.Colors.accent)
         }
         .padding(.vertical, 10)
-        .onChange(of: contextAuto) { _, newValue in
-            vm.kvCacheAuto = newValue
-            if !newValue {
-                contextTokens = Double(vm.maxNumTokens == 0 ? 4096 : vm.maxNumTokens)
-            }
-        }
     }
 
     private var contextSlider: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Slider(value: $contextTokens, in: 1024...16384, step: 256)
+            Slider(value: $vm.contextTokens, in: 1024...16384, step: 256)
                 .tint(LamoTheme.Colors.textMedium)
 
             HStack(spacing: 0) {
@@ -306,7 +261,7 @@ struct GenerationComputeSection: View {
                     .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(LamoTheme.Colors.textFaint)
                 Spacer()
-                Text("\(Int(contextTokens))")
+                Text("\(Int(vm.contextTokens))")
                     .font(.system(.caption2, design: .monospaced).weight(.semibold))
                     .foregroundStyle(LamoTheme.Colors.textLow)
                 Spacer()
@@ -316,9 +271,6 @@ struct GenerationComputeSection: View {
             }
         }
         .padding(.bottom, 10)
-        .onChange(of: contextTokens) { _, newValue in
-            vm.maxNumTokens = Int(newValue)
-        }
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
@@ -418,13 +370,7 @@ struct GenerationComputeSection: View {
                     .tint(LamoTheme.Colors.accent)
                     .onChange(of: selectedPresetID) { _, newID in
                         guard let preset = PromptPreset.preset(id: newID) else { return }
-                        vm.systemPrompt = PromptPreset.fullPrompt(for: preset)
-                        if let temp = preset.temperature { vm.temperature = temp }
-                        if let topP = preset.topP { vm.topP = topP }
-                        samplerTemp = vm.temperature
-                        samplerTopK = Double(vm.topK)
-                        samplerTopP = vm.topP
-                        samplerAuto = vm.temperature == 0.7 && vm.topK == 64 && vm.topP == 0.95
+                        vm.applyPreset(preset)
                     }
                 }
                 .padding(.horizontal, LamoTheme.Spacing.lg)
@@ -451,11 +397,6 @@ struct GenerationComputeSection: View {
     private var resetButton: some View {
         Button {
             vm.resetSamplerDefaults()
-            // Синхронизируем зеркала — раньше слайдеры залипали на старых значениях.
-            samplerTemp = 0.7
-            samplerTopK = 64
-            samplerTopP = 0.95
-            samplerAuto = true
         } label: {
             Label("Reset Sampling", systemImage: "arrow.counterclockwise")
                 .font(.system(.subheadline, design: .monospaced))
@@ -479,7 +420,7 @@ struct GenerationComputeSection: View {
     }
 
     private var tempTint: Color {
-        switch samplerTemp {
+        switch vm.samplerTemp {
         case 0..<0.5:  return .blue.opacity(0.8)
         case 0.5...1.0: return LamoTheme.Colors.accent
         default:        return .orange.opacity(0.8)
@@ -514,17 +455,17 @@ struct GenerationComputeSection: View {
                     .foregroundStyle(LamoTheme.Colors.textLow)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Slider(value: $compressionPct, in: 0.2...0.9, step: 0.05) {
+                Slider(value: $vm.compressionPct, in: 0.2...0.9, step: 0.05) {
                     Text("Threshold")
                 }
                 .tint(LamoTheme.Colors.accent)
 
                 HStack {
-                    Text("Trigger at \(Int(compressionPct * 100))% KV-cache fill")
+                    Text("Trigger at \(Int(vm.compressionPct * 100))% KV-cache fill")
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(LamoTheme.Colors.textMedium)
                     Spacer()
-                    Text(compressionPct >= 0.8 ? String(localized: "Late") : compressionPct <= 0.35 ? String(localized: "Early") : String(localized: "Balanced"))
+                    Text(vm.compressionPct >= 0.8 ? String(localized: "Late") : vm.compressionPct <= 0.35 ? String(localized: "Early") : String(localized: "Balanced"))
                         .font(.system(.caption2, design: .monospaced).weight(.medium))
                         .foregroundStyle(LamoTheme.Colors.textLow)
                 }
@@ -534,8 +475,5 @@ struct GenerationComputeSection: View {
         .padding(LamoTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: LamoTheme.CornerRadius.lg))
-        .onChange(of: compressionPct) { _, newValue in
-            ProviderManager.shared.compressionThreshold = newValue
-        }
     }
 }

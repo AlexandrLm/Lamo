@@ -364,7 +364,7 @@ private struct AmbientGradientView: View {
     private var tintSecondary: Color {
         if hasError { return .orange }
         if !isReady { return .yellow }
-        return Color(red: 0.35, green: 0.55, blue: 0.90)
+        return LamoTheme.Colors.chatOrbBlue
     }
 
     private var orbOpacity: Double { isDark ? 0.22 : 0.15 }

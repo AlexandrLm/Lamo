@@ -223,15 +223,7 @@ func toolIcon(name: String) -> String {
 }
 
 func toolColor(name: String) -> Color {
-    switch name {
-    case "weather":              return Color(red: 0.20, green: 0.62, blue: 0.95)
-    case "web_search":           return Color(red: 0.42, green: 0.48, blue: 0.95)
-    case "get_location":         return Color(red: 0.95, green: 0.38, blue: 0.42)
-    case "fetch_url":            return Color(red: 0.15, green: 0.65, blue: 0.55)
-    case "calendar":             return Color(red: 0.95, green: 0.55, blue: 0.20)
-    case "update_memory", "think": return Color(red: 0.62, green: 0.45, blue: 0.90)
-    default:                     return Color(red: 0.55, green: 0.58, blue: 0.62)
-    }
+    LamoTheme.Colors.toolColor(name: name)
 }
 
 // ─── SHARED RESULT COMPONENTS ────────────────────────────────────────────

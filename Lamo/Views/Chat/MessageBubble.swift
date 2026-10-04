@@ -356,11 +356,7 @@ struct ThinkingView: View {
 
     /// Warm amber accent — bright in dark, deeper in light for contrast on white.
     private var accentColor: Color {
-        Color(uiColor: UIColor { tc in
-            tc.userInterfaceStyle == .dark
-                ? UIColor(red: 0.94, green: 0.63, blue: 0.19, alpha: 1.0)
-                : UIColor(red: 0.72, green: 0.44, blue: 0.08, alpha: 1.0)
-        })
+        LamoTheme.Colors.thinkingAmber
     }
 
     var body: some View {

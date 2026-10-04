@@ -37,8 +37,9 @@ struct MarkdownRenderer: View {
     }()
     private final class CacheVal { let doc: Markdown.Document; init(_ d: Markdown.Document) { doc = d } }
 
-    /// Concrete-type firewall between the mutually recursive builders below
-    /// (groupBlock ↔ listItem): keeps opaque-type inference decidable.
+    /// Type-erased bridge for the mutually recursive builders below
+    /// (groupBlock ↔ listItem): AnyView keeps opaque-type inference decidable.
+    /// Callers get a concrete type; only genuinely recursive call sites erase.
     private func block(_ m: Markup) -> AnyView {
         AnyView(groupBlock(m))
     }
@@ -102,44 +103,43 @@ struct MarkdownRenderer: View {
         let inlines = blks.prefix(while: { $0 is Paragraph })
         let nested = blks.dropFirst(inlines.count)
         let txt = inlines.map { $0.format() }.joined(separator: "\n")
-        AnyView(
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 8) {
-                    if let cb = item.checkbox {
-                        Image(systemName: cb == .checked ? "checkmark.circle.fill" : "circle")
-                            .font(.subheadline)
-                            .foregroundStyle(cb == .checked ? LamoTheme.Colors.textMedium : .secondary)
-                            .frame(width: 18, alignment: .center)
-                        InlineMarkdown(text: txt, textColor: textColor)
-                            .foregroundStyle(cb == .checked ? .secondary : textColor)
-                            .strikethrough(cb == .checked)
-                    } else if ordered {
-                        Text("\(idx).").font(.subheadline).foregroundStyle(.secondary)
-                            .frame(width: 18, alignment: .trailing)
-                        InlineMarkdown(text: txt, textColor: textColor)
-                    } else {
-                        Text(bullet(indent)).font(.system(size: 10))
-                            .foregroundStyle(indent == 0 ? LamoTheme.Colors.textMedium : LamoTheme.Colors.textFaint)
-                            .frame(width: 18, alignment: .center).padding(.top, 4)
-                        InlineMarkdown(text: txt, textColor: textColor)
-                    }
-                }
-                .padding(.leading, CGFloat(indent) * 18).padding(.vertical, 2)
-                ForEach(Array(nested.enumerated()), id: \.offset) { _, child in
-                    if let ol = child as? OrderedList {
-                        let si = Array(ol.listItems)
-                        ForEach(Array(si.enumerated()), id: \.offset) { j, sub in
-                            listItem(sub, indent: indent + 1, idx: j + Int(ol.startIndex), ordered: true)
-                        }
-                    } else if let ul = child as? UnorderedList {
-                        let si = Array(ul.listItems)
-                        ForEach(Array(si.enumerated()), id: \.offset) { _, sub in
-                            listItem(sub, indent: indent + 1, idx: 0, ordered: false)
-                        }
-                    } else { block(child) }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 8) {
+                if let cb = item.checkbox {
+                    Image(systemName: cb == .checked ? "checkmark.circle.fill" : "circle")
+                        .font(.subheadline)
+                        .foregroundStyle(cb == .checked ? LamoTheme.Colors.textMedium : .secondary)
+                        .frame(width: 18, alignment: .center)
+                    InlineMarkdown(text: txt, textColor: textColor)
+                        .foregroundStyle(cb == .checked ? .secondary : textColor)
+                        .strikethrough(cb == .checked)
+                } else if ordered {
+                    Text("\(idx).").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: 18, alignment: .trailing)
+                    InlineMarkdown(text: txt, textColor: textColor)
+                } else {
+                    Text(bullet(indent)).font(.system(size: 10))
+                        .foregroundStyle(indent == 0 ? LamoTheme.Colors.textMedium : LamoTheme.Colors.textFaint)
+                        .frame(width: 18, alignment: .center).padding(.top, 4)
+                    InlineMarkdown(text: txt, textColor: textColor)
                 }
             }
-        )
+            .padding(.leading, CGFloat(indent) * 18).padding(.vertical, 2)
+            ForEach(Array(nested.enumerated()), id: \.offset) { _, child in
+                if let ol = child as? OrderedList {
+                    let si = Array(ol.listItems)
+                    ForEach(Array(si.enumerated()), id: \.offset) { j, sub in
+                        // Erased: direct self-recursion would make opaque inference circular.
+                        AnyView(listItem(sub, indent: indent + 1, idx: j + Int(ol.startIndex), ordered: true))
+                    }
+                } else if let ul = child as? UnorderedList {
+                    let si = Array(ul.listItems)
+                    ForEach(Array(si.enumerated()), id: \.offset) { _, sub in
+                        AnyView(listItem(sub, indent: indent + 1, idx: 0, ordered: false))
+                    }
+                } else { block(child) }
+            }
+        }
     }
 
     private func inlineStr(_ m: Markup) -> String {

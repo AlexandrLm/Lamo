@@ -109,6 +109,41 @@ final class SettingsViewModel {
 
     var modelInfo: ModelInfo?
 
+    // MARK: - UI State (single source for Inference screen)
+
+    /// Stored mirrors of UserDefaults/ProviderManager values.
+    /// Computed properties above read external stores that don't emit
+    /// @Observable updates, so conditional content (if !samplerAuto)
+    /// wouldn't re-render reliably through direct Bindings.
+    /// These stored vars are the binding source; didSet writes through.
+    var samplerAuto: Bool = true
+    var samplerTemp: Double = 0.7 {
+        didSet { AppDefaults.temperature.wrappedValue = samplerTemp }
+    }
+    var samplerTopK: Double = 64 {
+        didSet { AppDefaults.topK.wrappedValue = Int(samplerTopK) }
+    }
+    var samplerTopP: Double = 0.95 {
+        didSet { AppDefaults.topP.wrappedValue = samplerTopP }
+    }
+    var contextAuto: Bool = true {
+        didSet {
+            providerManager.kvCacheAuto = contextAuto
+            if !contextAuto, providerManager.maxNumTokens == 0 {
+                contextTokens = 4096
+            }
+        }
+    }
+    var gpuOn: Bool = true {
+        didSet { providerManager.litertLMUseGPU = gpuOn }
+    }
+    var contextTokens: Double = 4096 {
+        didSet { providerManager.maxNumTokens = Int(contextTokens) }
+    }
+    var compressionPct: Double = 0.6 {
+        didSet { providerManager.compressionThreshold = compressionPct }
+    }
+
     /// Coalescing task for info loads — rapid model switches cancel the previous load.
     /// NOTE(debounce): callers fire loadModelInfo() on every selection tap; the guard
     /// below cancels the in-flight Task.detached before starting a new one.
@@ -124,6 +159,41 @@ final class SettingsViewModel {
 
     init() {
         availableModels = ProviderManager.listModels()
+        syncFromStore()
+    }
+
+    /// Pull current store values into stored UI state.
+    /// Called on init and after external resets so View never desyncs.
+    func syncFromStore() {
+        let temp = AppDefaults.temperature.wrappedValue
+        let topK = AppDefaults.topK.wrappedValue
+        let topP = AppDefaults.topP.wrappedValue
+        samplerTemp = temp
+        samplerTopK = Double(topK)
+        samplerTopP = topP
+        samplerAuto = temp == 0.7 && topK == 64 && topP == 0.95
+        contextAuto = providerManager.kvCacheAuto
+        gpuOn = providerManager.litertLMUseGPU
+        let tokens = providerManager.maxNumTokens
+        contextTokens = Double(tokens == 0 ? 4096 : tokens)
+        compressionPct = providerManager.compressionThreshold
+    }
+
+    /// Apply a system-prompt preset (temperature/topP overrides + UI sync).
+    func applyPreset(_ preset: PromptPreset) {
+        systemPrompt = PromptPreset.fullPrompt(for: preset)
+        if let temp = preset.temperature {
+            AppDefaults.temperature.wrappedValue = temp
+            samplerTemp = temp
+        }
+        if let topP = preset.topP {
+            AppDefaults.topP.wrappedValue = topP
+            samplerTopP = topP
+        }
+        samplerTopK = Double(AppDefaults.topK.wrappedValue)
+        samplerAuto = AppDefaults.temperature.wrappedValue == 0.7
+            && AppDefaults.topK.wrappedValue == 64
+            && AppDefaults.topP.wrappedValue == 0.95
     }
 
     // MARK: - Actions
@@ -162,6 +232,10 @@ final class SettingsViewModel {
         topK = 64
         topP = 0.95
         temperature = 0.7
+        samplerTemp = 0.7
+        samplerTopK = 64
+        samplerTopP = 0.95
+        samplerAuto = true
     }
 
     func resetAllDefaults() {
@@ -173,6 +247,7 @@ final class SettingsViewModel {
         maxNumTokens = 4096
         speculativeDecoding = true
         memoryEnabled = true
+        syncFromStore()
         // Reload model info after path reset
         loadModelInfo()
     }

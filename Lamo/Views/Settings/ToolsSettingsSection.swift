@@ -1,7 +1,14 @@
 import SwiftUI
+import Combine
 
 struct ToolsSettingsSection: View {
-    @State private var refreshTick = 0
+    @ObservedObject private var memoryService = MemoryService.shared
+    /// Revision bridged from UserDefaults.didChangeNotification.
+    /// Tool toggles live in AppDefaults (not @Observable), so the view
+    /// subscribes to the store notification instead of manual tick increments.
+    @State private var revision = 0
+    // Keep observation alive without manual reads in helpers.
+    private var observedMemoryEnabled: Bool { memoryService.isEnabled }
 
     var body: some View {
         ScrollView {
@@ -20,12 +27,16 @@ struct ToolsSettingsSection: View {
         .background(LamoTheme.Colors.background)
         .navigationTitle("Tools")
         .navigationBarTitleDisplayMode(.inline)
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            revision += 1
+        }
     }
 
     private func categoryBlock(_ category: ToolCategory, tools: [ToolInfo]) -> some View {
-        // Читаем refreshTick, чтобы счётчики обновлялись без .id() —
-        // .id() пересоздавал весь список и сбрасывал скролл наверх.
-        _ = refreshTick
+        // Depend on store revision + memory state so counts refresh
+        // when toggles change (UserDefaults isn't @Observable).
+        _ = revision
+        _ = observedMemoryEnabled
         return VStack(alignment: .leading, spacing: LamoTheme.Spacing.sm) {
             HStack(spacing: 6) {
                 Text(category.title.uppercased())
@@ -39,7 +50,7 @@ struct ToolsSettingsSection: View {
             .padding(.horizontal, 4)
 
             ForEach(tools) { tool in
-                ToolCardView(tool: tool) { refreshTick += 1 }
+                ToolCardView(tool: tool, revision: revision)
             }
         }
     }
@@ -47,8 +58,9 @@ struct ToolsSettingsSection: View {
     // MARK: - Header
 
     private var headerCard: some View {
-        // Читаем refreshTick, чтобы счётчик обновлялся после тогглов.
-        _ = refreshTick
+        // Depend on store revision so the header count refreshes with toggles.
+        _ = revision
+        _ = observedMemoryEnabled
         return HStack(spacing: LamoTheme.Spacing.sm) {
             Image(systemName: "wrench.and.screwdriver.fill")
                 .font(.system(size: 14))
@@ -64,7 +76,6 @@ struct ToolsSettingsSection: View {
             Spacer()
             Button(allOn ? "Turn all off" : "Turn all on") {
                 setAll(!allOn)
-                refreshTick += 1
             }
             .font(.caption.weight(.medium))
             .foregroundStyle(LamoTheme.Colors.accent)
@@ -87,13 +98,13 @@ struct ToolsSettingsSection: View {
 
 private struct ToolCardView: View {
     let tool: ToolInfo
-    var onToggle: () -> Void = {}
+    let revision: Int
     @State private var isExpanded = false
     @State private var isEnabled: Bool
 
-    init(tool: ToolInfo, onToggle: @escaping () -> Void = {}) {
+    init(tool: ToolInfo, revision: Int) {
         self.tool = tool
-        self.onToggle = onToggle
+        self.revision = revision
         self._isEnabled = State(initialValue: tool.isEnabled())
     }
 
@@ -140,7 +151,10 @@ private struct ToolCardView: View {
                     .labelsHidden()
                     .onChange(of: isEnabled) { _, newValue in
                         tool.setEnabled(newValue)
-                        onToggle()
+                    }
+                    .onChange(of: revision) { _, _ in
+                        // Re-sync when another card or "Turn all" changed the store.
+                        isEnabled = tool.isEnabled()
                     }
             }
 

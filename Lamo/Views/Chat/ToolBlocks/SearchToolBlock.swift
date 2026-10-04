@@ -248,18 +248,6 @@ private struct SearchResultCard: View {
     }
 
     private func domainColor(_ domain: String) -> Color {
-        let palette: [Color] = [
-            Color(red: 0.25, green: 0.60, blue: 0.95),
-            Color(red: 0.90, green: 0.35, blue: 0.35),
-            Color(red: 0.30, green: 0.70, blue: 0.50),
-            Color(red: 0.85, green: 0.55, blue: 0.20),
-            Color(red: 0.55, green: 0.40, blue: 0.90),
-            Color(red: 0.90, green: 0.30, blue: 0.60),
-            Color(red: 0.20, green: 0.70, blue: 0.70),
-            Color(red: 0.70, green: 0.50, blue: 0.30),
-        ]
-        var hash = 0
-        for byte in domain.utf8 { hash = hash &* 31 &+ Int(byte) }
-        return palette[abs(hash) % palette.count]
+        LamoTheme.Colors.domainColor(domain)
     }
 }

@@ -82,6 +82,60 @@ enum LamoTheme {
                 : UIColor(white: 0.0, alpha: 0.12)
         })
         static let fillOverlay = Color.black.opacity(0.55)
+
+        // MARK: Tool identity palette — single source for toolColor(name:).
+        // Previously hardcoded as Color(red:...) in ToolCallBlock.swift:225.
+        enum Tool {
+            static let weather = Color(red: 0.20, green: 0.62, blue: 0.95)
+            static let webSearch = Color(red: 0.42, green: 0.48, blue: 0.95)
+            static let getLocation = Color(red: 0.95, green: 0.38, blue: 0.42)
+            static let fetchURL = Color(red: 0.15, green: 0.65, blue: 0.55)
+            static let calendar = Color(red: 0.95, green: 0.55, blue: 0.20)
+            static let memory = Color(red: 0.62, green: 0.45, blue: 0.90)
+            static let fallback = Color(red: 0.55, green: 0.58, blue: 0.62)
+        }
+
+        static func toolColor(name: String) -> Color {
+            switch name {
+            case "weather": Tool.weather
+            case "web_search": Tool.webSearch
+            case "get_location": Tool.getLocation
+            case "fetch_url": Tool.fetchURL
+            case "calendar": Tool.calendar
+            case "update_memory", "think": Tool.memory
+            default: Tool.fallback
+            }
+        }
+
+        // MARK: Domain avatar palette — single source for SearchToolBlock domainColor.
+        static let domainPalette: [Color] = [
+            Color(red: 0.25, green: 0.60, blue: 0.95),
+            Color(red: 0.90, green: 0.35, blue: 0.35),
+            Color(red: 0.30, green: 0.70, blue: 0.50),
+            Color(red: 0.85, green: 0.55, blue: 0.20),
+            Color(red: 0.55, green: 0.40, blue: 0.90),
+            Color(red: 0.90, green: 0.30, blue: 0.60),
+            Color(red: 0.20, green: 0.70, blue: 0.70),
+            Color(red: 0.70, green: 0.50, blue: 0.30),
+        ]
+
+        static func domainColor(_ domain: String) -> Color {
+            var hash = 0
+            for byte in domain.utf8 { hash = hash &* 31 &+ Int(byte) }
+            return domainPalette[abs(hash) % domainPalette.count]
+        }
+
+        /// Warm amber for thinking indicator — bright in dark, deeper in light.
+        /// Previously hardcoded in MessageBubble.swift:359.
+        static let thinkingAmber = Color(uiColor: UIColor { tc in
+            tc.userInterfaceStyle == .dark
+                ? UIColor(red: 0.94, green: 0.63, blue: 0.19, alpha: 1.0)
+                : UIColor(red: 0.72, green: 0.44, blue: 0.08, alpha: 1.0)
+        })
+
+        /// Secondary orb tint for empty-chat ambient gradient.
+        /// Previously hardcoded in ChatView.swift:367.
+        static let chatOrbBlue = Color(red: 0.35, green: 0.55, blue: 0.90)
     }
 
     enum Spacing {
